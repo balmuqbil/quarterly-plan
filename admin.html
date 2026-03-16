@@ -1024,30 +1024,17 @@ function normalizeOccupancy(val) {
   return Math.round(v * 100) / 100; // clean floating point
 }
 
-function fixDepartmentPlatformSwap(data) {
-  // Known departments and platforms to detect swaps
+function fixPlatformValues(data) {
+  // Ensure platform field has valid platform names (not department names from old swapped data)
   const mgmt = getMgmtData();
-  const knownDepartments = new Set(mgmt.departments.length ? mgmt.departments : DEFAULT_MGMT.departments);
   const knownPlatforms = new Set(mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms);
+  const knownDepartments = new Set(mgmt.departments.length ? mgmt.departments : DEFAULT_MGMT.departments);
 
   data.forEach(r => {
-    const department = (r.department || '').trim();
     const platform = (r.platform || '').trim();
-
-    // Case 1: department field has a platform name AND platform field has a department name → swap
-    if (knownPlatforms.has(department) && knownDepartments.has(platform)) {
-      r.department = platform;
-      r.platform = department;
-    }
-    // Case 2: department field has a platform name but platform field is also wrong/unknown
-    else if (knownPlatforms.has(department) && !knownDepartments.has(platform)) {
-      r.department = platform;
-      r.platform = department;
-    }
-    // Case 3: platform field has a department name but department field is also wrong/unknown
-    else if (knownDepartments.has(platform) && !knownPlatforms.has(department)) {
-      r.platform = department;
-      r.department = platform;
+    // If platform has a department name, it was likely swapped in old data — clear it
+    if (knownDepartments.has(platform) && !knownPlatforms.has(platform)) {
+      r.platform = '';
     }
   });
 
@@ -1058,8 +1045,8 @@ function cleanOccupancyData(data) {
   const MIN_OCC = 25;  // 25%
   const MAX_OCC = 120; // 120%
 
-  // Fix swapped department/platform fields
-  fixDepartmentPlatformSwap(data);
+  // Fix platform values (clean up old swapped data)
+  fixPlatformValues(data);
 
   // Normalize all occupancy values to percentage format
   data.forEach(r => { r.occupancy = normalizeOccupancy(r.occupancy); });
@@ -1099,89 +1086,49 @@ function cleanOccupancyData(data) {
 }
 
 function seedEmployeesFromData(data) {
+  // Seed employee NAMES from task data (dept/section come from employee mapping, not tasks)
   const mgmt = getMgmtData();
-  let changed = false;
+  const existingNames = new Set(mgmt.employees.map(e => e.name));
+  let added = 0;
 
-  // --- 1. Seed departments & sections from task data ---
-  const deptSet = new Set(mgmt.departments);
-  const sections = { ...mgmt.sections };
-  data.forEach(r => {
-    const dept = (r.department || '').trim();
-    const sec = (r.section || '').trim();
-    if (dept && !deptSet.has(dept)) {
-      mgmt.departments.push(dept);
-      deptSet.add(dept);
-      changed = true;
-    }
-    if (dept && sec) {
-      if (!sections[dept]) { sections[dept] = []; changed = true; }
-      if (!sections[dept].includes(sec)) {
-        sections[dept].push(sec);
-        changed = true;
-      }
-    }
-  });
-  if (changed) {
-    saveMgmtList('departments', mgmt.departments);
-    saveMgmtList('sections', sections);
-    mgmt.sections = sections;
-  }
-
-  // --- 2. Seed employees & update missing dept/section ---
-  const empInfo = {};
+  const uniqueNames = new Set();
   data.forEach(r => {
     const name = (r.name || '').trim();
-    if (!name) return;
-    const dept = (r.department || '').trim();
-    const sec = (r.section || '').trim();
-    if (!empInfo[name]) {
-      empInfo[name] = { department: dept, section: sec };
-    } else {
-      // Prefer non-empty values
-      if (!empInfo[name].department && dept) empInfo[name].department = dept;
-      if (!empInfo[name].section && sec) empInfo[name].section = sec;
-    }
+    if (name) uniqueNames.add(name);
   });
-  if (!Object.keys(empInfo).length) return;
 
-  const existingNames = new Set(mgmt.employees.map(e => e.name));
-  let empChanged = false;
-
-  // Add new employees
-  Object.entries(empInfo).forEach(([name, info]) => {
+  uniqueNames.forEach(name => {
     if (!existingNames.has(name)) {
-      mgmt.employees.push({ name, department: info.department, section: info.section });
+      mgmt.employees.push({ name, department: '', section: '' });
       existingNames.add(name);
-      empChanged = true;
+      added++;
     }
   });
 
-  // Update existing employees that have empty department/section
-  mgmt.employees.forEach(emp => {
-    const info = empInfo[emp.name];
-    if (!info) return;
-    if (!emp.department && info.department) { emp.department = info.department; empChanged = true; }
-    if (!emp.section && info.section) { emp.section = info.section; empChanged = true; }
-  });
-
-  if (empChanged) saveMgmtList('employees', mgmt.employees);
+  if (added > 0) saveMgmtList('employees', mgmt.employees);
 }
 
-function enrichTaskDataFromEmployees(data) {
-  // Fill missing department/section on task records using known employee mappings
+function resolveEmployeeDepartments(data) {
+  // ALWAYS resolve department/section from the employee mapping (source of truth)
+  // Task records' own department/section values are ignored
   const mgmt = getMgmtData();
   const empMap = {};
   mgmt.employees.forEach(e => {
-    if (e.name && (e.department || e.section)) {
+    if (e.name) {
       empMap[e.name] = { department: e.department || '', section: e.section || '' };
     }
   });
-  if (!Object.keys(empMap).length) return;
   data.forEach(r => {
-    const info = empMap[(r.name || '').trim()];
-    if (!info) return;
-    if (!r.department && info.department) r.department = info.department;
-    if (!r.section && info.section) r.section = info.section;
+    const name = (r.name || '').trim();
+    const info = empMap[name];
+    if (info) {
+      r.department = info.department;
+      r.section = info.section;
+    } else {
+      // Employee not in mapping — clear bad values
+      r.department = '';
+      r.section = '';
+    }
   });
 }
 
@@ -1197,12 +1144,12 @@ function loadData() {
     if (json && json.status === 'success' && json.data) {
       allData = cleanOccupancyData(json.data.map(r => ({
         ...r,
-        department: r.department || r.team || '',
-        section: r.section || '',
+        department: '',  // Will be resolved from employee mapping
+        section: '',     // Will be resolved from employee mapping
         year: r.year || '2026'
       })));
       seedEmployeesFromData(allData);
-      enrichTaskDataFromEmployees(allData);
+      resolveEmployeeDepartments(allData);
       applyFilters();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
     } else {
