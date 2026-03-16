@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نموذج خطة العمل الربعية</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Tajawal', Arial, sans-serif;
+    background: #f0f2f5;
+    color: #1a1a2e;
+    min-height: 100vh;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: white;
+    padding: 32px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -10%;
+    width: 300px;
+    height: 300px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 50%;
+  }
+  .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+  .header p { font-size: 15px; opacity: 0.75; font-weight: 300; }
+  .header-actions {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    gap: 8px;
+  }
+  .header-btn {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .header-btn:hover { background: rgba(255,255,255,0.25); }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
+
+  /* Connection Status Banner */
+  .status-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .status-banner.connected {
+    background: #e8f5e9;
+    border: 1.5px solid #a5d6a7;
+    color: #2e7d32;
+  }
+  .status-banner.disconnected {
+    background: #fff3e0;
+    border: 1.5px solid #ffcc80;
+    color: #e65100;
+  }
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .connected .status-dot { background: #4caf50; }
+  .disconnected .status-dot { background: #ff9800; }
+
+  /* Employee Info Card */
+  .info-card {
+    background: white;
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .info-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .info-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+  }
+  .field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid #dce1e8;
+    border-radius: 10px;
+    font-family: 'Tajawal', Arial, sans-serif;
+    font-size: 14px;
+    background: #fafbfc;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    direction: rtl;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: #0f3460;
+    box-shadow: 0 0 0 3px rgba(15,52,96,0.1);
+    background: white;
+  }
+
+  /* Occupancy Meter */
+  .month-meters {
+    background: white;
+    border-radius: 14px;
+    padding: 22px 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .month-meters h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .meters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+  .meter-item {
+    text-align: center;
+    padding: 14px 10px;
+    border-radius: 10px;
+    background: #f8f9fb;
+    border: 1.5px solid #e8ecf1;
+    transition: all 0.3s;
+  }
+  .meter-item.active { border-color: #0f3460; background: #f0f4fa; }
+  .meter-item.over { border-color: #e74c3c; background: #fdf0ef; }
+  .meter-label { font-size: 13px; color: #777; margin-bottom: 8px; }
+  .meter-value { font-size: 26px; font-weight: 700; color: #1a1a2e; }
+  .meter-item.over .meter-value { color: #e74c3c; }
+  .meter-bar {
+    margin-top: 8px;
+    height: 6px;
+    background: #e8ecf1;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #0f3460, #2980b9);
+    transition: width 0.4s ease;
+  }
+  .meter-item.over .meter-fill { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+
+  /* Tasks Table */
+  .tasks-card {
+    background: white;
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .tasks-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .task-entry {
+    background: #f8f9fb;
+    border: 1.5px solid #e8ecf1;
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 14px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .task-entry:hover { border-color: #b0bec5; }
+  .task-entry .entry-num {
+    position: absolute;
+    top: -10px;
+    right: 16px;
+    background: #0f3460;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 12px;
+    border-radius: 10px;
+  }
+  .task-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .task-grid .field select, .task-grid .field input {
+    background: white;
+  }
+  .remove-btn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 20px;
+    cursor: pointer;
+    transition: color 0.2s;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .remove-btn:hover { color: #e74c3c; background: #fdf0ef; }
+
+  .add-row-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px;
+    border: 2px dashed #cfd8dc;
+    border-radius: 12px;
+    background: transparent;
+    color: #607d8b;
+    font-family: 'Tajawal', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .add-row-btn:hover {
+    border-color: #0f3460;
+    color: #0f3460;
+    background: #f0f4fa;
+  }
+
+  /* Action Buttons */
+  .actions {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  .btn {
+    padding: 12px 32px;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Tajawal', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-submit {
+    background: linear-gradient(135deg, #27ae60, #219a52);
+    color: white;
+    padding: 14px 48px;
+    font-size: 16px;
+  }
+  .btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(39,174,96,0.35); }
+  .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .btn-primary {
+    background: linear-gradient(135deg, #0f3460, #16213e);
+    color: white;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(15,52,96,0.3); }
+  .btn-secondary {
+    background: white;
+    color: #1a1a2e;
+    border: 1.5px solid #dce1e8;
+  }
+  .btn-secondary:hover { background: #f0f2f5; }
+  .btn-danger {
+    background: white;
+    color: #e74c3c;
+    border: 1.5px solid #f5c6cb;
+  }
+  .btn-danger:hover { background: #fdf0ef; }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Success overlay */
+  .success-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .success-overlay.show { opacity: 1; pointer-events: auto; }
+  .success-box {
+    background: white;
+    border-radius: 18px;
+    padding: 48px 40px;
+    text-align: center;
+    max-width: 440px;
+    width: 90%;
+    transform: scale(0.9);
+    transition: transform 0.3s;
+  }
+  .success-overlay.show .success-box { transform: scale(1); }
+  .success-icon { font-size: 60px; margin-bottom: 16px; }
+  .success-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: #27ae60; }
+  .success-msg { font-size: 15px; color: #666; margin-bottom: 24px; line-height: 1.6; }
+  .success-btn {
+    background: #27ae60;
+    color: white;
+    border: none;
+    padding: 12px 36px;
+    border-radius: 10px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1a1a2e;
+    color: white;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    z-index: 1001;
+    opacity: 0;
+    transition: all 0.4s ease;
+    max-width: 90%;
+    text-align: center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.error { background: #e74c3c; }
+  .toast.success { background: #27ae60; }
+
+  .desc-field { grid-column: 1 / -1; }
+  .desc-field textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid #dce1e8;
+    border-radius: 10px;
+    font-family: 'Tajawal', Arial, sans-serif;
+    font-size: 14px;
+    background: white;
+    resize: vertical;
+    min-height: 50px;
+    direction: rtl;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .desc-field textarea:focus {
+    outline: none;
+    border-color: #0f3460;
+    box-shadow: 0 0 0 3px rgba(15,52,96,0.1);
+  }
+
+  /* Setup Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: white;
+    border-radius: 16px;
+    padding: 36px;
+    max-width: 720px;
+    width: 92%;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    direction: rtl;
+  }
+  .modal-close {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: #999;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-close:hover { background: #f0f0f0; color: #333; }
+  .modal-box h3 { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #1a1a2e; }
+  .setup-step {
+    background: #f8f9fb;
+    border: 1px solid #e8ecf1;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .setup-step .step-num {
+    display: inline-block;
+    background: #0f3460;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 28px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-left: 10px;
+  }
+  .setup-step .step-title { font-weight: 700; font-size: 15px; display: inline; }
+  .setup-step p { margin-top: 10px; font-size: 14px; color: #555; line-height: 1.7; }
+  .code-block {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-top: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    direction: ltr;
+    text-align: left;
+    overflow-x: auto;
+    position: relative;
+    white-space: pre;
+  }
+  .copy-code-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .copy-code-btn:hover { background: rgba(255,255,255,0.25); }
+  .url-input-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .url-input-row input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1.5px solid #dce1e8;
+    border-radius: 10px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 14px;
+    direction: ltr;
+  }
+  .url-input-row button {
+    padding: 10px 24px;
+    background: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  @media (max-width: 600px) {
+    .header { padding: 24px 20px; }
+    .header h1 { font-size: 22px; }
+    .header-actions { position: static; margin-top: 14px; }
+    .info-card, .tasks-card, .month-meters { padding: 20px 16px; }
+    .task-grid { grid-template-columns: 1fr; }
+    .info-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>نموذج خطة العمل الربعية</h1>
+  <p>يرجى تعبئة بيانات المهام المخطط لها خلال الربع مع مراعاة عدم تجاوز نسبة الإنشغال 120% لكل شهر</p>
+  <div class="header-actions">
+    <button class="header-btn" onclick="openSetup()">&#9881; إعداد الربط</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Connection Status -->
+  <div id="statusBanner" class="status-banner disconnected">
+    <div class="status-dot"></div>
+    <span id="statusText">غير متصل بـ Google Sheets — اضغط "إعداد الربط" لتفعيل الإرسال المباشر</span>
+  </div>
+
+  <!-- Employee Info -->
+  <div class="info-card">
+    <h2><span style="font-size:22px">&#128100;</span> بيانات الموظف</h2>
+    <div class="info-row">
+      <div class="field">
+        <label>الاسم</label>
+        <input type="text" id="empName" placeholder="أدخل اسمك الكامل">
+      </div>
+      <div class="field">
+        <label>الفريق</label>
+        <select id="empTeam">
+          <option value="">— اختر الفريق —</option>
+          <option>البيانات</option>
+          <option>القنوات الرقمية</option>
+          <option>المنتجات الرقمية</option>
+          <option>تجربة المستخدم</option>
+          <option>الدعم الفني</option>
+          <option>العمليات</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>الربع</label>
+        <select id="empQuarter" onchange="updateMonths()">
+          <option value="">— اختر الربع —</option>
+          <option value="الأول">الربع الأول (يناير - مارس)</option>
+          <option value="الثاني">الربع الثاني (أبريل - يونيو)</option>
+          <option value="الثالث">الربع الثالث (يوليو - سبتمبر)</option>
+          <option value="الرابع">الربع الرابع (أكتوبر - ديسمبر)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Occupancy Meters -->
+  <div class="month-meters">
+    <h2><span style="font-size:22px">&#128202;</span> نسبة الإشغال الشهرية</h2>
+    <div class="meters-grid" id="metersGrid">
+      <div class="meter-item" id="meter-m1">
+        <div class="meter-label" id="meter-label-m1">الشهر 1</div>
+        <div class="meter-value" id="meter-val-m1">0%</div>
+        <div class="meter-bar"><div class="meter-fill" id="meter-fill-m1" style="width:0%"></div></div>
+      </div>
+      <div class="meter-item" id="meter-m2">
+        <div class="meter-label" id="meter-label-m2">الشهر 2</div>
+        <div class="meter-value" id="meter-val-m2">0%</div>
+        <div class="meter-bar"><div class="meter-fill" id="meter-fill-m2" style="width:0%"></div></div>
+      </div>
+      <div class="meter-item" id="meter-m3">
+        <div class="meter-label" id="meter-label-m3">الشهر 3</div>
+        <div class="meter-value" id="meter-val-m3">0%</div>
+        <div class="meter-bar"><div class="meter-fill" id="meter-fill-m3" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Entries -->
+  <div class="tasks-card">
+    <h2><span style="font-size:22px">&#128203;</span> المهام المخطط لها</h2>
+    <div id="taskEntries"></div>
+    <button class="add-row-btn" onclick="addTask()">
+      <span style="font-size:20px">+</span> إضافة مهمة جديدة
+    </button>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-submit" id="submitBtn" onclick="submitToSheets()">
+      <span id="submitLabel">&#9989; إرسال الخطة</span>
+    </button>
+    <button class="btn btn-primary" onclick="exportCSV()">
+      &#128229; تصدير CSV
+    </button>
+    <button class="btn btn-secondary" onclick="previewData()">
+      &#128065; معاينة
+    </button>
+    <button class="btn btn-danger" onclick="clearAll()">
+      &#128465; مسح الكل
+    </button>
+  </div>
+</div>
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-box">
+    <div class="success-icon">&#9989;</div>
+    <div class="success-title">تم إرسال الخطة بنجاح!</div>
+    <div class="success-msg" id="successMsg">تم حفظ <strong id="successCount">0</strong> مهمة في Google Sheets.<br>يمكنك إغلاق الصفحة أو إضافة خطة أخرى.</div>
+    <button class="success-btn" onclick="closeSuccess()">حسناً</button>
+  </div>
+</div>
+
+<!-- Setup Modal -->
+<div class="modal-overlay" id="setupModal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeSetup()">&#10005;</button>
+    <h3>&#9881; إعداد الربط مع Google Sheets</h3>
+
+    <div class="setup-step">
+      <span class="step-num">1</span>
+      <span class="step-title">أنشئ جدول Google Sheets جديد</span>
+      <p>افتح <a href="https://sheets.google.com" target="_blank">Google Sheets</a> وأنشئ جدول بيانات جديد. أضف هذه العناوين في الصف الأول:</p>
+      <div class="code-block"><button class="copy-code-btn" onclick="copyCode(this)">نسخ</button>الاسم | الفريق | الشهر | الربع | المنصة/المنتج | نوع المهمة | نسبة الإنشغال | وصف المهمة | الخدمة إن وجدت | تاريخ الإرسال</div>
+    </div>
+
+    <div class="setup-step">
+      <span class="step-num">2</span>
+      <span class="step-title">افتح محرر Apps Script</span>
+      <p>من القائمة العلوية اختر: <strong>Extensions &gt; Apps Script</strong></p>
+    </div>
+
+    <div class="setup-step">
+      <span class="step-num">3</span>
+      <span class="step-title">الصق الكود التالي</span>
+      <p>امسح المحتوى الافتراضي والصق هذا الكود:</p>
+      <div class="code-block" id="appsScriptCode"><button class="copy-code-btn" onclick="copyCode(this)">نسخ</button>function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = JSON.parse(e.postData.contents);
+  var rows = data.rows;
+  var timestamp = new Date().toLocaleString('ar-SA');
+
+  for (var i = 0; i &lt; rows.length; i++) {
+    var r = rows[i];
+    sheet.appendRow([
+      r.name, r.team, r.month, r.quarter,
+      r.platform, r.taskType, r.occupancy,
+      r.description, r.service, timestamp
+    ]);
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify({
+      status: "success",
+      count: rows.length
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  return ContentService
+    .createTextOutput(JSON.stringify({
+      status: "ok",
+      message: "Workforce form endpoint is active"
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+}</div>
+    </div>
+
+    <div class="setup-step">
+      <span class="step-num">4</span>
+      <span class="step-title">انشر كتطبيق ويب</span>
+      <p>اضغط <strong>Deploy &gt; New deployment</strong> ثم اختر <strong>Web app</strong>.<br>
+      في "Execute as" اختر <strong>Me</strong>، وفي "Who has access" اختر <strong>Anyone</strong>.<br>
+      اضغط <strong>Deploy</strong> وانسخ الرابط الذي يظهر.</p>
+    </div>
+
+    <div class="setup-step">
+      <span class="step-num">5</span>
+      <span class="step-title">الصق رابط التطبيق هنا</span>
+      <p>الصق رابط Web App الذي حصلت عليه:</p>
+      <div class="url-input-row">
+        <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/..." dir="ltr">
+        <button onclick="saveSheetUrl()">حفظ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal-box" style="max-width:900px;">
+    <button class="modal-close" onclick="closePreview()">&#10005;</button>
+    <h3>&#128065; معاينة البيانات</h3>
+    <div id="previewContent" style="font-size:14px; overflow-x:auto; margin-top:16px;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== CONFIG =====
+const STORAGE_KEY = 'quarterly_form_sheet_url';
+let SHEET_URL = localStorage.getItem(STORAGE_KEY) || 'https://script.google.com/macros/s/AKfycbzadKc3RXC9_vof_Hz4vd-WEMa8B8jTOgrKqHF11_Rq0UwzvoDJpf8WbV_RbxQLXrLZzQ/exec';
+
+const QUARTERS = {
+  'الأول':  ['يناير', 'فبراير', 'مارس'],
+  'الثاني': ['أبريل', 'مايو', 'يونيو'],
+  'الثالث': ['يوليو', 'أغسطس', 'سبتمبر'],
+  'الرابع': ['أكتوبر', 'نوفمبر', 'ديسمبر']
+};
+const PLATFORMS = ['نور', 'مدرستي', 'سفير', 'بوابة التعليم', 'فارس'];
+const TASK_TYPES = [
+  'تحليل أعمال', 'تجربة مستخدم', 'تطوير حلول', 'تطوير تكاملات',
+  'تطوير واجهات', 'تطوير موبايل', 'جودة', 'إدارة عمليات DevOps',
+  'دعم L3', 'إدارة تسليم تقني', 'أعمال داخلية',
+  'أعمال مشاريع جديدة (لم تعتمد)', 'دراسات كراسات مشاريع جديدة'
+];
+
+let taskCounter = 0;
+let currentMonths = ['الشهر 1', 'الشهر 2', 'الشهر 3'];
+
+// ===== INIT =====
+updateConnectionStatus();
+addTask();
+
+// ===== SETUP & CONNECTION =====
+function openSetup() {
+  document.getElementById('setupModal').classList.add('show');
+  if (SHEET_URL) document.getElementById('sheetUrl').value = SHEET_URL;
+}
+function closeSetup() { document.getElementById('setupModal').classList.remove('show'); }
+
+function saveSheetUrl() {
+  const url = document.getElementById('sheetUrl').value.trim();
+  if (!url.startsWith('https://script.google.com/')) {
+    showToast('الرابط غير صحيح — يجب أن يبدأ بـ https://script.google.com/', true);
+    return;
+  }
+  SHEET_URL = url;
+  localStorage.setItem(STORAGE_KEY, url);
+  updateConnectionStatus();
+  closeSetup();
+  showToast('تم حفظ الرابط بنجاح — النموذج جاهز للإرسال', false, true);
+}
+
+function updateConnectionStatus() {
+  const banner = document.getElementById('statusBanner');
+  const text = document.getElementById('statusText');
+  if (SHEET_URL) {
+    banner.className = 'status-banner connected';
+    text.textContent = 'متصل بـ Google Sheets — جاهز لاستقبال البيانات';
+  } else {
+    banner.className = 'status-banner disconnected';
+    text.textContent = 'غير متصل بـ Google Sheets — اضغط "إعداد الربط" لتفعيل الإرسال المباشر';
+  }
+}
+
+function copyCode(btn) {
+  const block = btn.parentElement;
+  const text = block.textContent.replace('نسخ', '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'تم!';
+    setTimeout(() => btn.textContent = 'نسخ', 1500);
+  });
+}
+
+// ===== MONTHS =====
+function updateMonths() {
+  const q = document.getElementById('empQuarter').value;
+  currentMonths = (q && QUARTERS[q]) ? QUARTERS[q] : ['الشهر 1', 'الشهر 2', 'الشهر 3'];
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('meter-label-m' + (i+1)).textContent = currentMonths[i];
+  }
+  document.querySelectorAll('.month-select').forEach(sel => {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— الشهر —</option>';
+    currentMonths.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      if (m === prev) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  });
+  recalcMeters();
+}
+
+// ===== TASKS =====
+function makeOptions(arr, placeholder) {
+  return `<option value="">— ${placeholder} —</option>` + arr.map(v => `<option value="${v}">${v}</option>`).join('');
+}
+
+function addTask() {
+  taskCounter++;
+  const div = document.createElement('div');
+  div.className = 'task-entry';
+  div.id = 'task-' + taskCounter;
+  const num = taskCounter;
+  let monthOpts = '<option value="">— الشهر —</option>' + currentMonths.map(m => `<option value="${m}">${m}</option>`).join('');
+
+  div.innerHTML = `
+    <div class="entry-num">مهمة ${num}</div>
+    <button class="remove-btn" onclick="removeTask(${num})" title="حذف">&#10005;</button>
+    <div class="task-grid">
+      <div class="field">
+        <label>الشهر</label>
+        <select class="month-select" onchange="recalcMeters()">${monthOpts}</select>
+      </div>
+      <div class="field">
+        <label>المنصة / المنتج</label>
+        <select>${makeOptions(PLATFORMS, 'المنصة')}</select>
+      </div>
+      <div class="field">
+        <label>نوع المهمة</label>
+        <select>${makeOptions(TASK_TYPES, 'نوع المهمة')}</select>
+      </div>
+      <div class="field">
+        <label>نسبة الإشغال %</label>
+        <input type="number" class="occ-input" min="0" max="120" step="5" placeholder="مثال: 40" onchange="recalcMeters()" oninput="recalcMeters()">
+      </div>
+      <div class="field desc-field">
+        <label>وصف المهمة</label>
+        <textarea rows="2" placeholder="وصف مختصر للمهمة..."></textarea>
+      </div>
+      <div class="field">
+        <label>الخدمة (إن وجدت)</label>
+        <input type="text" placeholder="اختياري">
+      </div>
+    </div>`;
+  document.getElementById('taskEntries').appendChild(div);
+}
+
+function removeTask(id) {
+  const el = document.getElementById('task-' + id);
+  if (el) { el.remove(); recalcMeters(); }
+}
+
+// ===== METERS =====
+function recalcMeters() {
+  const totals = { m1: 0, m2: 0, m3: 0 };
+  document.querySelectorAll('.task-entry').forEach(entry => {
+    const month = entry.querySelector('.month-select')?.value;
+    const occ = parseFloat(entry.querySelector('.occ-input')?.value) || 0;
+    if (month === currentMonths[0]) totals.m1 += occ;
+    else if (month === currentMonths[1]) totals.m2 += occ;
+    else if (month === currentMonths[2]) totals.m3 += occ;
+  });
+  ['m1','m2','m3'].forEach(key => {
+    const val = totals[key];
+    document.getElementById('meter-val-' + key).textContent = val + '%';
+    document.getElementById('meter-fill-' + key).style.width = (Math.min(val, 120) / 120 * 100) + '%';
+    const item = document.getElementById('meter-' + key);
+    item.classList.toggle('over', val > 120);
+    item.classList.toggle('active', val > 0 && val <= 120);
+  });
+}
+
+// ===== DATA =====
+function gatherData() {
+  const name = document.getElementById('empName').value.trim();
+  const team = document.getElementById('empTeam').value;
+  const quarter = document.getElementById('empQuarter').value;
+  const rows = [];
+  document.querySelectorAll('.task-entry').forEach(entry => {
+    const selects = entry.querySelectorAll('select');
+    const inputs = entry.querySelectorAll('input');
+    const textarea = entry.querySelector('textarea');
+    rows.push({
+      name, team, quarter,
+      month: selects[0]?.value || '',
+      platform: selects[1]?.value || '',
+      taskType: selects[2]?.value || '',
+      occupancy: (parseFloat(inputs[0]?.value) || 0) / 100,
+      description: textarea?.value?.trim() || '',
+      service: inputs[1]?.value?.trim() || ''
+    });
+  });
+  return rows;
+}
+
+function validate() {
+  const name = document.getElementById('empName').value.trim();
+  const team = document.getElementById('empTeam').value;
+  const quarter = document.getElementById('empQuarter').value;
+  if (!name) { showToast('يرجى إدخال الاسم', true); return false; }
+  if (!team) { showToast('يرجى اختيار الفريق', true); return false; }
+  if (!quarter) { showToast('يرجى اختيار الربع', true); return false; }
+
+  const entries = document.querySelectorAll('.task-entry');
+  if (entries.length === 0) { showToast('يرجى إضافة مهمة واحدة على الأقل', true); return false; }
+
+  const monthTotals = {};
+  let hasEmpty = false;
+  entries.forEach(entry => {
+    const month = entry.querySelector('.month-select')?.value;
+    const occ = parseFloat(entry.querySelector('.occ-input')?.value) || 0;
+    const platform = entry.querySelectorAll('select')[1]?.value;
+    const taskType = entry.querySelectorAll('select')[2]?.value;
+    if (!month || !platform || !taskType || !occ) hasEmpty = true;
+    if (month) monthTotals[month] = (monthTotals[month] || 0) + occ;
+  });
+
+  if (hasEmpty) { showToast('يرجى تعبئة جميع الحقول المطلوبة في كل مهمة', true); return false; }
+  for (const [m, total] of Object.entries(monthTotals)) {
+    if (total > 120) {
+      showToast(`نسبة الإشغال في ${m} تتجاوز 120% (${total}%)`, true);
+      return false;
+    }
+  }
+  return true;
+}
+
+// ===== SUBMIT TO GOOGLE SHEETS =====
+async function submitToSheets() {
+  if (!validate()) return;
+
+  if (!SHEET_URL) {
+    showToast('يرجى إعداد الربط مع Google Sheets أولاً', true);
+    openSetup();
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  const label = document.getElementById('submitLabel');
+  btn.disabled = true;
+  label.innerHTML = '<span class="spinner"></span> جاري الإرسال...';
+
+  const rows = gatherData();
+
+  try {
+    const response = await fetch(SHEET_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows })
+    });
+
+    // no-cors means we can't read the response, but if no error was thrown, it likely succeeded
+    document.getElementById('successCount').textContent = rows.length;
+    document.getElementById('successOverlay').classList.add('show');
+  } catch (err) {
+    showToast('حدث خطأ أثناء الإرسال: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    label.innerHTML = '&#9989; إرسال الخطة';
+  }
+}
+
+function closeSuccess() {
+  document.getElementById('successOverlay').classList.remove('show');
+}
+
+// ===== CSV EXPORT =====
+function exportCSV() {
+  if (!validate()) return;
+  const rows = gatherData();
+  const headers = ['الاسم','الفريق','الشهر','الربع','المنصة/المنتج','نوع المهمة','نسبة الإنشغال','وصف المهمة','الخدمة إن وجدت'];
+  let csv = '\uFEFF' + headers.join(',') + '\n';
+  rows.forEach(r => {
+    csv += [r.name, r.team, r.month, r.quarter, r.platform, r.taskType, r.occupancy, `"${r.description}"`, r.service].join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `خطة_العمل_${document.getElementById('empName').value.trim()||'employee'}_الربع_${document.getElementById('empQuarter').value||'Q'}.csv`;
+  a.click();
+  showToast('تم تصدير الملف بنجاح', false, true);
+}
+
+// ===== PREVIEW =====
+function previewData() {
+  if (!validate()) return;
+  const rows = gatherData();
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<tr style="background:#0f3460;color:white;">';
+  ['الشهر','المنصة','نوع المهمة','نسبة الإشغال','وصف المهمة','الخدمة'].forEach(h => {
+    html += `<th style="padding:10px 12px;text-align:right;">${h}</th>`;
+  });
+  html += '</tr>';
+  rows.forEach((r, i) => {
+    html += `<tr style="background:${i%2===0?'#f8f9fb':'white'}">`;
+    [r.month, r.platform, r.taskType, (r.occupancy*100)+'%', r.description, r.service].forEach(v => {
+      html += `<td style="padding:8px 12px;border-bottom:1px solid #eee;">${v}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+  document.getElementById('previewContent').innerHTML = html;
+  document.getElementById('previewModal').classList.add('show');
+}
+function closePreview() { document.getElementById('previewModal').classList.remove('show'); }
+
+// ===== CLEAR =====
+function clearAll() {
+  if (!confirm('هل أنت متأكد من مسح جميع البيانات؟')) return;
+  document.getElementById('empName').value = '';
+  document.getElementById('empTeam').selectedIndex = 0;
+  document.getElementById('empQuarter').selectedIndex = 0;
+  document.getElementById('taskEntries').innerHTML = '';
+  taskCounter = 0;
+  updateMonths();
+  showToast('تم مسح جميع البيانات');
+}
+
+// ===== TOAST =====
+function showToast(msg, isError, isSuccess) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : isSuccess ? ' success' : '');
+  setTimeout(() => t.className = 'toast', 3500);
+}
+</script>
+</body>
+</html>
