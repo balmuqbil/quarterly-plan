@@ -766,6 +766,28 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <input type="text" class="search-box" id="empSearch" placeholder="🔍 بحث عن موظف..." oninput="renderEmployeesSection()">
       </div>
     </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center;">
+      <select class="quarter-filter" id="empDeptFilter" onchange="onEmpDeptFilterChange()">
+        <option value="all">جميع الإدارات</option>
+      </select>
+      <select class="quarter-filter" id="empSectionFilter" onchange="renderEmployeesSection()">
+        <option value="all">جميع الأقسام</option>
+      </select>
+      <select class="quarter-filter" id="empPlatformFilter" onchange="renderEmployeesSection()">
+        <option value="all">جميع المنصات</option>
+      </select>
+      <select class="quarter-filter" id="empQuarterFilter" onchange="renderEmployeesSection()">
+        <option value="all">جميع الأرباع</option>
+        <option value="الأول">الربع الأول</option>
+        <option value="الثاني">الربع الثاني</option>
+        <option value="الثالث">الربع الثالث</option>
+        <option value="الرابع">الربع الرابع</option>
+      </select>
+      <select class="quarter-filter" id="empYearFilter" onchange="renderEmployeesSection()">
+        <option value="all">جميع السنوات</option>
+      </select>
+      <button class="export-btn" style="font-size:12px;padding:6px 12px;" onclick="resetEmpFilters()">↻ إعادة تعيين</button>
+    </div>
     <div class="detail-grid" id="employeesGrid"></div>
   </div>
 
@@ -1301,37 +1323,111 @@ function animateValue(id, target) {
 }
 
 // ==================== EMPLOYEES SECTION ====================
+function populateEmpFilters() {
+  // Populate department filter
+  var deptFilter = document.getElementById('empDeptFilter');
+  var currentDept = deptFilter ? deptFilter.value : 'all';
+  var depts = [...new Set(allData.map(function(r) { return r.department; }).filter(Boolean))].sort();
+  if (deptFilter) {
+    deptFilter.innerHTML = '<option value="all">جميع الإدارات</option>' + depts.map(function(d) {
+      return '<option value="' + d + '"' + (d === currentDept ? ' selected' : '') + '>' + d + '</option>';
+    }).join('');
+  }
+
+  // Populate section filter (cascading from dept)
+  var secFilter = document.getElementById('empSectionFilter');
+  var currentSec = secFilter ? secFilter.value : 'all';
+  var secSource = currentDept !== 'all' ? allData.filter(function(r) { return r.department === currentDept; }) : allData;
+  var secs = [...new Set(secSource.map(function(r) { return r.section; }).filter(Boolean))].sort();
+  if (secFilter) {
+    secFilter.innerHTML = '<option value="all">جميع الأقسام</option>' + secs.map(function(s) {
+      return '<option value="' + s + '"' + (s === currentSec ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+  }
+
+  // Populate platform filter
+  var platFilter = document.getElementById('empPlatformFilter');
+  var currentPlat = platFilter ? platFilter.value : 'all';
+  var plats = [...new Set(allData.map(function(r) { return r.platform; }).filter(Boolean))].sort();
+  if (platFilter) {
+    platFilter.innerHTML = '<option value="all">جميع المنصات</option>' + plats.map(function(p) {
+      return '<option value="' + p + '"' + (p === currentPlat ? ' selected' : '') + '>' + p + '</option>';
+    }).join('');
+  }
+
+  // Populate year filter
+  var yearFilter = document.getElementById('empYearFilter');
+  var currentYear = yearFilter ? yearFilter.value : 'all';
+  var years = [...new Set(allData.map(function(r) { return String(r.year); }).filter(Boolean))].sort();
+  if (yearFilter) {
+    yearFilter.innerHTML = '<option value="all">جميع السنوات</option>' + years.map(function(y) {
+      return '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>';
+    }).join('');
+  }
+}
+
+function onEmpDeptFilterChange() {
+  // Reset section filter when department changes
+  var secFilter = document.getElementById('empSectionFilter');
+  if (secFilter) secFilter.value = 'all';
+  renderEmployeesSection();
+}
+
+function resetEmpFilters() {
+  var ids = ['empDeptFilter', 'empSectionFilter', 'empPlatformFilter', 'empQuarterFilter', 'empYearFilter'];
+  ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = 'all'; });
+  var search = document.getElementById('empSearch');
+  if (search) search.value = '';
+  renderEmployeesSection();
+}
+
 function renderEmployeesSection() {
-  const search = (document.getElementById('empSearch')?.value || '').trim().toLowerCase();
-  const empMap = {};
-  filteredData.forEach(r => {
+  populateEmpFilters();
+
+  var search = (document.getElementById('empSearch')?.value || '').trim().toLowerCase();
+  var deptVal = (document.getElementById('empDeptFilter')?.value) || 'all';
+  var secVal = (document.getElementById('empSectionFilter')?.value) || 'all';
+  var platVal = (document.getElementById('empPlatformFilter')?.value) || 'all';
+  var qtrVal = (document.getElementById('empQuarterFilter')?.value) || 'all';
+  var yearVal = (document.getElementById('empYearFilter')?.value) || 'all';
+
+  // Apply local filters on top of global filteredData
+  var data = filteredData;
+  if (deptVal !== 'all') data = data.filter(function(r) { return r.department === deptVal; });
+  if (secVal !== 'all') data = data.filter(function(r) { return r.section === secVal; });
+  if (platVal !== 'all') data = data.filter(function(r) { return r.platform === platVal; });
+  if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
+  if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
+
+  var empMap = {};
+  data.forEach(function(r) {
     if (!empMap[r.name]) empMap[r.name] = { name: r.name, department: r.department, section: r.section || '', tasks: [], totalOcc: 0, months: new Set(), platforms: new Set() };
     empMap[r.name].tasks.push(r);
     empMap[r.name].totalOcc += parseFloat(r.occupancy) || 0;
     empMap[r.name].months.add(r.month);
     empMap[r.name].platforms.add(r.platform);
   });
-  let employees = Object.values(empMap).sort((a,b) => b.totalOcc - a.totalOcc);
-  if (search) employees = employees.filter(e => e.name.includes(search) || e.department.includes(search));
+  var employees = Object.values(empMap).sort(function(a, b) { return b.totalOcc - a.totalOcc; });
+  if (search) employees = employees.filter(function(e) { return e.name.includes(search) || e.department.includes(search); });
 
-  const grid = document.getElementById('employeesGrid');
-  grid.innerHTML = employees.map(e => {
-    const avgOcc = (e.totalOcc / e.tasks.length).toFixed(0);
-    const barColor = avgOcc >= 80 ? '#ef4444' : avgOcc >= 50 ? '#f59e0b' : '#10b981';
-    return `<div class="detail-card" onclick="showEmployeeDrill('${e.name.replace(/'/g,"\\'")}')">
-      <div class="detail-card-header">
-        <div class="detail-card-name">${e.name}</div>
-        <span class="detail-card-badge badge-dept">${e.department}</span>
-        ${e.section ? '<span class="detail-card-badge badge-section">' + e.section + '</span>' : ''}
-      </div>
-      <div class="detail-card-stats">
-        <div class="detail-stat"><div class="detail-stat-value">${e.tasks.length}</div><div class="detail-stat-label">مهام</div></div>
-        <div class="detail-stat"><div class="detail-stat-value">${avgOcc}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
-        <div class="detail-stat"><div class="detail-stat-value">${e.months.size}</div><div class="detail-stat-label">أشهر</div></div>
-        <div class="detail-stat"><div class="detail-stat-value">${e.platforms.size}</div><div class="detail-stat-label">منصات</div></div>
-      </div>
-      <div class="detail-card-bar"><div class="detail-card-bar-fill" style="width:${Math.min(avgOcc,100)}%;background:${barColor};"></div></div>
-    </div>`;
+  var grid = document.getElementById('employeesGrid');
+  grid.innerHTML = employees.map(function(e) {
+    var avgOcc = (e.totalOcc / e.tasks.length).toFixed(0);
+    var barColor = avgOcc >= 80 ? '#ef4444' : avgOcc >= 50 ? '#f59e0b' : '#10b981';
+    return '<div class="detail-card" onclick="showEmployeeDrill(\'' + e.name.replace(/'/g, "\\'") + '\')">' +
+      '<div class="detail-card-header">' +
+        '<div class="detail-card-name">' + e.name + '</div>' +
+        '<span class="detail-card-badge badge-dept">' + e.department + '</span>' +
+        (e.section ? '<span class="detail-card-badge badge-section">' + e.section + '</span>' : '') +
+      '</div>' +
+      '<div class="detail-card-stats">' +
+        '<div class="detail-stat"><div class="detail-stat-value">' + e.tasks.length + '</div><div class="detail-stat-label">مهام</div></div>' +
+        '<div class="detail-stat"><div class="detail-stat-value">' + avgOcc + '%</div><div class="detail-stat-label">متوسط إشغال</div></div>' +
+        '<div class="detail-stat"><div class="detail-stat-value">' + e.months.size + '</div><div class="detail-stat-label">أشهر</div></div>' +
+        '<div class="detail-stat"><div class="detail-stat-value">' + e.platforms.size + '</div><div class="detail-stat-label">منصات</div></div>' +
+      '</div>' +
+      '<div class="detail-card-bar"><div class="detail-card-bar-fill" style="width:' + Math.min(avgOcc, 100) + '%;background:' + barColor + ';"></div></div>' +
+    '</div>';
   }).join('');
   if (!employees.length) grid.innerHTML = '<div class="no-data"><div class="icon">👥</div><p>لا يوجد موظفون مطابقون للبحث</p></div>';
 }
