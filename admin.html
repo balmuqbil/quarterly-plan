@@ -898,9 +898,42 @@ function normalizeOccupancy(val) {
   return Math.round(v * 100) / 100; // clean floating point
 }
 
+function fixTeamPlatformSwap(data) {
+  // Known teams and platforms to detect swaps
+  const mgmt = getMgmtData();
+  const knownTeams = new Set(mgmt.teams.length ? mgmt.teams : DEFAULT_MGMT.teams);
+  const knownPlatforms = new Set(mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms);
+
+  data.forEach(r => {
+    const team = (r.team || '').trim();
+    const platform = (r.platform || '').trim();
+
+    // Case 1: team field has a platform name AND platform field has a team name → swap
+    if (knownPlatforms.has(team) && knownTeams.has(platform)) {
+      r.team = platform;
+      r.platform = team;
+    }
+    // Case 2: team field has a platform name but platform field is also wrong/unknown
+    else if (knownPlatforms.has(team) && !knownTeams.has(platform)) {
+      r.team = platform; // move whatever is in platform to team
+      r.platform = team; // move the known platform name to platform
+    }
+    // Case 3: platform field has a team name but team field is also wrong/unknown
+    else if (knownTeams.has(platform) && !knownPlatforms.has(team)) {
+      r.platform = team;
+      r.team = platform;
+    }
+  });
+
+  return data;
+}
+
 function cleanOccupancyData(data) {
   const MIN_OCC = 25;  // 25%
   const MAX_OCC = 120; // 120%
+
+  // Fix swapped team/platform fields
+  fixTeamPlatformSwap(data);
 
   // Normalize all occupancy values to percentage format
   data.forEach(r => { r.occupancy = normalizeOccupancy(r.occupancy); });
