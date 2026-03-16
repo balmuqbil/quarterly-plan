@@ -1111,54 +1111,64 @@ function seedEmployeesFromData(data) {
 
 function remapEmployeeNames(data) {
   // Replace task employee names with names from the employee table
-  // Tasks from Google Sheets may have old/mismatched names — remap to real employees
-  const mgmt = getMgmtData();
-  const knownNames = new Set(mgmt.employees.map(e => e.name));
-  const empList = mgmt.employees.length ? mgmt.employees : CSV_EMPLOYEES;
+  // Also sets department/section for ALL tasks from the employee mapping
+  var empList = (CSV_EMPLOYEES && CSV_EMPLOYEES.length) ? CSV_EMPLOYEES : [];
+  if (!empList.length) {
+    try { var mgmt = getMgmtData(); empList = mgmt.employees || []; } catch(e) {}
+  }
+  if (!empList.length) return;
+
+  // Build lookup from employee list
+  var empByName = {};
+  empList.forEach(function(e) { if (e.name) empByName[e.name] = e; });
 
   // Find tasks whose name is NOT in the employee table
-  const unmapped = [];
-  data.forEach((r, i) => {
-    const name = (r.name || '').trim();
-    if (!name || !knownNames.has(name)) unmapped.push(i);
+  var unmapped = [];
+  data.forEach(function(r, i) {
+    var name = (r.name || '').trim();
+    if (!name || !empByName[name]) unmapped.push(i);
   });
 
-  if (unmapped.length === 0) return; // All names already match
+  // Remap unknown names round-robin from the employee list
+  if (unmapped.length > 0) {
+    unmapped.forEach(function(idx, i) {
+      var emp = empList[i % empList.length];
+      data[idx].name = emp.name;
+    });
+    console.log('🔄 Remapped', unmapped.length, 'task names to employee table names');
+  }
 
-  // Assign employee names round-robin from the employee list
-  unmapped.forEach((idx, i) => {
-    const emp = empList[i % empList.length];
-    data[idx].name = emp.name;
+  // Set department/section for ALL tasks from the employee mapping
+  data.forEach(function(r) {
+    var emp = empByName[r.name];
+    if (emp) {
+      r.department = emp.department || '';
+      r.section = emp.section || '';
+    }
   });
-  console.log('🔄 Remapped', unmapped.length, 'task names to employee table names');
 }
 
 function resolveEmployeeDepartments(data) {
-  // ALWAYS resolve department/section from the employee mapping (source of truth)
-  // Task records' own department/section values are ignored
-  const mgmt = getMgmtData();
-  const empMap = {};
-  mgmt.employees.forEach(e => {
-    if (e.name) {
-      empMap[e.name] = { department: e.department || '', section: e.section || '' };
-    }
+  // Resolve department/section from the employee mapping (source of truth)
+  // Uses CSV_EMPLOYEES directly as primary source to avoid localStorage timing issues
+  var empList = (CSV_EMPLOYEES && CSV_EMPLOYEES.length) ? CSV_EMPLOYEES : [];
+  if (!empList.length) {
+    try { var mgmt = getMgmtData(); empList = mgmt.employees || []; } catch(e) {}
+  }
+  var empMap = {};
+  empList.forEach(function(e) {
+    if (e.name) empMap[e.name] = { department: e.department || '', section: e.section || '' };
   });
-  console.log('📋 DEBUG prefix=' + MGMT_STORAGE_PREFIX + ', rawKey=' + localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees')?.substring(0,50) + ', empCount=' + mgmt.employees.length);
-  let resolved = 0, missed = 0;
-  data.forEach(r => {
-    const name = (r.name || '').trim();
-    const info = empMap[name];
+  data.forEach(function(r) {
+    var info = empMap[(r.name || '').trim()];
     if (info) {
       r.department = info.department;
       r.section = info.section;
-      if (info.department) resolved++;
     } else {
-      r.department = '';
-      r.section = '';
-      missed++;
+      r.department = r.department || '';
+      r.section = r.section || '';
     }
   });
-  console.log('📋 resolveEmployeeDepartments: resolved=' + resolved + ', missed=' + missed + ', mapSize=' + Object.keys(empMap).length + ', firstDept=' + (data[0] && data[0].department));
 }
 
 // ==================== DATA LOADING ====================
@@ -1201,8 +1211,6 @@ function loadData() {
 }
 
 function applyFilters() {
-  // Always resolve departments from employee mapping before rendering
-  if (allData.length > 0) resolveEmployeeDepartments(allData);
   const quarter = document.getElementById('quarterFilter').value;
   const year = document.getElementById('yearFilter').value;
   filteredData = [...allData];
