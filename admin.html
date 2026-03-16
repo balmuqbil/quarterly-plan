@@ -410,6 +410,66 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .mgmt-toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
 .mgmt-toast.error { background:var(--danger); }
 .mgmt-toast.success { background:var(--success); }
+
+/* Bulk Import */
+.mgmt-bulk-import {
+  border-top:1.5px dashed var(--border); margin-top:12px; padding-top:14px;
+}
+.mgmt-bulk-header {
+  display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+  font-size:13px; font-weight:600; color:var(--text);
+}
+.mgmt-template-btn {
+  padding:5px 12px; border:1.5px solid var(--accent); border-radius:8px; background:#fff;
+  color:var(--accent); font-family:inherit; font-size:12px; font-weight:600;
+  cursor:pointer; transition:all 0.2s;
+}
+.mgmt-template-btn:hover { background:var(--accent); color:#fff; }
+.mgmt-bulk-body {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.mgmt-bulk-upload-btn {
+  padding:8px 16px; border:1.5px dashed var(--accent); border-radius:10px;
+  background:rgba(99,102,241,0.04); color:var(--accent); font-family:inherit;
+  font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;
+}
+.mgmt-bulk-upload-btn:hover { background:rgba(99,102,241,0.1); }
+.mgmt-bulk-or { font-size:12px; color:var(--text-light); }
+.mgmt-bulk-paste-btn {
+  padding:8px 16px; border:1.5px solid var(--border); border-radius:10px; background:#fff;
+  color:var(--text); font-family:inherit; font-size:12px; font-weight:600;
+  cursor:pointer; transition:all 0.2s;
+}
+.mgmt-bulk-paste-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+/* Bulk Paste Dialog */
+.bulk-paste-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:3000;
+  display:flex; align-items:center; justify-content:center;
+  animation:fadeIn 0.2s;
+}
+.bulk-paste-dialog {
+  background:#fff; border-radius:16px; padding:28px; width:90%; max-width:500px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.2); animation:slideUp 0.3s;
+}
+.bulk-paste-dialog h3 { margin:0 0 6px; font-size:17px; color:var(--text); }
+.bulk-paste-dialog .hint { font-size:12px; color:var(--text-light); margin-bottom:14px; }
+.bulk-paste-dialog textarea {
+  width:100%; min-height:180px; border:1.5px solid var(--border); border-radius:10px;
+  padding:12px; font-family:inherit; font-size:13px; resize:vertical; direction:rtl;
+}
+.bulk-paste-dialog textarea:focus { border-color:var(--accent); outline:none; }
+.bulk-paste-actions {
+  display:flex; gap:10px; justify-content:flex-end; margin-top:14px;
+}
+.bulk-paste-actions button {
+  padding:9px 22px; border:none; border-radius:10px; font-family:inherit;
+  font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s;
+}
+.bulk-paste-cancel { background:var(--bg); color:var(--text); }
+.bulk-paste-cancel:hover { background:var(--border); }
+.bulk-paste-submit { background:var(--accent); color:#fff; }
+.bulk-paste-submit:hover { background:var(--accent-light); }
 </style>
 </head>
 <body>
@@ -839,7 +899,7 @@ function loadData() {
     var scriptEl = document.getElementById('jsonp-loader');
     if (scriptEl) scriptEl.remove();
     if (json && json.status === 'success' && json.data) {
-      allData = json.data;
+      allData = json.data.map(r => ({ ...r, year: r.year || '2026' }));
       applyFilters();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
     } else {
@@ -1604,6 +1664,21 @@ function renderDataManagement() {
         <input class="mgmt-add-input" id="mgmt-input-${cat.key}" placeholder="${cat.placeholder}" onkeydown="if(event.key==='Enter')addMgmtItem('${cat.key}')">
         <button class="mgmt-add-btn" onclick="addMgmtItem('${cat.key}')">+ إضافة</button>
       </div>
+      ${cat.key === 'employees' ? `
+      <div class="mgmt-bulk-import">
+        <div class="mgmt-bulk-header">
+          <span>📋 استيراد جماعي</span>
+          <button class="mgmt-template-btn" onclick="downloadEmployeeTemplate()">⬇️ تحميل القالب</button>
+        </div>
+        <div class="mgmt-bulk-body">
+          <label class="mgmt-bulk-upload-btn">
+            📄 رفع ملف CSV أو TXT
+            <input type="file" accept=".csv,.txt" style="display:none" onchange="importEmployeesBulk(event)">
+          </label>
+          <span class="mgmt-bulk-or">أو</span>
+          <button class="mgmt-bulk-paste-btn" onclick="showBulkPasteDialog()">📝 لصق قائمة</button>
+        </div>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1688,6 +1763,93 @@ function importMgmtData(event) {
   };
   reader.readAsText(file);
   event.target.value = '';
+}
+
+// ==================== BULK EMPLOYEE IMPORT ====================
+function downloadEmployeeTemplate() {
+  const bom = '\uFEFF';
+  const csv = bom + 'اسم الموظف\n' +
+    'أحمد محمد العلي\n' +
+    'سارة خالد الأحمدي\n' +
+    'محمد عبدالله الغامدي\n';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'employee_template.csv';
+  a.click();
+  showMgmtToast('تم تحميل القالب', 'success');
+}
+
+function parseEmployeeList(text) {
+  return text.split(/[\n\r]+/)
+    .map(line => line.replace(/^[\s,;"]+|[\s,;"]+$/g, '').trim())
+    .filter(name => name.length > 0 && name !== 'اسم الموظف');
+}
+
+function importEmployeesBulk(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const names = parseEmployeeList(e.target.result);
+    if (names.length === 0) {
+      showMgmtToast('لم يتم العثور على أسماء في الملف', 'error');
+      return;
+    }
+    mergeEmployees(names);
+  };
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = '';
+}
+
+function showBulkPasteDialog() {
+  const overlay = document.createElement('div');
+  overlay.className = 'bulk-paste-overlay';
+  overlay.id = 'bulkPasteOverlay';
+  overlay.innerHTML = `
+    <div class="bulk-paste-dialog">
+      <h3>📝 لصق قائمة الموظفين</h3>
+      <div class="hint">أدخل اسم كل موظف في سطر منفصل</div>
+      <textarea id="bulkPasteArea" placeholder="أحمد محمد العلي\nسارة خالد الأحمدي\nمحمد عبدالله الغامدي"></textarea>
+      <div class="bulk-paste-actions">
+        <button class="bulk-paste-cancel" onclick="closeBulkPaste()">إلغاء</button>
+        <button class="bulk-paste-submit" onclick="submitBulkPaste()">✅ استيراد</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeBulkPaste(); });
+  document.body.appendChild(overlay);
+  document.getElementById('bulkPasteArea').focus();
+}
+
+function closeBulkPaste() {
+  const el = document.getElementById('bulkPasteOverlay');
+  if (el) el.remove();
+}
+
+function submitBulkPaste() {
+  const text = document.getElementById('bulkPasteArea').value;
+  const names = parseEmployeeList(text);
+  if (names.length === 0) {
+    showMgmtToast('لم يتم العثور على أسماء', 'error');
+    return;
+  }
+  closeBulkPaste();
+  mergeEmployees(names);
+}
+
+function mergeEmployees(newNames) {
+  const data = getMgmtData();
+  const existing = new Set(data.employees);
+  let added = 0, skipped = 0;
+  newNames.forEach(name => {
+    if (existing.has(name)) { skipped++; }
+    else { data.employees.push(name); existing.add(name); added++; }
+  });
+  saveMgmtList('employees', data.employees);
+  renderDataManagement();
+  let msg = `تم استيراد ${added} موظف`;
+  if (skipped > 0) msg += ` (تم تخطي ${skipped} مكرر)`;
+  showMgmtToast(msg, added > 0 ? 'success' : 'error');
 }
 
 function showMgmtToast(msg, type) {
