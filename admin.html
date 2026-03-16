@@ -954,8 +954,7 @@ function attemptLogin() {
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('mainContent').style.display = 'block';
     sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
-    initializeFromCSV();
-    loadData();
+    setTimeout(function() { initializeFromCSV(); loadData(); }, 0);
   } else {
     document.getElementById('loginError').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
     document.getElementById('loginPass').value = '';
@@ -975,8 +974,7 @@ function logout() {
 if (sessionStorage.getItem(STORAGE_PREFIX + 'auth') === 'true') {
   document.getElementById('loginOverlay').classList.add('hidden');
   document.getElementById('mainContent').style.display = 'block';
-  initializeFromCSV();
-  loadData();
+  setTimeout(function() { initializeFromCSV(); loadData(); }, 0);
 }
 
 // ==================== NAVIGATION ====================
