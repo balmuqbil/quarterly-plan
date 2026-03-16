@@ -970,9 +970,40 @@ const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','
 const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
 const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','Other':'💻'};
 
+// ==================== SECURITY UTILITIES ====================
+function escapeHtml(str) {
+  if (str == null) return '';
+  var s = String(str);
+  var map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+  return s.replace(/[&<>"']/g, function(c) { return map[c]; });
+}
+function escapeAttr(str) {
+  // For use inside HTML attribute values (double-quoted)
+  return escapeHtml(str);
+}
+function escapeJS(str) {
+  // For use inside JS string literals in onclick handlers
+  if (str == null) return '';
+  return String(str).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/</g,'\\x3c').replace(/>/g,'\\x3e');
+}
+function sanitizeInput(str) {
+  // Strip HTML tags for inputs that should never contain HTML
+  if (str == null) return '';
+  return String(str).replace(/<[^>]*>/g, '').trim();
+}
+async function hashPassword(pass) {
+  var encoder = new TextEncoder();
+  var data = encoder.encode(pass);
+  var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  var hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
 let SHEET_URL = localStorage.getItem(STORAGE_PREFIX + 'url') || DEFAULT_URL;
 let ADMIN_USER = localStorage.getItem(STORAGE_PREFIX + 'user') || 'admin';
-let ADMIN_PASS = localStorage.getItem(STORAGE_PREFIX + 'pass') || 'admin123';
+// Password stored as SHA-256 hash
+var DEFAULT_PASS_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'; // sha256('admin123')
+let ADMIN_PASS_HASH = localStorage.getItem(STORAGE_PREFIX + 'passHash') || DEFAULT_PASS_HASH;
 
 let allData = [];
 let filteredData = [];
@@ -983,10 +1014,11 @@ let tasksPage = 1;
 const PAGE_SIZE = 25;
 
 // ==================== AUTH ====================
-function attemptLogin() {
-  const user = document.getElementById('loginUser').value.trim();
-  const pass = document.getElementById('loginPass').value;
-  if (user === ADMIN_USER && pass === ADMIN_PASS) {
+async function attemptLogin() {
+  var user = document.getElementById('loginUser').value.trim();
+  var pass = document.getElementById('loginPass').value;
+  var passHash = await hashPassword(pass);
+  if (user === ADMIN_USER && passHash === ADMIN_PASS_HASH) {
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('mainContent').style.display = 'block';
     sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
@@ -1042,13 +1074,18 @@ function openSettings() {
   document.getElementById('settingsModal').classList.add('show');
 }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
-function saveSettings() {
-  const url = document.getElementById('settingsUrl').value.trim();
-  const user = document.getElementById('settingsUser').value.trim();
-  const pass = document.getElementById('settingsPass').value;
+async function saveSettings() {
+  var url = document.getElementById('settingsUrl').value.trim();
+  var user = document.getElementById('settingsUser').value.trim();
+  var pass = document.getElementById('settingsPass').value;
   if (url) { SHEET_URL = url; localStorage.setItem(STORAGE_PREFIX + 'url', url); }
   if (user) { ADMIN_USER = user; localStorage.setItem(STORAGE_PREFIX + 'user', user); }
-  if (pass) { ADMIN_PASS = pass; localStorage.setItem(STORAGE_PREFIX + 'pass', pass); }
+  if (pass) {
+    var h = await hashPassword(pass);
+    ADMIN_PASS_HASH = h;
+    localStorage.setItem(STORAGE_PREFIX + 'passHash', h);
+    localStorage.removeItem(STORAGE_PREFIX + 'pass'); // Remove old plaintext
+  }
   closeSettings();
   loadData();
 }
@@ -1330,7 +1367,7 @@ function populateEmpFilters() {
   var depts = [...new Set(allData.map(function(r) { return r.department; }).filter(Boolean))].sort();
   if (deptFilter) {
     deptFilter.innerHTML = '<option value="all">جميع الإدارات</option>' + depts.map(function(d) {
-      return '<option value="' + d + '"' + (d === currentDept ? ' selected' : '') + '>' + d + '</option>';
+      return '<option value="' + escapeAttr(d) + '"' + (d === currentDept ? ' selected' : '') + '>' + escapeHtml(d) + '</option>';
     }).join('');
   }
 
@@ -1341,7 +1378,7 @@ function populateEmpFilters() {
   var secs = [...new Set(secSource.map(function(r) { return r.section; }).filter(Boolean))].sort();
   if (secFilter) {
     secFilter.innerHTML = '<option value="all">جميع الأقسام</option>' + secs.map(function(s) {
-      return '<option value="' + s + '"' + (s === currentSec ? ' selected' : '') + '>' + s + '</option>';
+      return '<option value="' + escapeAttr(s) + '"' + (s === currentSec ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
     }).join('');
   }
 
@@ -1351,7 +1388,7 @@ function populateEmpFilters() {
   var plats = [...new Set(allData.map(function(r) { return r.platform; }).filter(Boolean))].sort();
   if (platFilter) {
     platFilter.innerHTML = '<option value="all">جميع المنصات</option>' + plats.map(function(p) {
-      return '<option value="' + p + '"' + (p === currentPlat ? ' selected' : '') + '>' + p + '</option>';
+      return '<option value="' + escapeAttr(p) + '"' + (p === currentPlat ? ' selected' : '') + '>' + escapeHtml(p) + '</option>';
     }).join('');
   }
 
@@ -1361,7 +1398,7 @@ function populateEmpFilters() {
   var years = [...new Set(allData.map(function(r) { return String(r.year); }).filter(Boolean))].sort();
   if (yearFilter) {
     yearFilter.innerHTML = '<option value="all">جميع السنوات</option>' + years.map(function(y) {
-      return '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>';
+      return '<option value="' + escapeAttr(y) + '"' + (y === currentYear ? ' selected' : '') + '>' + escapeHtml(y) + '</option>';
     }).join('');
   }
 }
@@ -1414,11 +1451,11 @@ function renderEmployeesSection() {
   grid.innerHTML = employees.map(function(e) {
     var avgOcc = (e.totalOcc / e.tasks.length).toFixed(0);
     var barColor = avgOcc >= 80 ? '#ef4444' : avgOcc >= 50 ? '#f59e0b' : '#10b981';
-    return '<div class="detail-card" onclick="showEmployeeDrill(\'' + e.name.replace(/'/g, "\\'") + '\')">' +
+    return '<div class="detail-card" onclick="showEmployeeDrill(\'' + escapeJS(e.name) + '\')">' +
       '<div class="detail-card-header">' +
-        '<div class="detail-card-name">' + e.name + '</div>' +
-        '<span class="detail-card-badge badge-dept">' + e.department + '</span>' +
-        (e.section ? '<span class="detail-card-badge badge-section">' + e.section + '</span>' : '') +
+        '<div class="detail-card-name">' + escapeHtml(e.name) + '</div>' +
+        '<span class="detail-card-badge badge-dept">' + escapeHtml(e.department) + '</span>' +
+        (e.section ? '<span class="detail-card-badge badge-section">' + escapeHtml(e.section) + '</span>' : '') +
       '</div>' +
       '<div class="detail-card-stats">' +
         '<div class="detail-stat"><div class="detail-stat-value">' + e.tasks.length + '</div><div class="detail-stat-label">مهام</div></div>' +
@@ -1446,10 +1483,10 @@ function renderPlatformsSection() {
   const grid = document.getElementById('platformsGrid');
   grid.innerHTML = platforms.map((p,i) => {
     const icon = Object.entries(PLATFORM_ICONS).find(([k]) => p.name.includes(k));
-    return `<div class="detail-card platform-card" onclick="showPlatformDrill('${p.name.replace(/'/g,"\\'")}')">
+    return `<div class="detail-card platform-card" onclick="showPlatformDrill('` + escapeJS(p.name) + `')">
       <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
       <div class="detail-card-header">
-        <div class="detail-card-name">${p.name}</div>
+        <div class="detail-card-name">${escapeHtml(p.name)}</div>
         <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${p.tasks} مهمة</span>
       </div>
       <div class="detail-card-stats">
@@ -1476,9 +1513,9 @@ function renderTasksSection() {
   });
   const types = Object.values(typeMap).sort((a,b) => b.count - a.count);
   const grid = document.getElementById('tasksGrid');
-  grid.innerHTML = types.map((t,i) => `<div class="detail-card" onclick="showTaskTypeDrill('${t.name.replace(/'/g,"\\'")}')">
+  grid.innerHTML = types.map((t,i) => `<div class="detail-card" onclick="showTaskTypeDrill('` + escapeJS(t.name) + `')">
     <div class="detail-card-header">
-      <div class="detail-card-name">${t.name}</div>
+      <div class="detail-card-name">${escapeHtml(t.name)}</div>
       <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${t.count} مهمة</span>
     </div>
     <div class="detail-card-stats">
@@ -1501,13 +1538,13 @@ function renderTasksSection() {
     const idx = allData.indexOf(r);
     return `<tr>
       <td>${start+i+1}</td>
-      <td style="font-weight:600;cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')"><u>${r.name||''}</u></td>
-      <td><span class="badge badge-dept">${r.department||''}</span></td>
-      <td><span class="badge badge-platform">${r.platform||''}</span></td>
-      <td><span class="badge badge-task">${r.taskType||''}</span></td>
+      <td style="font-weight:600;cursor:pointer" onclick="showEmployeeDrill('` + escapeJS(r.name||'') + `')"><u>${escapeHtml(r.name||'')}</u></td>
+      <td><span class="badge badge-dept">${escapeHtml(r.department||'')}</span></td>
+      <td><span class="badge badge-platform">${escapeHtml(r.platform||'')}</span></td>
+      <td><span class="badge badge-task">${escapeHtml(r.taskType||'')}</span></td>
       <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
-      <td>${r.month||''}</td>
-      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td>
+      <td>${escapeHtml(r.month||'')}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
       <td>
         <div class="task-crud-actions">
           <button class="task-crud-btn edit-btn" title="تعديل" onclick="openTaskModal(${idx})">✏️</button>
@@ -1527,16 +1564,16 @@ function populateTaskModalDropdowns() {
   const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
   const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
 
-  document.getElementById('taskField_name').innerHTML = '<option value="">— اختر الموظف —</option>' + empNames.map(e => `<option value="${e}">${e}</option>`).join('');
-  document.getElementById('taskField_department').innerHTML = '<option value="">— اختر الإدارة —</option>' + departments.map(d => `<option value="${d}">${d}</option>`).join('');
-  document.getElementById('taskField_platform').innerHTML = '<option value="">— اختر المنصة —</option>' + platforms.map(p => `<option value="${p}">${p}</option>`).join('');
-  document.getElementById('taskField_taskType').innerHTML = '<option value="">— اختر نوع المهمة —</option>' + taskTypes.map(t => `<option value="${t}">${t}</option>`).join('');
-  document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الشهر —</option>' + MONTHS.map(m => `<option value="${m}">${m}</option>`).join('');
+  document.getElementById('taskField_name').innerHTML = '<option value="">— اختر الموظف —</option>' + empNames.map(e => `<option value="${escapeAttr(e)}">${escapeHtml(e)}</option>`).join('');
+  document.getElementById('taskField_department').innerHTML = '<option value="">— اختر الإدارة —</option>' + departments.map(d => `<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
+  document.getElementById('taskField_platform').innerHTML = '<option value="">— اختر المنصة —</option>' + platforms.map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
+  document.getElementById('taskField_taskType').innerHTML = '<option value="">— اختر نوع المهمة —</option>' + taskTypes.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
+  document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الشهر —</option>' + MONTHS.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join('');
   // Section cascading
   const secData = mgmt.sections || {};
   document.getElementById('taskField_department').onchange = function() {
     const secs = secData[this.value] || [];
-    document.getElementById('taskField_section').innerHTML = '<option value="">— اختر القسم —</option>' + secs.map(s => `<option value="${s}">${s}</option>`).join('');
+    document.getElementById('taskField_section').innerHTML = '<option value="">— اختر القسم —</option>' + secs.map(s => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join('');
   };
   document.getElementById('taskField_section').innerHTML = '<option value="">— اختر القسم —</option>';
 }
@@ -1720,8 +1757,8 @@ function showEmployeeDrill(name) {
   empData.forEach(r => {
     const occ = parseFloat(r.occupancy)||0;
     const c = occ>=80?'#ef4444':occ>=50?'#f59e0b':'#10b981';
-    html += `<tr><td>${r.month}</td><td><span class="badge badge-platform">${r.platform}</span></td><td><span class="badge badge-task">${r.taskType}</span></td>
-    <td><span style="color:${c};font-weight:700;">${occ}%</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td></tr>`;
+    html += `<tr><td>${escapeHtml(r.month)}</td><td><span class="badge badge-platform">${escapeHtml(r.platform)}</span></td><td><span class="badge badge-task">${escapeHtml(r.taskType)}</span></td>
+    <td><span style="color:${c};font-weight:700;">${occ}%</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td></tr>`;
   });
   html += '</tbody></table></div>';
 
@@ -1781,8 +1818,8 @@ function showPlatformDrill(platform) {
     empStats[r.name].occ += parseFloat(r.occupancy)||0;
   });
   Object.entries(empStats).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,s]) => {
-    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${name}</td><td><span class="badge badge-dept">${s.department}</span></td><td>${s.count}</td>
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
+      <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(s.department)}</span></td><td>${s.count}</td>
       <td><span style="color:${s.occ>=100?'#ef4444':'#10b981'};font-weight:700">${s.occ.toFixed(0)}%</span></td></tr>`;
   });
   html += '</tbody></table></div>';
@@ -1816,10 +1853,10 @@ function showTaskTypeDrill(taskType) {
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>المنصة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th></tr></thead><tbody>`;
   tData.forEach(r => {
-    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${r.name}</td><td><span class="badge badge-dept">${r.department}</span></td>
-      <td><span class="badge badge-platform">${r.platform}</span></td><td>${r.occupancy}%</td><td>${r.month}</td>
-      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td></tr>`;
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(r.name||'') + `'),200)">
+      <td style="font-weight:600">${escapeHtml(r.name)}</td><td><span class="badge badge-dept">${escapeHtml(r.department)}</span></td>
+      <td><span class="badge badge-platform">${escapeHtml(r.platform)}</span></td><td>${r.occupancy}%</td><td>${escapeHtml(r.month)}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td></tr>`;
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
@@ -1865,9 +1902,9 @@ function showHighOccDrill() {
   <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>الشهر</th><th>الإشغال</th></tr></thead><tbody>`;
   Object.entries(empMap).forEach(([name,d]) => {
     Object.entries(d.months).filter(([_,v])=>v>=100).sort((a,b)=>b[1]-a[1]).forEach(([month,occ]) => {
-      html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
-        <td style="font-weight:600">${name}</td><td><span class="badge badge-dept">${d.department}</span></td>
-        <td>${month}</td><td style="color:#ef4444;font-weight:700">${occ.toFixed(0)}%</td></tr>`;
+      html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
+        <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(d.department)}</span></td>
+        <td>${escapeHtml(month)}</td><td style="color:#ef4444;font-weight:700">${occ.toFixed(0)}%</td></tr>`;
     });
   });
   html += '</tbody></table></div>';
@@ -1894,7 +1931,7 @@ function showDepartmentsDrill() {
     const hc = cap ? cap.totalHeadCount : 0;
     const totalCap = hc * 100 * activeMonths;
     const capPct = totalCap > 0 ? (d.totalOcc / totalCap * 100).toFixed(1) : '—';
-    html += `<tr><td style="font-weight:600">${dept}</td><td>${d.employees.size}</td><td>${d.tasks}</td>
+    html += `<tr><td style="font-weight:600">${escapeHtml(dept)}</td><td>${d.employees.size}</td><td>${d.tasks}</td>
       <td><span style="color:${avg>=80?'#ef4444':avg>=50?'#f59e0b':'#10b981'};font-weight:700">${avg}%</span></td>
       <td>${hc}</td><td>${capPct}${capPct !== '—' ? '%' : ''}</td></tr>`;
   });
@@ -1986,13 +2023,13 @@ function showDepartmentMembersDrill(department) {
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>عدد المهام</th><th>إجمالي الإشغال</th><th>أشهر نشطة</th></tr></thead><tbody>`;
   Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,d]) => {
-    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${name}</td><td>${d.count}</td>
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
+      <td style="font-weight:600">${escapeHtml(name)}</td><td>${d.count}</td>
       <td><span style="color:${d.occ>=200?'#ef4444':'#10b981'};font-weight:700">${d.occ.toFixed(0)}%</span></td><td>${d.months.size}</td></tr>`;
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
-  openDrill('🏢 ' + department, 'أعضاء الإدارة وإشغالهم');
+  openDrill('🏢 ' + escapeHtml(department), 'أعضاء الإدارة وإشغالهم');
   setTimeout(() => {
     const names = Object.keys(empMap);
     drillCharts.teamMembers = new Chart(document.getElementById('drillTeamMembers'), {
@@ -2041,8 +2078,8 @@ function showMonthDrill(month) {
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
   Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,d]) => {
-    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${name}</td><td><span class="badge badge-dept">${d.department}</span></td><td>${d.count}</td>
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
+      <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(d.department)}</span></td><td>${d.count}</td>
       <td><span style="color:${d.occ>=100?'#ef4444':'#10b981'};font-weight:700">${d.occ.toFixed(0)}%</span></td></tr>`;
   });
   html += '</tbody></table></div>';
@@ -2090,9 +2127,9 @@ function renderHeatmap() {
   });
   let html = `<div class="heatmap-grid" style="grid-template-columns: 120px repeat(${months.length}, 1fr);">`;
   html += '<div class="heatmap-label"></div>';
-  months.forEach(m => { html += `<div class="heatmap-label">${m}</div>`; });
+  months.forEach(m => { html += `<div class="heatmap-label">${escapeHtml(m)}</div>`; });
   departments.forEach(department => {
-    html += `<div class="heatmap-label" style="text-align:right;cursor:pointer;" onclick="showDepartmentMembersDrill('${department.replace(/'/g,"\\'")}')"><u>${department}</u></div>`;
+    html += `<div class="heatmap-label" style="text-align:right;cursor:pointer;" onclick="showDepartmentMembersDrill('` + escapeJS(department) + `')"><u>${escapeHtml(department)}</u></div>`;
     months.forEach(month => {
       const k = department + '|' + month;
       const d = grid[k];
@@ -2103,7 +2140,7 @@ function renderHeatmap() {
       else if (avg >= 90) { bg = `rgba(239,68,68,${0.2+intensity*0.6})`; fg = '#991b1b'; }
       else if (avg >= 60) { bg = `rgba(245,158,11,${0.15+intensity*0.4})`; fg = '#92400e'; }
       else { bg = `rgba(16,185,129,${0.15+intensity*0.4})`; fg = '#065f46'; }
-      const clickHandler = d ? `onclick="showHeatmapCellDrill('${department.replace(/'/g,"\\'")}','${month}')"` : '';
+      const clickHandler = d ? `onclick="showHeatmapCellDrill('` + escapeJS(department) + `','` + escapeJS(month) + `')"` : '';
       html += `<div class="heatmap-cell" style="background:${bg};color:${fg};${d?'cursor:pointer;':''}" ${clickHandler}>${d ? avg+'%' : '—'}</div>`;
     });
   });
@@ -2122,10 +2159,10 @@ function showHeatmapCellDrill(department, month) {
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th></tr></thead><tbody>`;
   cData.forEach(r => {
-    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${r.name}</td><td><span class="badge badge-platform">${r.platform}</span></td>
-      <td><span class="badge badge-task">${r.taskType}</span></td><td>${r.occupancy}%</td>
-      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td></tr>`;
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(r.name||'') + `'),200)">
+      <td style="font-weight:600">${escapeHtml(r.name)}</td><td><span class="badge badge-platform">${escapeHtml(r.platform)}</span></td>
+      <td><span class="badge badge-task">${escapeHtml(r.taskType)}</span></td><td>${r.occupancy}%</td>
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td></tr>`;
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
@@ -2148,17 +2185,17 @@ function renderTable() {
   tbody.innerHTML = pageData.map((r, i) => {
     const occ = parseFloat(r.occupancy)||0;
     const occColor = occ>=80?'#ef4444':occ>=50?'#f59e0b':'#10b981';
-    return `<tr style="cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')">
+    return `<tr style="cursor:pointer" onclick="showEmployeeDrill('` + escapeJS(r.name||'') + `')">
       <td style="color:var(--text-light)">${start+i+1}</td>
-      <td style="font-weight:600">${r.name||''}</td>
-      <td><span class="badge badge-dept">${r.department||''}</span></td>
-      <td><span class="badge badge-section">${r.section||''}</span></td>
-      <td>${r.month||''}</td><td>${r.quarter||''}</td><td>${r.year||''}</td>
-      <td><span class="badge badge-platform">${r.platform||''}</span></td>
-      <td><span class="badge badge-task">${r.taskType||''}</span></td>
+      <td style="font-weight:600">${escapeHtml(r.name||'')}</td>
+      <td><span class="badge badge-dept">${escapeHtml(r.department||'')}</span></td>
+      <td><span class="badge badge-section">${escapeHtml(r.section||'')}</span></td>
+      <td>${escapeHtml(r.month||'')}</td><td>${escapeHtml(r.quarter||'')}</td><td>${escapeHtml(r.year||'')}</td>
+      <td><span class="badge badge-platform">${escapeHtml(r.platform||'')}</span></td>
+      <td><span class="badge badge-task">${escapeHtml(r.taskType||'')}</span></td>
       <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
-      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td>
-      <td style="font-size:11px;color:var(--text-light);direction:ltr;text-align:left;">${r.timestamp||''}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
+      <td style="font-size:11px;color:var(--text-light);direction:ltr;text-align:left;">${escapeHtml(r.timestamp||'')}</td>
     </tr>`;
   }).join('');
   renderPaginationFor('pagination', totalPages, currentPage, p => { currentPage = p; renderTable(); });
@@ -2200,6 +2237,8 @@ var DEFAULT_MGMT = {
 };
 
 // ===== CSV Employee Data (source of truth) =====
+// SECURITY NOTE: Employee data is embedded for JSONP callback timing reliability.
+// For higher security, move to a server-side API and remove this array.
 var CSV_EMPLOYEES = [
   {name:'مشاعل فهد بويرد',department:'تطوير الحلول',section:'تصميم الحلول'},
   {name:'محمد خالد الفهيد',department:'تطوير الحلول',section:'تصميم الحلول'},
@@ -2529,9 +2568,9 @@ function renderDataManagement() {
             const sec = typeof emp === 'string' ? '' : (emp.section || '');
             return `<div class="mgmt-item" id="mgmt-item-employees-${i}">
               <div class="mgmt-emp-info">
-                <span class="mgmt-item-name" id="mgmt-name-employees-${i}">${name}</span>
-                ${dept ? '<span class="badge badge-dept">' + dept + '</span>' : ''}
-                ${sec ? '<span class="badge badge-section">' + sec + '</span>' : ''}
+                <span class="mgmt-item-name" id="mgmt-name-employees-${i}">${escapeHtml(name)}</span>
+                ${dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : ''}
+                ${sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : ''}
               </div>
               <div class="mgmt-item-actions">
                 <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',${i})">✏️</button>
@@ -2543,7 +2582,7 @@ function renderDataManagement() {
         </div>
         <div class="mgmt-add-emp-row">
           <input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="flex:1;" onkeydown="if(event.key==='Enter')addMgmtItem('employees')">
-          <select id="mgmt-emp-dept" onchange="updateEmpSectionDropdown()"><option value="">الإدارة</option>${depts.map(d=>'<option value="'+d+'">'+d+'</option>').join('')}</select>
+          <select id="mgmt-emp-dept" onchange="updateEmpSectionDropdown()"><option value="">الإدارة</option>${depts.map(d=>'<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>').join('')}</select>
           <select id="mgmt-emp-section"><option value="">القسم</option></select>
           <button class="mgmt-add-btn" onclick="addMgmtItem('employees')">+ إضافة</button>
         </div>
@@ -2579,23 +2618,23 @@ function renderDataManagement() {
             const deptSecs = secs[dept] || [];
             return `<div class="mgmt-dept-group">
               <div class="mgmt-dept-header">
-                <span>${dept} (${deptSecs.length})</span>
+                <span>${escapeHtml(dept)} (${deptSecs.length})</span>
               </div>
               <div>
                 ${deptSecs.map((sec, si) => {
                   const hc = capData[dept + '|' + sec] || 0;
                   return `<div class="mgmt-item mgmt-section-item">
-                    <span class="mgmt-item-name">${sec}</span>
+                    <span class="mgmt-item-name">${escapeHtml(sec)}</span>
                     <div style="display:flex;align-items:center;gap:6px;">
                       <span style="font-size:11px;color:var(--text-light);">HC:</span>
-                      <input type="number" class="section-hc-input" value="${hc}" min="0" onchange="updateSectionCapacity('${dept.replace(/'/g,"\\'")}','${sec.replace(/'/g,"\\'")}',this.value)">
-                      <button class="mgmt-action-btn delete" title="حذف" onclick="deleteSection('${dept.replace(/'/g,"\\'")}',${si})">🗑️</button>
+                      <input type="number" class="section-hc-input" value="${hc}" min="0" onchange="updateSectionCapacity('` + escapeJS(dept) + `','` + escapeJS(sec) + `',this.value)">
+                      <button class="mgmt-action-btn delete" title="حذف" onclick="deleteSection('` + escapeJS(dept) + `',${si})">🗑️</button>
                     </div>
                   </div>`;
                 }).join('')}
                 <div class="mgmt-add-row" style="padding:8px 12px 8px 24px;">
-                  <input class="mgmt-add-input" id="mgmt-section-input-${CSS.escape(dept)}" placeholder="أضف قسم جديد..." onkeydown="if(event.key==='Enter')addSection('${dept.replace(/'/g,"\\'")}')">
-                  <button class="mgmt-add-btn" onclick="addSection('${dept.replace(/'/g,"\\'")}')">+ إضافة</button>
+                  <input class="mgmt-add-input" id="mgmt-section-input-${CSS.escape(dept)}" placeholder="أضف قسم جديد..." onkeydown="if(event.key==='Enter')addSection('` + escapeJS(dept) + `')">
+                  <button class="mgmt-add-btn" onclick="addSection('` + escapeJS(dept) + `')">+ إضافة</button>
                 </div>
               </div>
             </div>`;
@@ -2613,7 +2652,7 @@ function renderDataManagement() {
         <div class="mgmt-list" id="mgmt-list-${cat.key}">
           ${items.map((item, i) => `
             <div class="mgmt-item" id="mgmt-item-${cat.key}-${i}">
-              <span class="mgmt-item-name" id="mgmt-name-${cat.key}-${i}">${item}</span>
+              <span class="mgmt-item-name" id="mgmt-name-${cat.key}-${i}">${escapeHtml(item)}</span>
               <div class="mgmt-item-actions">
                 <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('${cat.key}',${i})">✏️</button>
                 <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('${cat.key}',${i})">🗑️</button>
@@ -2637,7 +2676,7 @@ function updateEmpSectionDropdown() {
   const deptVal = document.getElementById('mgmt-emp-dept').value;
   const data = getMgmtData();
   const secs = (data.sections || {})[deptVal] || [];
-  document.getElementById('mgmt-emp-section').innerHTML = '<option value="">القسم</option>' + secs.map(s => '<option value="' + s + '">' + s + '</option>').join('');
+  document.getElementById('mgmt-emp-section').innerHTML = '<option value="">القسم</option>' + secs.map(s => '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>').join('');
 }
 
 function addMgmtItem(key) {
@@ -2646,20 +2685,20 @@ function addMgmtItem(key) {
     const nameInput = document.getElementById('mgmt-emp-name');
     const deptSelect = document.getElementById('mgmt-emp-dept');
     const secSelect = document.getElementById('mgmt-emp-section');
-    const name = nameInput.value.trim();
+    const name = sanitizeInput(nameInput.value);
     if (!name) return;
     if (data.employees.some(e => e.name === name)) {
       showMgmtToast('هذا الموظف موجود بالفعل', 'error');
       return;
     }
-    data.employees.push({ name, department: deptSelect.value, section: secSelect.value });
+    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value) });
     saveMgmtList('employees', data.employees);
     nameInput.value = '';
     deptSelect.selectedIndex = 0;
     secSelect.innerHTML = '<option value="">القسم</option>';
   } else {
     const input = document.getElementById('mgmt-input-' + key);
-    const val = input.value.trim();
+    const val = sanitizeInput(input.value);
     if (!val) return;
     if (data[key].includes(val)) {
       showMgmtToast('هذا العنصر موجود بالفعل', 'error');
@@ -2696,17 +2735,17 @@ function editMgmtItem(key, index) {
     var itemEl = document.getElementById('mgmt-item-employees-' + index);
     if (!itemEl) return;
     var editHtml = '<div class="mgmt-edit-emp-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;padding:8px 0;">';
-    editHtml += '<input class="mgmt-edit-input" style="flex:1;min-width:140px;" value="' + currentName + '" id="mgmt-edit-employees-' + index + '" placeholder="اسم الموظف">';
+    editHtml += '<input class="mgmt-edit-input" style="flex:1;min-width:140px;" value="' + escapeAttr(currentName) + '" id="mgmt-edit-employees-' + index + '" placeholder="اسم الموظف">';
     editHtml += '<select id="mgmt-edit-dept-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:120px;padding:8px;" onchange="updateEditSectionDropdown(' + index + ')">';
     editHtml += '<option value="">الإدارة</option>';
     depts.forEach(function(d) {
-      editHtml += '<option value="' + d + '"' + (d === currentDept ? ' selected' : '') + '>' + d + '</option>';
+      editHtml += '<option value="' + escapeAttr(d) + '"' + (d === currentDept ? ' selected' : '') + '>' + escapeHtml(d) + '</option>';
     });
     editHtml += '</select>';
     editHtml += '<select id="mgmt-edit-section-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:120px;padding:8px;">';
     editHtml += '<option value="">القسم</option>';
     secs.forEach(function(s) {
-      editHtml += '<option value="' + s + '"' + (s === currentSec ? ' selected' : '') + '>' + s + '</option>';
+      editHtml += '<option value="' + escapeAttr(s) + '"' + (s === currentSec ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
     });
     editHtml += '</select>';
     editHtml += '<button class="mgmt-add-btn" style="padding:6px 12px;" onclick="saveEditMgmt(\'employees\',' + index + ')">✅</button>';
@@ -2717,7 +2756,7 @@ function editMgmtItem(key, index) {
   } else {
     var nameEl = document.getElementById('mgmt-name-' + key + '-' + index);
     var currentVal = data[key][index];
-    nameEl.innerHTML = '<input class="mgmt-edit-input" value="' + currentVal + '" id="mgmt-edit-' + key + '-' + index + '" onkeydown="if(event.key===\'Enter\')saveEditMgmt(\'' + key + '\',' + index + ');if(event.key===\'Escape\')renderDataManagement();" autofocus>';
+    nameEl.innerHTML = '<input class="mgmt-edit-input" value="' + escapeAttr(currentVal) + '" id="mgmt-edit-' + key + '-' + index + '" onkeydown="if(event.key===\'Enter\')saveEditMgmt(\'' + key + '\',' + index + ');if(event.key===\'Escape\')renderDataManagement();" autofocus>';
     document.getElementById('mgmt-edit-' + key + '-' + index).focus();
     document.getElementById('mgmt-edit-' + key + '-' + index).select();
   }
@@ -2729,13 +2768,13 @@ function updateEditSectionDropdown(index) {
   var secs = (data.sections || {})[deptVal] || [];
   var secEl = document.getElementById('mgmt-edit-section-' + index);
   secEl.innerHTML = '<option value="">القسم</option>' + secs.map(function(s) {
-    return '<option value="' + s + '">' + s + '</option>';
+    return '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>';
   }).join('');
 }
 
 function saveEditMgmt(key, index) {
   var input = document.getElementById('mgmt-edit-' + key + '-' + index);
-  var val = input.value.trim();
+  var val = sanitizeInput(input.value);
   if (!val) return renderDataManagement();
   var data = getMgmtData();
   if (key === 'employees') {
@@ -2749,8 +2788,8 @@ function saveEditMgmt(key, index) {
     var secSelect = document.getElementById('mgmt-edit-section-' + index);
     data.employees[index] = {
       name: val,
-      department: deptSelect ? deptSelect.value : '',
-      section: secSelect ? secSelect.value : ''
+      department: sanitizeInput(deptSelect ? deptSelect.value : ''),
+      section: sanitizeInput(secSelect ? secSelect.value : '')
     };
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
@@ -2768,7 +2807,7 @@ function saveEditMgmt(key, index) {
 function addSection(dept) {
   const input = document.getElementById('mgmt-section-input-' + CSS.escape(dept));
   if (!input) return;
-  const val = input.value.trim();
+  const val = sanitizeInput(input.value);
   if (!val) return;
   const data = getMgmtData();
   if (!data.sections[dept]) data.sections[dept] = [];
@@ -2856,7 +2895,7 @@ function renderDeptsAndSections() {
     html += '<div class="chart-card" style="margin-bottom:20px;">';
     html += '<div class="chart-header" style="border-bottom:1px solid var(--border);padding-bottom:16px;">';
     html += '<div style="flex:1;">';
-    html += '<div class="chart-title" style="font-size:18px;">🏢 ' + dept + '</div>';
+    html += '<div class="chart-title" style="font-size:18px;">🏢 ' + escapeHtml(dept) + '</div>';
     html += '<div class="chart-subtitle">' + deptSecs.length + ' أقسام · ' + deptEmpCount + ' موظف نشط · HC: ' + deptCap.totalHeadCount + '</div>';
     html += '</div>';
     html += '<div style="text-align:left;min-width:180px;">';
@@ -2886,7 +2925,7 @@ function renderDeptsAndSections() {
         var secEmpCount = empCountByDeptSec[secKey] ? empCountByDeptSec[secKey].size : 0;
 
         html += '<tr>';
-        html += '<td style="font-weight:600;text-align:right;">📂 ' + sec + '</td>';
+        html += '<td style="font-weight:600;text-align:right;">📂 ' + escapeHtml(sec) + '</td>';
         html += '<td>' + secCap.headCount + '</td>';
         html += '<td>' + secEmpCount + '</td>';
         html += '<td>' + secCapTotal + '%</td>';
@@ -2979,7 +3018,7 @@ function showCapacityDrill() {
     const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
     const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
     deptStats[dept] = { used, cap, pct, hc: d.totalHeadCount };
-    html += '<tr><td style="font-weight:600">' + dept + '</td><td>' + d.totalHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
+    html += '<tr><td style="font-weight:600">' + escapeHtml(dept) + '</td><td>' + d.totalHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
     html += '<td><span style="color:' + color + ';font-weight:700">' + pct + '%</span><div class="capacity-bar"><div class="capacity-fill" style="width:' + Math.min(pct,100) + '%;background:' + color + '"></div></div></td></tr>';
   });
   html += '</tbody></table></div>';
@@ -2993,7 +3032,7 @@ function showCapacityDrill() {
       const cap = s.monthlyCapacity * (activeMonths.length||1);
       const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
       const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
-      html += '<tr><td>' + dept + '</td><td>' + sec + '</td><td>' + s.headCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
+      html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.headCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
     });
   });
   html += '</tbody></table></div>';
