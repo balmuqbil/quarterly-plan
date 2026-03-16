@@ -572,6 +572,9 @@ tr:hover td { background:rgba(99,102,241,0.03); }
     <div class="nav-item" data-section="tasks">
       <span class="icon">📋</span> المهام
     </div>
+    <div class="nav-item" data-section="deptsAndSections">
+      <span class="icon">🏢</span> الإدارات والأقسام
+    </div>
     <div class="nav-item" data-section="dataManagement">
       <span class="icon">🗂️</span> إدارة البيانات
     </div>
@@ -617,7 +620,6 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         </select>
         <button class="export-btn" onclick="exportCSV()">📥 تصدير CSV</button>
         <button class="refresh-btn" onclick="loadData()">🔄 تحديث</button>
-        <button class="refresh-btn" style="background:#8b5cf6" onclick="loadSampleData()">🧪 بيانات تجريبية</button>
       </div>
     </div>
 
@@ -871,6 +873,18 @@ tr:hover td { background:rgba(99,102,241,0.03); }
     </div>
   </div>
 
+  <!-- ===== DEPARTMENTS & SECTIONS ===== -->
+  <div class="section-view" id="section-deptsAndSections">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>🏢 الإدارات والأقسام</h1>
+        <div class="subtitle">هيكل الإدارات والأقسام مع تقارير السعة والإشغال</div>
+      </div>
+    </div>
+    <div id="deptsAndSectionsContent"></div>
+  </div>
+
   <!-- ===== DATA MANAGEMENT SECTION ===== -->
   <div class="section-view" id="section-dataManagement">
     <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
@@ -988,6 +1002,7 @@ function navigateTo(section) {
   if (section === 'employees') renderEmployeesSection();
   if (section === 'platforms') renderPlatformsSection();
   if (section === 'tasks') renderTasksSection();
+  if (section === 'deptsAndSections') renderDeptsAndSections();
   if (section === 'dataManagement') renderDataManagement();
   if (section === 'settings') openSettings();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2574,37 +2589,73 @@ function deleteMgmtItem(key, index) {
 }
 
 function editMgmtItem(key, index) {
-  const data = getMgmtData();
-  const nameEl = document.getElementById('mgmt-name-' + key + '-' + index);
+  var data = getMgmtData();
   if (key === 'employees') {
-    const emp = data.employees[index];
-    const currentName = typeof emp === 'string' ? emp : emp.name;
-    nameEl.innerHTML = '<input class="mgmt-edit-input" value="' + currentName + '" id="mgmt-edit-' + key + '-' + index + '" onkeydown="if(event.key===\'Enter\')saveEditMgmt(\'' + key + '\',' + index + ');if(event.key===\'Escape\')renderDataManagement();" autofocus>';
+    var emp = data.employees[index];
+    var currentName = typeof emp === 'string' ? emp : emp.name;
+    var currentDept = (typeof emp === 'object' ? emp.department : '') || '';
+    var currentSec = (typeof emp === 'object' ? emp.section : '') || '';
+    var depts = data.departments || [];
+    var secs = (data.sections || {})[currentDept] || [];
+    var itemEl = document.getElementById('mgmt-item-employees-' + index);
+    if (!itemEl) return;
+    var editHtml = '<div class="mgmt-edit-emp-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;padding:8px 0;">';
+    editHtml += '<input class="mgmt-edit-input" style="flex:1;min-width:140px;" value="' + currentName + '" id="mgmt-edit-employees-' + index + '" placeholder="اسم الموظف">';
+    editHtml += '<select id="mgmt-edit-dept-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:120px;padding:8px;" onchange="updateEditSectionDropdown(' + index + ')">';
+    editHtml += '<option value="">الإدارة</option>';
+    depts.forEach(function(d) {
+      editHtml += '<option value="' + d + '"' + (d === currentDept ? ' selected' : '') + '>' + d + '</option>';
+    });
+    editHtml += '</select>';
+    editHtml += '<select id="mgmt-edit-section-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:120px;padding:8px;">';
+    editHtml += '<option value="">القسم</option>';
+    secs.forEach(function(s) {
+      editHtml += '<option value="' + s + '"' + (s === currentSec ? ' selected' : '') + '>' + s + '</option>';
+    });
+    editHtml += '</select>';
+    editHtml += '<button class="mgmt-add-btn" style="padding:6px 12px;" onclick="saveEditMgmt(\'employees\',' + index + ')">✅</button>';
+    editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 12px;" onclick="renderDataManagement()">❌</button>';
+    editHtml += '</div>';
+    itemEl.innerHTML = editHtml;
+    document.getElementById('mgmt-edit-employees-' + index).focus();
   } else {
-    const currentVal = data[key][index];
+    var nameEl = document.getElementById('mgmt-name-' + key + '-' + index);
+    var currentVal = data[key][index];
     nameEl.innerHTML = '<input class="mgmt-edit-input" value="' + currentVal + '" id="mgmt-edit-' + key + '-' + index + '" onkeydown="if(event.key===\'Enter\')saveEditMgmt(\'' + key + '\',' + index + ');if(event.key===\'Escape\')renderDataManagement();" autofocus>';
+    document.getElementById('mgmt-edit-' + key + '-' + index).focus();
+    document.getElementById('mgmt-edit-' + key + '-' + index).select();
   }
-  document.getElementById('mgmt-edit-' + key + '-' + index).focus();
-  document.getElementById('mgmt-edit-' + key + '-' + index).select();
+}
+
+function updateEditSectionDropdown(index) {
+  var deptVal = document.getElementById('mgmt-edit-dept-' + index).value;
+  var data = getMgmtData();
+  var secs = (data.sections || {})[deptVal] || [];
+  var secEl = document.getElementById('mgmt-edit-section-' + index);
+  secEl.innerHTML = '<option value="">القسم</option>' + secs.map(function(s) {
+    return '<option value="' + s + '">' + s + '</option>';
+  }).join('');
 }
 
 function saveEditMgmt(key, index) {
-  const input = document.getElementById('mgmt-edit-' + key + '-' + index);
-  const val = input.value.trim();
+  var input = document.getElementById('mgmt-edit-' + key + '-' + index);
+  var val = input.value.trim();
   if (!val) return renderDataManagement();
-  const data = getMgmtData();
+  var data = getMgmtData();
   if (key === 'employees') {
-    const existing = data.employees.map(e => typeof e === 'string' ? e : e.name);
-    const currentName = typeof data.employees[index] === 'string' ? data.employees[index] : data.employees[index].name;
+    var existing = data.employees.map(function(e) { return typeof e === 'string' ? e : e.name; });
+    var currentName = typeof data.employees[index] === 'string' ? data.employees[index] : data.employees[index].name;
     if (existing.includes(val) && currentName !== val) {
       showMgmtToast('هذا العنصر موجود بالفعل', 'error');
       return;
     }
-    if (typeof data.employees[index] === 'string') {
-      data.employees[index] = { name: val, department: '', section: '' };
-    } else {
-      data.employees[index].name = val;
-    }
+    var deptSelect = document.getElementById('mgmt-edit-dept-' + index);
+    var secSelect = document.getElementById('mgmt-edit-section-' + index);
+    data.employees[index] = {
+      name: val,
+      department: deptSelect ? deptSelect.value : '',
+      section: secSelect ? secSelect.value : ''
+    };
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
       showMgmtToast('هذا العنصر موجود بالفعل', 'error');
@@ -2649,6 +2700,144 @@ function updateSectionCapacity(dept, sec, hc) {
   const data = getMgmtData();
   data.sectionCapacity[dept + '|' + sec] = parseInt(hc) || 0;
   saveMgmtList('sectionCapacity', data.sectionCapacity);
+}
+
+// ==================== DEPARTMENTS & SECTIONS PAGE ====================
+function renderDeptsAndSections() {
+  var mgmt = getMgmtData();
+  var capData = getCapacityData();
+  var activeMonths = [...new Set(filteredData.map(function(r) { return r.month; }))];
+  var numMonths = activeMonths.length || 1;
+
+  // Calculate usage per dept and section
+  var usageByDeptSec = {};
+  var usageByDept = {};
+  var empCountByDeptSec = {};
+  var empCountByDept = {};
+  filteredData.forEach(function(r) {
+    var dk = r.department || '';
+    var sk = r.section || '';
+    usageByDept[dk] = (usageByDept[dk] || 0) + (parseFloat(r.occupancy) || 0);
+    var key = dk + '|' + sk;
+    usageByDeptSec[key] = (usageByDeptSec[key] || 0) + (parseFloat(r.occupancy) || 0);
+    // Count unique employees
+    if (!empCountByDept[dk]) empCountByDept[dk] = new Set();
+    empCountByDept[dk].add(r.name);
+    if (!empCountByDeptSec[key]) empCountByDeptSec[key] = new Set();
+    empCountByDeptSec[key].add(r.name);
+  });
+
+  var departments = mgmt.departments || [];
+  var sections = mgmt.sections || {};
+  var totalHC = Object.values(capData).reduce(function(s, d) { return s + d.totalHeadCount; }, 0);
+  var totalCap = totalHC * 100 * numMonths;
+  var totalUsed = filteredData.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
+  var totalUtil = totalCap > 0 ? (totalUsed / totalCap * 100).toFixed(1) : 0;
+  var totalSections = 0;
+  departments.forEach(function(d) { totalSections += (sections[d] || []).length; });
+
+  var html = '';
+
+  // Summary cards
+  html += '<div class="kpi-grid" style="margin-bottom:24px;">';
+  html += '<div class="kpi-card animate-in"><div class="kpi-icon">🏢</div><div class="kpi-value">' + departments.length + '</div><div class="kpi-label">إجمالي الإدارات</div></div>';
+  html += '<div class="kpi-card animate-in delay-1"><div class="kpi-icon">📂</div><div class="kpi-value">' + totalSections + '</div><div class="kpi-label">إجمالي الأقسام</div></div>';
+  html += '<div class="kpi-card animate-in delay-2"><div class="kpi-icon">👥</div><div class="kpi-value">' + totalHC + '</div><div class="kpi-label">إجمالي عدد الموظفين (HC)</div></div>';
+  var utilColor = totalUtil > 90 ? 'var(--danger)' : totalUtil > 70 ? 'var(--warning)' : 'var(--success)';
+  html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📊</div><div class="kpi-value" style="color:' + utilColor + '">' + totalUtil + '%</div><div class="kpi-label">نسبة الاستغلال الإجمالية</div></div>';
+  html += '</div>';
+
+  // Per-department cards
+  departments.forEach(function(dept) {
+    var deptCap = capData[dept] || { sections: {}, totalHeadCount: 0, monthlyCapacity: 0 };
+    var deptUsed = usageByDept[dept] || 0;
+    var deptCapTotal = deptCap.monthlyCapacity * numMonths;
+    var deptUtil = deptCapTotal > 0 ? (deptUsed / deptCapTotal * 100).toFixed(1) : 0;
+    var deptUtilColor = deptUtil > 90 ? '#ef4444' : deptUtil > 70 ? '#f59e0b' : '#10b981';
+    var deptEmpCount = empCountByDept[dept] ? empCountByDept[dept].size : 0;
+    var deptSecs = sections[dept] || [];
+
+    html += '<div class="chart-card" style="margin-bottom:20px;">';
+    html += '<div class="chart-header" style="border-bottom:1px solid var(--border);padding-bottom:16px;">';
+    html += '<div style="flex:1;">';
+    html += '<div class="chart-title" style="font-size:18px;">🏢 ' + dept + '</div>';
+    html += '<div class="chart-subtitle">' + deptSecs.length + ' أقسام · ' + deptEmpCount + ' موظف نشط · HC: ' + deptCap.totalHeadCount + '</div>';
+    html += '</div>';
+    html += '<div style="text-align:left;min-width:180px;">';
+    html += '<div style="font-size:24px;font-weight:800;color:' + deptUtilColor + '">' + deptUtil + '%</div>';
+    html += '<div class="capacity-bar" style="width:180px;margin-top:6px;"><div class="capacity-fill" style="width:' + Math.min(deptUtil, 100) + '%;background:' + deptUtilColor + '"></div></div>';
+    html += '<div style="font-size:11px;color:var(--text-light);margin-top:4px;">الاستغلال: ' + deptUsed.toFixed(0) + '% من ' + deptCapTotal + '%</div>';
+    html += '</div></div>';
+
+    // Sections table
+    if (deptSecs.length > 0) {
+      html += '<div style="overflow-x:auto;"><table class="drill-table" style="margin:0;border:none;"><thead><tr>';
+      html += '<th style="text-align:right;">القسم</th>';
+      html += '<th>عدد الموظفين (HC)</th>';
+      html += '<th>الموظفون النشطون</th>';
+      html += '<th>السعة الشهرية</th>';
+      html += '<th>الإشغال الفعلي</th>';
+      html += '<th>نسبة الاستغلال</th>';
+      html += '</tr></thead><tbody>';
+
+      deptSecs.forEach(function(sec) {
+        var secCap = deptCap.sections[sec] || { headCount: 0, monthlyCapacity: 0 };
+        var secKey = dept + '|' + sec;
+        var secUsed = usageByDeptSec[secKey] || 0;
+        var secCapTotal = secCap.monthlyCapacity * numMonths;
+        var secUtil = secCapTotal > 0 ? (secUsed / secCapTotal * 100).toFixed(1) : 0;
+        var secColor = secUtil > 90 ? '#ef4444' : secUtil > 70 ? '#f59e0b' : '#10b981';
+        var secEmpCount = empCountByDeptSec[secKey] ? empCountByDeptSec[secKey].size : 0;
+
+        html += '<tr>';
+        html += '<td style="font-weight:600;text-align:right;">📂 ' + sec + '</td>';
+        html += '<td>' + secCap.headCount + '</td>';
+        html += '<td>' + secEmpCount + '</td>';
+        html += '<td>' + secCapTotal + '%</td>';
+        html += '<td>' + secUsed.toFixed(0) + '%</td>';
+        html += '<td><span style="color:' + secColor + ';font-weight:700;">' + secUtil + '%</span>';
+        html += '<div class="capacity-bar" style="width:100px;display:inline-block;vertical-align:middle;margin-right:8px;"><div class="capacity-fill" style="width:' + Math.min(secUtil, 100) + '%;background:' + secColor + '"></div></div>';
+        html += '</td></tr>';
+      });
+
+      html += '</tbody></table></div>';
+    } else {
+      html += '<div style="padding:16px;color:var(--text-light);text-align:center;">لا توجد أقسام محددة لهذه الإدارة</div>';
+    }
+
+    html += '</div>';
+  });
+
+  // Chart container
+  html += '<div class="chart-card" style="margin-top:20px;">';
+  html += '<div class="chart-header"><div><div class="chart-title">مقارنة السعة والإشغال حسب الإدارة</div></div></div>';
+  html += '<div class="chart-container medium"><canvas id="deptCapacityChart"></canvas></div>';
+  html += '</div>';
+
+  document.getElementById('deptsAndSectionsContent').innerHTML = html;
+
+  // Render chart
+  setTimeout(function() {
+    var canvas = document.getElementById('deptCapacityChart');
+    if (!canvas) return;
+    var deptLabels = departments;
+    var capValues = deptLabels.map(function(d) { return (capData[d] ? capData[d].monthlyCapacity * numMonths : 0); });
+    var usedValues = deptLabels.map(function(d) { return usageByDept[d] ? parseFloat(usageByDept[d].toFixed(0)) : 0; });
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: deptLabels,
+        datasets: [
+          { label: 'السعة', data: capValues, backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
+          { label: 'الإشغال الفعلي', data: usedValues, backgroundColor: usedValues.map(function(u, i) {
+            var pct = capValues[i] > 0 ? u / capValues[i] * 100 : 0;
+            return pct > 90 ? 'rgba(239,68,68,0.6)' : pct > 70 ? 'rgba(245,158,11,0.6)' : 'rgba(16,185,129,0.6)';
+          }), borderRadius: 6 }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { family: 'Tajawal' } } } }, scales: { x: { grid: { display: false }, ticks: { font: { family: 'Tajawal', size: 11 } } }, y: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Tajawal' }, callback: function(v) { return v + '%'; } } } } }
+    });
+  }, 100);
 }
 
 // Capacity helper
