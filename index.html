@@ -1165,7 +1165,7 @@ function gatherData() {
       month: selects[0]?.value || '',
       platform: selects[1]?.value || '',
       taskType: selects[2]?.value || '',
-      occupancy: (parseFloat(inputs[0]?.value) || 0) / 100,
+      occupancy: parseFloat(inputs[0]?.value) || 0,
       description: textarea?.value?.trim() || '',
       service: inputs[1]?.value?.trim() || ''
     });

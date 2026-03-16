@@ -889,6 +889,56 @@ function saveSettings() {
   loadData();
 }
 
+// ==================== DATA CLEANING ====================
+function normalizeOccupancy(val) {
+  let v = parseFloat(val) || 0;
+  // If value > 1.5, it's in percentage form (e.g. 25 means 25%); keep as-is
+  // If value <= 1.5, it's in decimal form (e.g. 0.25 means 25%); convert to percentage
+  if (v > 0 && v <= 1.5) v = v * 100;
+  return Math.round(v * 100) / 100; // clean floating point
+}
+
+function cleanOccupancyData(data) {
+  const MIN_OCC = 25;  // 25%
+  const MAX_OCC = 120; // 120%
+
+  // Normalize all occupancy values to percentage format
+  data.forEach(r => { r.occupancy = normalizeOccupancy(r.occupancy); });
+
+  // Group records by employee + month + year
+  const groups = {};
+  data.forEach(r => {
+    const key = `${r.name}|${r.month}|${r.year}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+
+  const cleaned = [];
+  Object.values(groups).forEach(records => {
+    // Separate low and ok records
+    const lowRecords = records.filter(r => r.occupancy > 0 && r.occupancy < MIN_OCC);
+    const okRecords = records.filter(r => r.occupancy >= MIN_OCC || r.occupancy === 0);
+
+    // Current total of OK records
+    let okTotal = okRecords.reduce((s, r) => s + r.occupancy, 0);
+
+    // Try to adjust low records up to 25%, drop if would exceed 120%
+    lowRecords.forEach(r => {
+      if (okTotal + MIN_OCC <= MAX_OCC) {
+        r.occupancy = MIN_OCC;
+        okTotal += MIN_OCC;
+        okRecords.push(r);
+      }
+      // else: record is dropped
+    });
+
+    // Cap: if max 4 tasks per month, keep only first 4
+    cleaned.push(...okRecords.slice(0, 4));
+  });
+
+  return cleaned;
+}
+
 // ==================== DATA LOADING ====================
 function loadData() {
   const loading = document.getElementById('loadingOverlay');
@@ -899,7 +949,7 @@ function loadData() {
     var scriptEl = document.getElementById('jsonp-loader');
     if (scriptEl) scriptEl.remove();
     if (json && json.status === 'success' && json.data) {
-      allData = json.data.map(r => ({ ...r, year: r.year || '2026' }));
+      allData = cleanOccupancyData(json.data.map(r => ({ ...r, year: r.year || '2026' })));
       applyFilters();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
     } else {
