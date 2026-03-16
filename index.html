@@ -269,6 +269,9 @@
     color: #0f3460;
     background: #f0f4fa;
   }
+  .add-row-btn:disabled { cursor: not-allowed; }
+  .add-row-btn:disabled:hover { background: transparent; color: #888; border-color: #ddd; }
+  .month-task-hint { font-size:11px; color:#888; font-weight:400; }
 
   /* Action Buttons */
   .actions {
@@ -837,6 +840,7 @@ const PLATFORMS = loadMgmtList('platforms', DEFAULT_PLATFORMS);
 const TASK_TYPES = loadMgmtList('taskTypes', DEFAULT_TASK_TYPES);
 const TEAMS = loadMgmtList('teams', DEFAULT_TEAMS);
 const MIN_OCCUPANCY = 25;
+const MAX_TASKS_PER_MONTH = 4;
 
 let taskCounter = 0;
 let currentMonths = ['الشهر 1', 'الشهر 2', 'الشهر 3'];
@@ -1021,7 +1025,57 @@ function makeOptions(arr, placeholder) {
   return `<option value="">— ${placeholder} —</option>` + arr.map(v => `<option value="${v}">${v}</option>`).join('');
 }
 
+function getMonthTaskCounts() {
+  const counts = {};
+  document.querySelectorAll('.task-entry').forEach(entry => {
+    const month = entry.querySelector('.month-select')?.value;
+    if (month) counts[month] = (counts[month] || 0) + 1;
+  });
+  return counts;
+}
+
+function getAvailableMonths() {
+  const counts = getMonthTaskCounts();
+  return currentMonths.filter(m => (counts[m] || 0) < MAX_TASKS_PER_MONTH);
+}
+
+function onMonthChange(selectEl) {
+  const counts = getMonthTaskCounts();
+  const selected = selectEl.value;
+  // Check if this selection exceeds the limit
+  if (selected && counts[selected] > MAX_TASKS_PER_MONTH) {
+    showToast(`الحد الأقصى ${MAX_TASKS_PER_MONTH} مهام لكل شهر`, true);
+    selectEl.value = '';
+  }
+  updateAddTaskBtn();
+  recalcMeters();
+}
+
+function updateAddTaskBtn() {
+  const btn = document.querySelector('.add-row-btn');
+  if (!btn) return;
+  const totalEntries = document.querySelectorAll('.task-entry').length;
+  const maxTotal = MAX_TASKS_PER_MONTH * currentMonths.length;
+  const available = getAvailableMonths();
+  // Disable if all months are full or total entries hit max
+  if (totalEntries >= maxTotal || available.length === 0) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.title = `الحد الأقصى ${MAX_TASKS_PER_MONTH} مهام لكل شهر (${maxTotal} إجمالي)`;
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.title = '';
+  }
+}
+
 function addTask() {
+  const totalEntries = document.querySelectorAll('.task-entry').length;
+  const maxTotal = MAX_TASKS_PER_MONTH * currentMonths.length;
+  if (totalEntries >= maxTotal) {
+    showToast(`الحد الأقصى ${maxTotal} مهمة (${MAX_TASKS_PER_MONTH} لكل شهر)`, true);
+    return;
+  }
   taskCounter++;
   const div = document.createElement('div');
   div.className = 'task-entry';
@@ -1034,8 +1088,8 @@ function addTask() {
     <button class="remove-btn" onclick="removeTask(${num})" title="حذف">&#10005;</button>
     <div class="task-grid">
       <div class="field">
-        <label>الشهر</label>
-        <select class="month-select" onchange="recalcMeters()">${monthOpts}</select>
+        <label>الشهر <span class="month-task-hint"></span></label>
+        <select class="month-select" onchange="onMonthChange(this)">${monthOpts}</select>
       </div>
       <div class="field">
         <label>المنصة / المنتج</label>
@@ -1059,6 +1113,7 @@ function addTask() {
       </div>
     </div>`;
   document.getElementById('taskEntries').appendChild(div);
+  updateAddTaskBtn();
 }
 
 function enforceMinOcc(input) {
@@ -1071,7 +1126,7 @@ function enforceMinOcc(input) {
 
 function removeTask(id) {
   const el = document.getElementById('task-' + id);
-  if (el) { el.remove(); recalcMeters(); }
+  if (el) { el.remove(); recalcMeters(); updateAddTaskBtn(); }
 }
 
 // ===== METERS =====
@@ -1132,6 +1187,7 @@ function validate() {
   if (entries.length === 0) { showToast('يرجى إضافة مهمة واحدة على الأقل', true); return false; }
 
   const monthTotals = {};
+  const monthTaskCounts = {};
   let hasEmpty = false;
   let hasLowOcc = false;
   entries.forEach(entry => {
@@ -1141,11 +1197,20 @@ function validate() {
     const taskType = entry.querySelectorAll('select')[2]?.value;
     if (!month || !platform || !taskType || !occ) hasEmpty = true;
     if (occ > 0 && occ < MIN_OCCUPANCY) hasLowOcc = true;
-    if (month) monthTotals[month] = (monthTotals[month] || 0) + occ;
+    if (month) {
+      monthTotals[month] = (monthTotals[month] || 0) + occ;
+      monthTaskCounts[month] = (monthTaskCounts[month] || 0) + 1;
+    }
   });
 
   if (hasEmpty) { showToast('يرجى تعبئة جميع الحقول المطلوبة في كل مهمة', true); return false; }
   if (hasLowOcc) { showToast(`الحد الأدنى لنسبة الإشغال في كل مهمة هو ${MIN_OCCUPANCY}%`, true); return false; }
+  for (const [m, count] of Object.entries(monthTaskCounts)) {
+    if (count > MAX_TASKS_PER_MONTH) {
+      showToast(`الحد الأقصى ${MAX_TASKS_PER_MONTH} مهام في الشهر الواحد (${m} يحتوي ${count})`, true);
+      return false;
+    }
+  }
   for (const [m, total] of Object.entries(monthTotals)) {
     if (total > 120) {
       showToast(`نسبة الإشغال في ${m} تتجاوز 120% (${total}%)`, true);
