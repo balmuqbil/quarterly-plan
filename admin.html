@@ -431,6 +431,11 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       </div>
       <div class="top-actions">
         <span class="last-update" id="lastUpdate"></span>
+        <select class="quarter-filter" id="yearFilter" onchange="applyFilters()">
+          <option value="all">جميع السنوات</option>
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+        </select>
         <select class="quarter-filter" id="quarterFilter" onchange="applyFilters()">
           <option value="all">جميع الأرباع</option>
           <option value="الأول">الربع الأول</option>
@@ -557,7 +562,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <table>
           <thead>
             <tr>
-              <th>#</th><th>الاسم</th><th>الفريق</th><th>الشهر</th><th>الربع</th>
+              <th>#</th><th>الاسم</th><th>الفريق</th><th>الشهر</th><th>الربع</th><th>السنة</th>
               <th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th><th>تاريخ الإرسال</th>
             </tr>
           </thead>
@@ -781,7 +786,10 @@ function loadData() {
 
 function applyFilters() {
   const quarter = document.getElementById('quarterFilter').value;
-  filteredData = quarter === 'all' ? [...allData] : allData.filter(r => r.quarter === quarter);
+  const year = document.getElementById('yearFilter').value;
+  filteredData = [...allData];
+  if (quarter !== 'all') filteredData = filteredData.filter(r => r.quarter === quarter);
+  if (year !== 'all') filteredData = filteredData.filter(r => String(r.year) === year);
   updateKPIs(); renderCharts(); currentPage = 1; renderTable(); renderHeatmap();
 }
 
@@ -1425,7 +1433,7 @@ function renderTable() {
       <td style="color:var(--text-light)">${start+i+1}</td>
       <td style="font-weight:600">${r.name||''}</td>
       <td><span class="badge badge-team">${r.team||''}</span></td>
-      <td>${r.month||''}</td><td>${r.quarter||''}</td>
+      <td>${r.month||''}</td><td>${r.quarter||''}</td><td>${r.year||''}</td>
       <td><span class="badge badge-platform">${r.platform||''}</span></td>
       <td><span class="badge badge-task">${r.taskType||''}</span></td>
       <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
@@ -1441,9 +1449,9 @@ function filterTable() { currentPage = 1; renderTable(); }
 function exportCSV() {
   if (!filteredData.length) return alert('لا توجد بيانات للتصدير');
   const BOM = '\uFEFF';
-  const headers = ['الاسم','الفريق','الشهر','الربع','المنصة','نوع المهمة','الإشغال','الوصف','الخدمة','تاريخ الإرسال'];
+  const headers = ['الاسم','الفريق','الشهر','الربع','السنة','المنصة','نوع المهمة','الإشغال','الوصف','الخدمة','تاريخ الإرسال'];
   const rows = filteredData.map(r =>
-    [r.name,r.team,r.month,r.quarter,r.platform,r.taskType,r.occupancy,r.description,r.service,r.timestamp]
+    [r.name,r.team,r.month,r.quarter,r.year,r.platform,r.taskType,r.occupancy,r.description,r.service,r.timestamp]
       .map(v => '"'+(v||'').toString().replace(/"/g,'""')+'"').join(',')
   );
   const csv = BOM + headers.join(',') + '\n' + rows.join('\n');

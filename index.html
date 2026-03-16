@@ -393,6 +393,35 @@
   .toast.success { background: #27ae60; }
 
   .desc-field { grid-column: 1 / -1; }
+  /* Autocomplete */
+  .autocomplete-wrapper { position: relative; }
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    background: white;
+    border: 1.5px solid #dce1e8;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 50;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+    display: none;
+  }
+  .autocomplete-list.show { display: block; }
+  .autocomplete-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f0f2f5;
+  }
+  .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item:hover, .autocomplete-item.highlighted { background: #f0f4fa; color: #0f3460; }
+  .autocomplete-item .match { font-weight: 700; color: #0f3460; }
+
   .desc-field textarea {
     width: 100%;
     padding: 10px 14px;
@@ -542,7 +571,7 @@
 
 <div class="header">
   <h1>نموذج خطة العمل الربعية</h1>
-  <p>يرجى تعبئة بيانات المهام المخطط لها خلال الربع مع مراعاة عدم تجاوز نسبة الإنشغال 120% لكل شهر</p>
+  <p>يرجى تعبئة بيانات المهام المخطط لها خلال الربع — الحد الأدنى للإشغال 25% لكل مهمة، والحد الأقصى 120% لكل شهر</p>
   <div class="header-actions">
     <button class="header-btn" onclick="openSetup()">&#9881; إعداد الربط</button>
   </div>
@@ -561,7 +590,10 @@
     <div class="info-row">
       <div class="field">
         <label>الاسم</label>
-        <input type="text" id="empName" placeholder="أدخل اسمك الكامل">
+        <div class="autocomplete-wrapper">
+          <input type="text" id="empName" placeholder="ابدأ بكتابة اسمك..." autocomplete="off" oninput="filterEmployees()" onfocus="filterEmployees()" onkeydown="handleAutocompleteKey(event)">
+          <div class="autocomplete-list" id="empAutoList"></div>
+        </div>
       </div>
       <div class="field">
         <label>الفريق</label>
@@ -573,6 +605,14 @@
           <option>تجربة المستخدم</option>
           <option>الدعم الفني</option>
           <option>العمليات</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>السنة</label>
+        <select id="empYear">
+          <option value="">— اختر السنة —</option>
+          <option value="2026" selected>2026</option>
+          <option value="2027">2027</option>
         </select>
       </div>
       <div class="field">
@@ -655,8 +695,9 @@
     <div class="setup-step">
       <span class="step-num">1</span>
       <span class="step-title">أنشئ جدول Google Sheets جديد</span>
-      <p>افتح <a href="https://sheets.google.com" target="_blank">Google Sheets</a> وأنشئ جدول بيانات جديد. أضف هذه العناوين في الصف الأول:</p>
-      <div class="code-block"><button class="copy-code-btn" onclick="copyCode(this)">نسخ</button>الاسم | الفريق | الشهر | الربع | المنصة/المنتج | نوع المهمة | نسبة الإنشغال | وصف المهمة | الخدمة إن وجدت | تاريخ الإرسال</div>
+      <p>افتح <a href="https://sheets.google.com" target="_blank">Google Sheets</a> وأنشئ جدول بيانات جديد. أضف هذه العناوين في الصف الأول بورقة "البيانات":</p>
+      <div class="code-block"><button class="copy-code-btn" onclick="copyCode(this)">نسخ</button>الاسم | الفريق | الشهر | الربع | السنة | المنصة/المنتج | نوع المهمة | نسبة الإنشغال | وصف المهمة | الخدمة إن وجدت | تاريخ الإرسال</div>
+      <p style="margin-top:10px;">ثم أضف ورقة ثانية باسم <strong>"الموظفون"</strong> وضع أسماء الموظفين في العمود الأول (عمود A).</p>
     </div>
 
     <div class="setup-step">
@@ -670,7 +711,8 @@
       <span class="step-title">الصق الكود التالي</span>
       <p>امسح المحتوى الافتراضي والصق هذا الكود:</p>
       <div class="code-block" id="appsScriptCode"><button class="copy-code-btn" onclick="copyCode(this)">نسخ</button>function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('البيانات') || ss.getActiveSheet();
   var data = JSON.parse(e.postData.contents);
   var rows = data.rows;
   var timestamp = new Date().toLocaleString('ar-SA');
@@ -678,7 +720,7 @@
   for (var i = 0; i &lt; rows.length; i++) {
     var r = rows[i];
     sheet.appendRow([
-      r.name, r.team, r.month, r.quarter,
+      r.name, r.team, r.month, r.quarter, r.year,
       r.platform, r.taskType, r.occupancy,
       r.description, r.service, timestamp
     ]);
@@ -693,12 +735,54 @@
 }
 
 function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({
-      status: "ok",
-      message: "Workforce form endpoint is active"
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+  var action = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.action) || '';
+  var callback = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.callback) || '';
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (action === 'getEmployees') {
+    var empSheet = ss.getSheetByName('الموظفون');
+    var names = [];
+    if (empSheet) {
+      var data = empSheet.getRange('A2:A').getValues();
+      for (var i = 0; i &lt; data.length; i++) {
+        if (data[i][0]) names.push(data[i][0].toString().trim());
+      }
+    }
+    var result = JSON.stringify({status:'success',employees:names});
+    if (callback) {
+      return ContentService.createTextOutput(callback+'('+result+')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return ContentService.createTextOutput(result)
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'getData') {
+    var dataSheet = ss.getSheetByName('البيانات') || ss.getActiveSheet();
+    var all = dataSheet.getDataRange().getValues();
+    var headers = all[0];
+    var rows = [];
+    for (var i = 1; i &lt; all.length; i++) {
+      rows.push({
+        name:all[i][0],team:all[i][1],month:all[i][2],
+        quarter:all[i][3],year:all[i][4],platform:all[i][5],
+        taskType:all[i][6],occupancy:all[i][7],
+        description:all[i][8],service:all[i][9],
+        timestamp:all[i][10]
+      });
+    }
+    var result = JSON.stringify({status:'success',data:rows});
+    if (callback) {
+      return ContentService.createTextOutput(callback+'('+result+')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return ContentService.createTextOutput(result)
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status:"ok",message:"Endpoint is active"
+  })).setMimeType(ContentService.MimeType.JSON);
 }</div>
     </div>
 
@@ -751,13 +835,118 @@ const TASK_TYPES = [
   'دعم L3', 'إدارة تسليم تقني', 'أعمال داخلية',
   'أعمال مشاريع جديدة (لم تعتمد)', 'دراسات كراسات مشاريع جديدة'
 ];
+const MIN_OCCUPANCY = 25;
 
 let taskCounter = 0;
 let currentMonths = ['الشهر 1', 'الشهر 2', 'الشهر 3'];
 
+// ===== EMPLOYEE LIST (autocomplete) =====
+let EMPLOYEE_LIST = [];  // Will be loaded from Google Sheet
+let highlightedIndex = -1;
+
+function loadEmployeeList() {
+  if (!SHEET_URL) return;
+  var cbName = '_empListCb_' + Date.now();
+  window[cbName] = function(json) {
+    delete window[cbName];
+    var s = document.getElementById('emp-list-loader');
+    if (s) s.remove();
+    if (json && json.status === 'success' && json.employees && json.employees.length) {
+      EMPLOYEE_LIST = json.employees;
+      localStorage.setItem('qplan_employees', JSON.stringify(EMPLOYEE_LIST));
+    }
+  };
+  var old = document.getElementById('emp-list-loader');
+  if (old) old.remove();
+  var script = document.createElement('script');
+  script.id = 'emp-list-loader';
+  script.src = SHEET_URL + '?action=getEmployees&callback=' + cbName;
+  script.onerror = function() { delete window[cbName]; };
+  document.head.appendChild(script);
+}
+
+// Load cached employee list first, then try fetching fresh
+try {
+  var cached = localStorage.getItem('qplan_employees');
+  if (cached) EMPLOYEE_LIST = JSON.parse(cached);
+} catch(e) {}
+
+function filterEmployees() {
+  const input = document.getElementById('empName');
+  const list = document.getElementById('empAutoList');
+  const val = input.value.trim();
+  highlightedIndex = -1;
+
+  if (!val || !EMPLOYEE_LIST.length) {
+    list.classList.remove('show');
+    return;
+  }
+
+  const matches = EMPLOYEE_LIST.filter(name =>
+    name.includes(val) || name.toLowerCase().includes(val.toLowerCase())
+  ).slice(0, 10);
+
+  if (!matches.length) {
+    list.classList.remove('show');
+    return;
+  }
+
+  list.innerHTML = matches.map((name, i) => {
+    const highlighted = name.replace(new RegExp('(' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<span class="match">$1</span>');
+    return `<div class="autocomplete-item" data-index="${i}" onmousedown="selectEmployee('${name.replace(/'/g, "\\'")}')">${highlighted}</div>`;
+  }).join('');
+  list.classList.add('show');
+}
+
+function selectEmployee(name) {
+  document.getElementById('empName').value = name;
+  document.getElementById('empAutoList').classList.remove('show');
+  highlightedIndex = -1;
+
+  // Auto-fill team if we have mapping
+  const empTeamMap = {};
+  // This could be extended to include team mapping from the sheet
+}
+
+function handleAutocompleteKey(e) {
+  const list = document.getElementById('empAutoList');
+  const items = list.querySelectorAll('.autocomplete-item');
+  if (!items.length || !list.classList.contains('show')) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+    items.forEach((item, i) => item.classList.toggle('highlighted', i === highlightedIndex));
+    items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    highlightedIndex = Math.max(highlightedIndex - 1, 0);
+    items.forEach((item, i) => item.classList.toggle('highlighted', i === highlightedIndex));
+    items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+    e.preventDefault();
+    const name = EMPLOYEE_LIST.filter(n => {
+      const val = document.getElementById('empName').value.trim();
+      return n.includes(val) || n.toLowerCase().includes(val.toLowerCase());
+    })[highlightedIndex];
+    if (name) selectEmployee(name);
+  } else if (e.key === 'Escape') {
+    list.classList.remove('show');
+    highlightedIndex = -1;
+  }
+}
+
+// Hide autocomplete on click outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.autocomplete-wrapper')) {
+    document.getElementById('empAutoList').classList.remove('show');
+  }
+});
+
 // ===== INIT =====
 updateConnectionStatus();
 addTask();
+loadEmployeeList();
 
 // ===== SETUP & CONNECTION =====
 function openSetup() {
@@ -775,6 +964,7 @@ function saveSheetUrl() {
   SHEET_URL = url;
   localStorage.setItem(STORAGE_KEY, url);
   updateConnectionStatus();
+  loadEmployeeList();
   closeSetup();
   showToast('تم حفظ الرابط بنجاح — النموذج جاهز للإرسال', false, true);
 }
@@ -850,8 +1040,8 @@ function addTask() {
         <select>${makeOptions(TASK_TYPES, 'نوع المهمة')}</select>
       </div>
       <div class="field">
-        <label>نسبة الإشغال %</label>
-        <input type="number" class="occ-input" min="0" max="120" step="5" placeholder="مثال: 40" onchange="recalcMeters()" oninput="recalcMeters()">
+        <label>نسبة الإشغال % (الحد الأدنى ${MIN_OCCUPANCY}%)</label>
+        <input type="number" class="occ-input" min="${MIN_OCCUPANCY}" max="120" step="5" placeholder="الحد الأدنى ${MIN_OCCUPANCY}%" onchange="enforceMinOcc(this);recalcMeters()" oninput="recalcMeters()">
       </div>
       <div class="field desc-field">
         <label>وصف المهمة</label>
@@ -863,6 +1053,14 @@ function addTask() {
       </div>
     </div>`;
   document.getElementById('taskEntries').appendChild(div);
+}
+
+function enforceMinOcc(input) {
+  const val = parseFloat(input.value);
+  if (val && val < MIN_OCCUPANCY) {
+    input.value = MIN_OCCUPANCY;
+    showToast(`الحد الأدنى لنسبة الإشغال هو ${MIN_OCCUPANCY}%`, true);
+  }
 }
 
 function removeTask(id) {
@@ -895,13 +1093,14 @@ function gatherData() {
   const name = document.getElementById('empName').value.trim();
   const team = document.getElementById('empTeam').value;
   const quarter = document.getElementById('empQuarter').value;
+  const year = document.getElementById('empYear').value;
   const rows = [];
   document.querySelectorAll('.task-entry').forEach(entry => {
     const selects = entry.querySelectorAll('select');
     const inputs = entry.querySelectorAll('input');
     const textarea = entry.querySelector('textarea');
     rows.push({
-      name, team, quarter,
+      name, team, quarter, year,
       month: selects[0]?.value || '',
       platform: selects[1]?.value || '',
       taskType: selects[2]?.value || '',
@@ -917,8 +1116,10 @@ function validate() {
   const name = document.getElementById('empName').value.trim();
   const team = document.getElementById('empTeam').value;
   const quarter = document.getElementById('empQuarter').value;
+  const year = document.getElementById('empYear').value;
   if (!name) { showToast('يرجى إدخال الاسم', true); return false; }
   if (!team) { showToast('يرجى اختيار الفريق', true); return false; }
+  if (!year) { showToast('يرجى اختيار السنة', true); return false; }
   if (!quarter) { showToast('يرجى اختيار الربع', true); return false; }
 
   const entries = document.querySelectorAll('.task-entry');
@@ -926,16 +1127,19 @@ function validate() {
 
   const monthTotals = {};
   let hasEmpty = false;
+  let hasLowOcc = false;
   entries.forEach(entry => {
     const month = entry.querySelector('.month-select')?.value;
     const occ = parseFloat(entry.querySelector('.occ-input')?.value) || 0;
     const platform = entry.querySelectorAll('select')[1]?.value;
     const taskType = entry.querySelectorAll('select')[2]?.value;
     if (!month || !platform || !taskType || !occ) hasEmpty = true;
+    if (occ > 0 && occ < MIN_OCCUPANCY) hasLowOcc = true;
     if (month) monthTotals[month] = (monthTotals[month] || 0) + occ;
   });
 
   if (hasEmpty) { showToast('يرجى تعبئة جميع الحقول المطلوبة في كل مهمة', true); return false; }
+  if (hasLowOcc) { showToast(`الحد الأدنى لنسبة الإشغال في كل مهمة هو ${MIN_OCCUPANCY}%`, true); return false; }
   for (const [m, total] of Object.entries(monthTotals)) {
     if (total > 120) {
       showToast(`نسبة الإشغال في ${m} تتجاوز 120% (${total}%)`, true);
@@ -970,7 +1174,6 @@ async function submitToSheets() {
       body: JSON.stringify({ rows })
     });
 
-    // no-cors means we can't read the response, but if no error was thrown, it likely succeeded
     document.getElementById('successCount').textContent = rows.length;
     document.getElementById('successOverlay').classList.add('show');
   } catch (err) {
@@ -989,15 +1192,15 @@ function closeSuccess() {
 function exportCSV() {
   if (!validate()) return;
   const rows = gatherData();
-  const headers = ['الاسم','الفريق','الشهر','الربع','المنصة/المنتج','نوع المهمة','نسبة الإنشغال','وصف المهمة','الخدمة إن وجدت'];
+  const headers = ['الاسم','الفريق','الشهر','الربع','السنة','المنصة/المنتج','نوع المهمة','نسبة الإنشغال','وصف المهمة','الخدمة إن وجدت'];
   let csv = '\uFEFF' + headers.join(',') + '\n';
   rows.forEach(r => {
-    csv += [r.name, r.team, r.month, r.quarter, r.platform, r.taskType, r.occupancy, `"${r.description}"`, r.service].join(',') + '\n';
+    csv += [r.name, r.team, r.month, r.quarter, r.year, r.platform, r.taskType, r.occupancy, `"${r.description}"`, r.service].join(',') + '\n';
   });
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `خطة_العمل_${document.getElementById('empName').value.trim()||'employee'}_الربع_${document.getElementById('empQuarter').value||'Q'}.csv`;
+  a.download = `خطة_العمل_${document.getElementById('empName').value.trim()||'employee'}_${document.getElementById('empYear').value||''}_الربع_${document.getElementById('empQuarter').value||'Q'}.csv`;
   a.click();
   showToast('تم تصدير الملف بنجاح', false, true);
 }
@@ -1006,7 +1209,9 @@ function exportCSV() {
 function previewData() {
   if (!validate()) return;
   const rows = gatherData();
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  const year = document.getElementById('empYear').value;
+  let html = `<p style="margin-bottom:12px;font-weight:600;">السنة: ${year} | الربع: ${rows[0]?.quarter || ''}</p>`;
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
   html += '<tr style="background:#0f3460;color:white;">';
   ['الشهر','المنصة','نوع المهمة','نسبة الإشغال','وصف المهمة','الخدمة'].forEach(h => {
     html += `<th style="padding:10px 12px;text-align:right;">${h}</th>`;
@@ -1031,6 +1236,7 @@ function clearAll() {
   document.getElementById('empName').value = '';
   document.getElementById('empTeam').selectedIndex = 0;
   document.getElementById('empQuarter').selectedIndex = 0;
+  document.getElementById('empYear').value = '2026';
   document.getElementById('taskEntries').innerHTML = '';
   taskCounter = 0;
   updateMonths();
