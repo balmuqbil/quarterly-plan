@@ -709,24 +709,67 @@
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('البيانات') || ss.getActiveSheet();
   var data = JSON.parse(e.postData.contents);
-  var rows = data.rows;
-  var timestamp = new Date().toLocaleString('ar-SA');
+  var action = data.action || 'add';
 
-  for (var i = 0; i &lt; rows.length; i++) {
-    var r = rows[i];
-    sheet.appendRow([
-      r.name, r.team, r.month, r.quarter, r.year,
-      r.platform, r.taskType, r.occupancy,
-      r.description, r.service, timestamp
-    ]);
+  if (action === 'add') {
+    var rows = data.rows;
+    var timestamp = new Date().toLocaleString('ar-SA');
+    for (var i = 0; i &lt; rows.length; i++) {
+      var r = rows[i];
+      sheet.appendRow([
+        r.name, r.team, r.month, r.quarter, r.year,
+        r.platform, r.taskType, r.occupancy,
+        r.description, r.service, timestamp
+      ]);
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success', count: rows.length
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 
-  return ContentService
-    .createTextOutput(JSON.stringify({
-      status: "success",
-      count: rows.length
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+  if (action === 'update') {
+    var match = data.match;
+    var updated = data.updated;
+    var all = sheet.getDataRange().getValues();
+    for (var i = 1; i &lt; all.length; i++) {
+      if (all[i][0] === match.name &amp;&amp; all[i][2] === match.month
+        &amp;&amp; String(all[i][4]) === String(match.year)
+        &amp;&amp; all[i][5] === match.platform
+        &amp;&amp; all[i][6] === match.taskType) {
+        var ts = new Date().toLocaleString('ar-SA');
+        sheet.getRange(i+1,1,1,11).setValues([[
+          updated.name, updated.team, updated.month, updated.quarter,
+          updated.year, updated.platform, updated.taskType, updated.occupancy,
+          updated.description, updated.service, ts
+        ]]);
+        break;
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success'
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'delete') {
+    var match = data.match;
+    var all = sheet.getDataRange().getValues();
+    for (var i = all.length - 1; i >= 1; i--) {
+      if (all[i][0] === match.name &amp;&amp; all[i][2] === match.month
+        &amp;&amp; String(all[i][4]) === String(match.year)
+        &amp;&amp; all[i][5] === match.platform
+        &amp;&amp; all[i][6] === match.taskType) {
+        sheet.deleteRow(i + 1);
+        break;
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success'
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'error', message: 'Unknown action'
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doGet(e) {

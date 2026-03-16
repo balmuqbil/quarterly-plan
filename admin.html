@@ -470,6 +470,47 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .bulk-paste-cancel:hover { background:var(--border); }
 .bulk-paste-submit { background:var(--accent); color:#fff; }
 .bulk-paste-submit:hover { background:var(--accent-light); }
+
+/* Task CRUD */
+.task-crud-actions { display:flex; gap:4px; justify-content:center; }
+.task-crud-btn {
+  width:30px; height:30px; border:none; border-radius:8px; cursor:pointer;
+  font-size:14px; display:flex; align-items:center; justify-content:center;
+  transition:all 0.2s; background:transparent;
+}
+.task-crud-btn.edit-btn { color:var(--accent); }
+.task-crud-btn.edit-btn:hover { background:rgba(99,102,241,0.1); }
+.task-crud-btn.delete-btn { color:var(--danger); }
+.task-crud-btn.delete-btn:hover { background:rgba(239,68,68,0.1); }
+
+.task-modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:3000;
+  display:none; align-items:center; justify-content:center;
+  animation:fadeIn 0.2s;
+}
+.task-modal-overlay.show { display:flex; }
+.task-modal {
+  background:#fff; border-radius:16px; padding:28px; width:92%; max-width:650px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.2); animation:slideUp 0.3s;
+  max-height:90vh; overflow-y:auto;
+}
+.task-modal h3 { margin:0 0 20px; font-size:18px; color:var(--text); }
+.task-modal-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:14px;
+}
+.task-modal-field { display:flex; flex-direction:column; gap:5px; }
+.task-modal-field.full-width { grid-column:1/-1; }
+.task-modal-field label { font-size:12px; font-weight:600; color:var(--text-light); }
+.task-modal-field select, .task-modal-field input, .task-modal-field textarea {
+  padding:9px 12px; border:1.5px solid var(--border); border-radius:8px;
+  font-family:inherit; font-size:13px; direction:rtl; background:#fff;
+}
+.task-modal-field select:focus, .task-modal-field input:focus, .task-modal-field textarea:focus {
+  border-color:var(--accent); outline:none;
+}
+.task-modal-actions {
+  display:flex; gap:10px; justify-content:flex-end; margin-top:20px;
+}
 </style>
 </head>
 <body>
@@ -725,9 +766,10 @@ tr:hover td { background:rgba(99,102,241,0.03); }
     <div class="top-bar">
       <div>
         <h1>📋 المهام</h1>
-        <div class="subtitle">عرض تفصيلي لجميع أنواع المهام</div>
+        <div class="subtitle">عرض تفصيلي لجميع أنواع المهام — إضافة، تعديل، وحذف</div>
       </div>
       <div class="top-actions">
+        <button class="export-btn" onclick="openTaskModal()">➕ إضافة مهمة</button>
         <input type="text" class="search-box" id="taskSearch" placeholder="🔍 بحث في المهام..." oninput="renderTasksSection()">
       </div>
     </div>
@@ -736,11 +778,73 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="chart-header"><div><div class="chart-title">جدول المهام التفصيلي</div></div></div>
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>#</th><th>الموظف</th><th>الفريق</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th></tr></thead>
+          <thead><tr><th>#</th><th>الموظف</th><th>الفريق</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th><th>إجراءات</th></tr></thead>
           <tbody id="tasksTableBody"></tbody>
         </table>
       </div>
       <div class="pagination" id="tasksPagination"></div>
+    </div>
+  </div>
+
+  <!-- ===== TASK CRUD MODAL ===== -->
+  <div class="task-modal-overlay" id="taskModalOverlay" onclick="if(event.target===this)closeTaskModal()">
+    <div class="task-modal">
+      <h3 id="taskModalTitle">➕ إضافة مهمة جديدة</h3>
+      <input type="hidden" id="taskEditIdx">
+      <div class="task-modal-grid">
+        <div class="task-modal-field">
+          <label>الموظف</label>
+          <select id="taskField_name"></select>
+        </div>
+        <div class="task-modal-field">
+          <label>الفريق</label>
+          <select id="taskField_team"></select>
+        </div>
+        <div class="task-modal-field">
+          <label>المنصة / المنتج</label>
+          <select id="taskField_platform"></select>
+        </div>
+        <div class="task-modal-field">
+          <label>نوع المهمة</label>
+          <select id="taskField_taskType"></select>
+        </div>
+        <div class="task-modal-field">
+          <label>الشهر</label>
+          <select id="taskField_month">
+            <option value="">— اختر —</option>
+          </select>
+        </div>
+        <div class="task-modal-field">
+          <label>الربع</label>
+          <select id="taskField_quarter">
+            <option value="">— اختر —</option>
+            <option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option>
+          </select>
+        </div>
+        <div class="task-modal-field">
+          <label>السنة</label>
+          <select id="taskField_year">
+            <option value="">— اختر —</option>
+            <option>2026</option><option>2027</option>
+          </select>
+        </div>
+        <div class="task-modal-field">
+          <label>نسبة الإشغال %</label>
+          <input type="number" id="taskField_occupancy" min="25" max="120" step="5" placeholder="25 - 120">
+        </div>
+        <div class="task-modal-field full-width">
+          <label>وصف المهمة</label>
+          <textarea id="taskField_description" rows="2" placeholder="وصف مختصر..."></textarea>
+        </div>
+        <div class="task-modal-field">
+          <label>الخدمة (اختياري)</label>
+          <input type="text" id="taskField_service" placeholder="اختياري">
+        </div>
+      </div>
+      <div class="task-modal-actions">
+        <button class="bulk-paste-cancel" onclick="closeTaskModal()">إلغاء</button>
+        <button class="bulk-paste-submit" onclick="saveTask()">💾 حفظ</button>
+      </div>
     </div>
   </div>
 
@@ -1185,14 +1289,158 @@ function renderTasksSection() {
   document.getElementById('tasksTableBody').innerHTML = pageData.map((r,i) => {
     const occ = parseFloat(r.occupancy)||0;
     const occColor = occ >= 80 ? '#ef4444' : occ >= 50 ? '#f59e0b' : '#10b981';
-    return `<tr style="cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')">
-      <td>${start+i+1}</td><td style="font-weight:600">${r.name||''}</td><td><span class="badge badge-team">${r.team||''}</span></td>
-      <td><span class="badge badge-platform">${r.platform||''}</span></td><td><span class="badge badge-task">${r.taskType||''}</span></td>
+    const idx = allData.indexOf(r);
+    return `<tr>
+      <td>${start+i+1}</td>
+      <td style="font-weight:600;cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')"><u>${r.name||''}</u></td>
+      <td><span class="badge badge-team">${r.team||''}</span></td>
+      <td><span class="badge badge-platform">${r.platform||''}</span></td>
+      <td><span class="badge badge-task">${r.taskType||''}</span></td>
       <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
-      <td>${r.month||''}</td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td>
+      <td>${r.month||''}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td>
+      <td>
+        <div class="task-crud-actions">
+          <button class="task-crud-btn edit-btn" title="تعديل" onclick="openTaskModal(${idx})">✏️</button>
+          <button class="task-crud-btn delete-btn" title="حذف" onclick="deleteTask(${idx})">🗑️</button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
   renderPaginationFor('tasksPagination', totalPages, tasksPage, p => { tasksPage = p; renderTasksSection(); });
+}
+
+// ==================== TASK CRUD ====================
+function populateTaskModalDropdowns() {
+  const mgmt = getMgmtData();
+  const employees = mgmt.employees.length ? mgmt.employees : [...new Set(allData.map(r => r.name).filter(Boolean))];
+  const teams = mgmt.teams.length ? mgmt.teams : DEFAULT_MGMT.teams;
+  const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
+
+  document.getElementById('taskField_name').innerHTML = '<option value="">— اختر الموظف —</option>' + employees.map(e => `<option value="${e}">${e}</option>`).join('');
+  document.getElementById('taskField_team').innerHTML = '<option value="">— اختر الفريق —</option>' + teams.map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('taskField_platform').innerHTML = '<option value="">— اختر المنصة —</option>' + platforms.map(p => `<option value="${p}">${p}</option>`).join('');
+  document.getElementById('taskField_taskType').innerHTML = '<option value="">— اختر نوع المهمة —</option>' + taskTypes.map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الشهر —</option>' + MONTHS.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+function openTaskModal(editIdx) {
+  populateTaskModalDropdowns();
+  const isEdit = editIdx !== undefined && editIdx >= 0;
+  document.getElementById('taskModalTitle').textContent = isEdit ? '✏️ تعديل المهمة' : '➕ إضافة مهمة جديدة';
+  document.getElementById('taskEditIdx').value = isEdit ? editIdx : '-1';
+
+  if (isEdit) {
+    const r = allData[editIdx];
+    document.getElementById('taskField_name').value = r.name || '';
+    document.getElementById('taskField_team').value = r.team || '';
+    document.getElementById('taskField_platform').value = r.platform || '';
+    document.getElementById('taskField_taskType').value = r.taskType || '';
+    document.getElementById('taskField_month').value = r.month || '';
+    document.getElementById('taskField_quarter').value = r.quarter || '';
+    document.getElementById('taskField_year').value = r.year || '2026';
+    document.getElementById('taskField_occupancy').value = r.occupancy || '';
+    document.getElementById('taskField_description').value = r.description || '';
+    document.getElementById('taskField_service').value = r.service || '';
+  } else {
+    ['name','team','platform','taskType','month','quarter','year','occupancy','description','service'].forEach(f => {
+      const el = document.getElementById('taskField_' + f);
+      if (el.tagName === 'SELECT') el.selectedIndex = 0;
+      else el.value = '';
+    });
+    document.getElementById('taskField_year').value = '2026';
+  }
+  document.getElementById('taskModalOverlay').classList.add('show');
+}
+
+function closeTaskModal() {
+  document.getElementById('taskModalOverlay').classList.remove('show');
+}
+
+function saveTask() {
+  const fields = {};
+  ['name','team','platform','taskType','month','quarter','year','description','service'].forEach(f => {
+    fields[f] = document.getElementById('taskField_' + f).value.trim();
+  });
+  fields.occupancy = parseFloat(document.getElementById('taskField_occupancy').value) || 0;
+
+  // Validate required fields
+  if (!fields.name) { showMgmtToast('يرجى اختيار الموظف', 'error'); return; }
+  if (!fields.team) { showMgmtToast('يرجى اختيار الفريق', 'error'); return; }
+  if (!fields.platform) { showMgmtToast('يرجى اختيار المنصة', 'error'); return; }
+  if (!fields.taskType) { showMgmtToast('يرجى اختيار نوع المهمة', 'error'); return; }
+  if (!fields.month) { showMgmtToast('يرجى اختيار الشهر', 'error'); return; }
+  if (!fields.quarter) { showMgmtToast('يرجى اختيار الربع', 'error'); return; }
+  if (!fields.year) { showMgmtToast('يرجى اختيار السنة', 'error'); return; }
+  if (fields.occupancy < 25) { showMgmtToast('الحد الأدنى للإشغال 25%', 'error'); return; }
+  if (fields.occupancy > 120) { showMgmtToast('الحد الأقصى للإشغال 120%', 'error'); return; }
+
+  const editIdx = parseInt(document.getElementById('taskEditIdx').value);
+  fields.timestamp = new Date().toLocaleString('ar-SA');
+
+  let originalTask = null;
+  if (editIdx >= 0) {
+    // Update existing record
+    originalTask = { ...allData[editIdx] };
+    allData[editIdx] = fields;
+    showMgmtToast('تم تعديل المهمة بنجاح', 'success');
+  } else {
+    // Add new record
+    allData.push(fields);
+    showMgmtToast('تم إضافة المهمة بنجاح', 'success');
+  }
+
+  closeTaskModal();
+  applyFilters();
+  // Sync to Google Sheets if configured
+  syncTaskToSheet(fields, editIdx, originalTask);
+}
+
+function deleteTask(idx) {
+  const r = allData[idx];
+  if (!r) return;
+  if (!confirm(`هل تريد حذف مهمة "${r.taskType}" للموظف "${r.name}" في ${r.month}؟`)) return;
+  allData.splice(idx, 1);
+  applyFilters();
+  showMgmtToast('تم حذف المهمة', 'success');
+  // Sync deletion to Google Sheets
+  syncDeleteToSheet(r);
+}
+
+function syncTaskToSheet(task, editIdx, originalTask) {
+  if (!SHEET_URL) return;
+  if (editIdx < 0) {
+    // Add new
+    fetch(SHEET_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add', rows: [task] })
+    }).catch(() => {});
+  } else if (originalTask) {
+    // Update existing
+    fetch(SHEET_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update',
+        match: { name: originalTask.name, month: originalTask.month, year: originalTask.year, platform: originalTask.platform, taskType: originalTask.taskType },
+        updated: task
+      })
+    }).catch(() => {});
+  }
+}
+
+function syncDeleteToSheet(task) {
+  if (!SHEET_URL) return;
+  fetch(SHEET_URL, {
+    method: 'POST', mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'delete',
+      match: { name: task.name, month: task.month, year: task.year, platform: task.platform, taskType: task.taskType }
+    })
+  }).catch(() => {});
 }
 
 function renderPaginationFor(id, totalPages, curPage, onPage) {
