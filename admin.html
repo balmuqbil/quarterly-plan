@@ -617,6 +617,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         </select>
         <button class="export-btn" onclick="exportCSV()">📥 تصدير CSV</button>
         <button class="refresh-btn" onclick="loadData()">🔄 تحديث</button>
+        <button class="refresh-btn" style="background:#8b5cf6" onclick="loadSampleData()">🧪 بيانات تجريبية</button>
       </div>
     </div>
 
@@ -953,6 +954,7 @@ function attemptLogin() {
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('mainContent').style.display = 'block';
     sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
+    initializeFromCSV();
     loadData();
   } else {
     document.getElementById('loginError').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
@@ -973,6 +975,7 @@ function logout() {
 if (sessionStorage.getItem(STORAGE_PREFIX + 'auth') === 'true') {
   document.getElementById('loginOverlay').classList.add('hidden');
   document.getElementById('mainContent').style.display = 'block';
+  initializeFromCSV();
   loadData();
 }
 
@@ -2038,19 +2041,189 @@ const MGMT_STORAGE_PREFIX = 'qplan_mgmt_';
 // Default data lists
 const DEFAULT_MGMT = {
   employees: [],
-  departments: ['البيانات','القنوات الرقمية','المنتجات الرقمية','تجربة المستخدم','الدعم الفني','العمليات'],
+  departments: ['تطوير الحلول','الاستشارات وهيكلية الحلول','تنفيذ تكامل الحلول'],
   sections: {
-    'البيانات': ['تحليل البيانات', 'هندسة البيانات'],
-    'القنوات الرقمية': ['إدارة القنوات', 'التطوير الرقمي'],
-    'المنتجات الرقمية': ['تطوير المنتجات', 'إدارة المنتجات'],
-    'تجربة المستخدم': ['بحث المستخدم', 'تصميم التفاعل'],
-    'الدعم الفني': ['الدعم التقني', 'إدارة الحوادث'],
-    'العمليات': ['إدارة العمليات', 'التحسين المستمر']
+    'تطوير الحلول': ['تصميم الحلول', 'تطوير البرمجيات', 'إدارة التسليم التقني والجودة', 'هندسة المنصات'],
+    'الاستشارات وهيكلية الحلول': ['هيكلية الحلول'],
+    'تنفيذ تكامل الحلول': ['تكامل التطبيقات', 'الحلول المؤسسية']
   },
   sectionCapacity: {},
   platforms: ['نور','مدرستي','سفير','بوابة التعليم','فارس'],
   taskTypes: ['تحليل أعمال','تجربة مستخدم','تطوير حلول','تطوير تكاملات','تطوير واجهات','تطوير موبايل','جودة','إدارة عمليات DevOps','دعم L3','إدارة تسليم تقني','أعمال داخلية','أعمال مشاريع جديدة (لم تعتمد)','دراسات كراسات مشاريع جديدة']
 };
+
+// ===== CSV Employee Data (source of truth) =====
+const CSV_EMPLOYEES = [
+  {name:'مشاعل فهد بويرد',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'محمد خالد الفهيد',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'أحمد رمضان أحمد',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'عبدالعزيز محمد المسعود',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'عبدالله سامي عبدالهادي البقشي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'ثابت عبدالله العنزي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'محمد بندر محمد بن مقبل',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'ناصر نايف العتيبي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'سرينيفاسولو بوسالا',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'معتز محمد بدوي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'ماليش مونجالا',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أمير ميخائيل رياض',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أحمد حسين أحمد التونسي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'محمد سمير الدسوقي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'حازم جودة علي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أحمد فؤاد جمال الدين',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'فتح الله أحمد سعيد الخطيب',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'رامي علي البسيوني',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'محمد عبدالمنعم مخالي',department:'تطوير الحلول',section:'هندسة المنصات'},
+  {name:'ضياء محمد الصالحي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'محمد أحمد شحاتة',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'خالد حسن السيد',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'محمد سعيد فتح الباب',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أحمد السيد محمد',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'علي محمد حسن',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'علي محمد أبو زهرة',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أمين نعيم موسى',department:'تطوير الحلول',section:'هندسة المنصات'},
+  {name:'لجين فهد أبو الجدايل',department:'تطوير الحلول',section:'هندسة المنصات'},
+  {name:'علي علي المخلافي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'كيران كومار سانغاراجو',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'آصف علي شيخ',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'كيرثي فاردان ريدي سيلام',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'عبدالله زياد أبو أحمد',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'شعيب أحمد نيمانابالي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'محمد زهير عقيلان',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'مهند راسم سعد',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'مثنى أحمد عقلان',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'رحاب عبدالله الحمدان',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'عبدالله إبراهيم الخريف',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'ناصر سعد التليان',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أحمد عبدالله القاسم',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'العنود عبدالله العويس',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'علاء فوزي النمراوي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أحمد ناصر محمد',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'هلا شجعان العماج',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'سامي عثمان إبراهيم',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ممريز خان أعظم',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أحمد إبراهيم مصطفى',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'محمد مدحت حسن',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'عبدالعزيز محمد المصبحي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'عبادة إبراهيم جميعان',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'محمد إبراهيم حسن',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'محمد عبدالله سليمان',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'مازن أحمد محمد',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'عبدالحفيظ محمد إسماعيل أحمد',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أسامة حسن عسيري',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'كنان سعد السيايد',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'رغد سعيد علي القحطاني',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أحمد عبدالرحيم إبراهيم الغبان',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'هلا عبدالرحمن القحطاني',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'مها عوض العنزي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'فارس محمد النافعي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'عبدالعزيز بدر البدر',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'سعد عبدالرحمن الغوينم',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'مرام خالد المضحي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'مها ناصر البراك',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'رنا محمد العويضي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'لمياء سالم الدوسري',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'الهنوف ظاهر الشمري',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ريهام الزويد',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'رزان محمد ربعي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'منال محمد القحطاني',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ريم صالح القرشي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ابتهال إبراهيم المسلم',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'رغد تركي الزهراني',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'منصور محمد العنزي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'هلا الأحمدي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'شماء صالح الحميسان',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'سارة عبدالعزيز السليم',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'خلود فهد العمران',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'عبدالعزيز راشد السمري',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'أحد علي الشهري',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'سلطان راشد الدوسري',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'تاج السر عابدين بابكر',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'عبدالعزيز مرشد الحربي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ديما محمد الأبوش',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'طرفة سعد المعيذر',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ديمه سعد البقمي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'أحمد محمد العتيبي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ريم صالح الغامدي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'يوسف سعد العتيبي',department:'تطوير الحلول',section:'تصميم الحلول'},
+  {name:'ريوف صالح بن عبدالواحد',department:'تطوير الحلول',section:'هندسة المنصات'},
+  {name:'أروى إبراهيم عبدالله الغيث',department:'تطوير الحلول',section:'هندسة المنصات'},
+  {name:'رغد عبدالهادي الحربي',department:'تطوير الحلول',section:'هندسة المنصات'},
+  {name:'وجدان الجار الله',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'فردوس محمد أمين الأندجاني',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'رحاب ناصر الوهيبي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'جميلة سعود العتيبي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'مها محمد النفيعي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'أروى سلطان الرزيحي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'الهنوف عبدالله العبدالله',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'طارق خليفة الربيعة',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'مشعل محمد المدبل',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'عبدالله هارون الطراوي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'أفنان الدايل',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'فهد عناد العنزي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'نهال الحسن القرني',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'إسراء المسعد',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'هدى عبدالرحمن الشهري',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'أحمد عبدالله العريفج',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'أسماء ناصر العتيبي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'رغد محمد الحسون',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'لينا محمد السيف',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'نورة عبدالله العربيد',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'نورة عبدالله الجامعة',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'عبدالله محمد الشهري',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'عبدالله القحطاني',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'شهد أحمد السمري',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'فاي عبدالله الشهري',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'مزنة فايز الدوسري',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'سعد فهد الحربي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أثير براك العتيبي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'رحاب عبدالكريم الحربي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'مريم ثابت العسافي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'تركي سلطان المدبل',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'نورة محمد معاشي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'حمد محمد الجريسي',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'رزان راشد الزهراني',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'شريف عبدالمنعم فرج',department:'تطوير الحلول',section:'تطوير البرمجيات'},
+  {name:'أيمن محمد نصر',department:'الاستشارات وهيكلية الحلول',section:'هيكلية الحلول'},
+  {name:'أحمد عبدالله شلن',department:'الاستشارات وهيكلية الحلول',section:'هيكلية الحلول'},
+  {name:'سامر صبحي أبو عبيد',department:'الاستشارات وهيكلية الحلول',section:'هيكلية الحلول'},
+  {name:'خالد الموسى',department:'تنفيذ تكامل الحلول',section:'تكامل التطبيقات'},
+  {name:'سرينيفاس شيرفيرالا ديفيندار',department:'تنفيذ تكامل الحلول',section:'تكامل التطبيقات'},
+  {name:'أحمد حمدي الديدموني',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'غادة ناجي الجميعي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'محمد سعد العنزي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'فهد منصور العتيبي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'ربيع حسن بحريه',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'حمد عبدالله الدوسري',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'إبراهيم فهد الغامدي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'محمد عبدالكريم عثمان',department:'تنفيذ تكامل الحلول',section:'تكامل التطبيقات'},
+  {name:'محمد عبدالله القحطاني',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'محمد فوزي رشوان',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'علي علي الطلاوي',department:'تنفيذ تكامل الحلول',section:'تكامل التطبيقات'},
+  {name:'سعيد محمد العمري',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'وسيم فرحان عمري',department:'تنفيذ تكامل الحلول',section:'تكامل التطبيقات'},
+  {name:'ياسر سعيد الغامدي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'أحمد علي الغامدي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'أبرار محمد الربيعة',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'أحمد محمد محمود',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'أحمد علي القاسم',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'أشرف ماجد فاضل',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'بسام عبدالرحمن الفروان',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'عيسى ضيف العمري',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'فهد سعد الزايد',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'فراس ناصر الحسن',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'فؤاد فايز نشار',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'عبدالله مبارك اللويمي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'عبدالله محمد العلياني',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'عبدالعزيز صالح الحسيني',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'محمد ناصر الدوسري',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'ناصر حمود حربي',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'رائد عبدالله الرويس',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'سامي مديش النتيفات',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'حسن محمد شنك',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'صالح عبدالرحمن الزوير',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'مهند شار الشهري',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'},
+  {name:'فايز عبدالله الشهري',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'}
+];
 
 const MGMT_CATEGORIES = [
   { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...', custom: true },
@@ -2105,6 +2278,85 @@ function saveMgmtList(key, list) {
     // Also save full employee data for form auto-fill
     localStorage.setItem('qplan_employees_full', JSON.stringify(list));
   }
+}
+
+// ===== Initialize management data from CSV (replaces all existing data) =====
+function initializeFromCSV() {
+  // Save departments
+  saveMgmtList('departments', DEFAULT_MGMT.departments);
+  // Save sections
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'sections', JSON.stringify(DEFAULT_MGMT.sections));
+  // Save sectionCapacity (reset)
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'sectionCapacity', JSON.stringify({}));
+  // Save employees from CSV
+  saveMgmtList('employees', CSV_EMPLOYEES);
+  console.log('✅ Initialized from CSV:', CSV_EMPLOYEES.length, 'employees,', DEFAULT_MGMT.departments.length, 'departments');
+}
+
+// ===== Generate sample tasks =====
+function generateSampleTasks(taskCount, employeeCount) {
+  const mgmt = getMgmtData();
+  const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
+  const employees = mgmt.employees.length ? mgmt.employees : CSV_EMPLOYEES;
+
+  // Pick random subset of employees
+  const shuffled = [...employees].sort(() => Math.random() - 0.5);
+  const selectedEmps = shuffled.slice(0, Math.min(employeeCount, employees.length));
+
+  const quarters = { 'يناير':'Q1','فبراير':'Q1','مارس':'Q1','أبريل':'Q2','مايو':'Q2','يونيو':'Q2',
+    'يوليو':'Q3','أغسطس':'Q3','سبتمبر':'Q3','أكتوبر':'Q4','نوفمبر':'Q4','ديسمبر':'Q4' };
+  const monthList = Object.keys(quarters);
+  const occupancies = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+  const descriptions = [
+    'تطوير واجهة المستخدم','تحليل متطلبات النظام','اختبار الأداء','تصميم قاعدة البيانات',
+    'تكامل الخدمات','مراجعة الكود','إصلاح الأخطاء','تحسين الأداء','توثيق النظام',
+    'تصميم واجهة المستخدم','تطوير API','اختبار التكامل','نشر التحديثات','دعم فني',
+    'تحليل البيانات','إعداد البنية التحتية','تطوير الموبايل','مراجعة الأمان',
+    'تدريب الفريق','إدارة المشروع','تصميم الحلول التقنية','تطوير التقارير',
+    'صيانة النظام','ترحيل البيانات','تطوير لوحة التحكم','اختبار القبول'
+  ];
+  const services = ['خدمة التسجيل','خدمة المحتوى','خدمة الإشعارات','خدمة التقييم','خدمة التكامل','خدمة البوابة','خدمة الدفع',''];
+
+  const tasks = [];
+  // Ensure each selected employee gets at least a few tasks
+  const minTasksPerEmp = Math.floor(taskCount / selectedEmps.length);
+  const extraTasks = taskCount - (minTasksPerEmp * selectedEmps.length);
+
+  let taskIdx = 0;
+  selectedEmps.forEach((emp, empIdx) => {
+    const count = minTasksPerEmp + (empIdx < extraTasks ? 1 : 0);
+    for (let i = 0; i < count; i++) {
+      const month = monthList[Math.floor(Math.random() * monthList.length)];
+      const task = {
+        name: emp.name,
+        department: emp.department,
+        section: emp.section,
+        platform: platforms[Math.floor(Math.random() * platforms.length)],
+        taskType: taskTypes[Math.floor(Math.random() * taskTypes.length)],
+        month: month,
+        quarter: quarters[month],
+        year: '2026',
+        occupancy: occupancies[Math.floor(Math.random() * occupancies.length)],
+        description: descriptions[Math.floor(Math.random() * descriptions.length)],
+        service: services[Math.floor(Math.random() * services.length)],
+        timestamp: new Date().toLocaleString('ar-SA')
+      };
+      tasks.push(task);
+      taskIdx++;
+    }
+  });
+
+  return tasks;
+}
+
+function loadSampleData() {
+  initializeFromCSV();
+  allData = generateSampleTasks(400, 50);
+  resolveEmployeeDepartments(allData);
+  applyFilters();
+  document.getElementById('lastUpdate').textContent = '🧪 بيانات تجريبية — ' + allData.length + ' مهمة | ' + new Date().toLocaleTimeString('ar-SA');
+  showMgmtToast('تم تحميل ' + allData.length + ' مهمة تجريبية مع 50 موظف', 'success');
 }
 
 function renderDataManagement() {

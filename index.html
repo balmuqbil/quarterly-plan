@@ -882,7 +882,7 @@ const DEFAULT_TASK_TYPES = [
   'دعم L3', 'إدارة تسليم تقني', 'أعمال داخلية',
   'أعمال مشاريع جديدة (لم تعتمد)', 'دراسات كراسات مشاريع جديدة'
 ];
-const DEFAULT_DEPARTMENTS = ['البيانات','القنوات الرقمية','المنتجات الرقمية','تجربة المستخدم','الدعم الفني','العمليات'];
+const DEFAULT_DEPARTMENTS = ['تطوير الحلول','الاستشارات وهيكلية الحلول','تنفيذ تكامل الحلول'];
 
 function loadMgmtList(key, fallback) {
   try { const s = localStorage.getItem('qplan_mgmt_' + key); return s ? JSON.parse(s) : fallback; } catch(e) { return fallback; }
@@ -894,12 +894,9 @@ const PLATFORMS = loadMgmtList('platforms', DEFAULT_PLATFORMS);
 const TASK_TYPES = loadMgmtList('taskTypes', DEFAULT_TASK_TYPES);
 const DEPARTMENTS = loadMgmtList('departments', DEFAULT_DEPARTMENTS);
 const SECTIONS = loadMgmtObject('sections', {
-  'البيانات': ['تحليل البيانات', 'هندسة البيانات'],
-  'القنوات الرقمية': ['إدارة القنوات', 'التطوير الرقمي'],
-  'المنتجات الرقمية': ['تطوير المنتجات', 'إدارة المنتجات'],
-  'تجربة المستخدم': ['بحث المستخدم', 'تصميم التفاعل'],
-  'الدعم الفني': ['الدعم التقني', 'إدارة الحوادث'],
-  'العمليات': ['إدارة العمليات', 'التحسين المستمر']
+  'تطوير الحلول': ['تصميم الحلول', 'تطوير البرمجيات', 'إدارة التسليم التقني والجودة', 'هندسة المنصات'],
+  'الاستشارات وهيكلية الحلول': ['هيكلية الحلول'],
+  'تنفيذ تكامل الحلول': ['تكامل التطبيقات', 'الحلول المؤسسية']
 });
 
 // Load full employee objects (with department & section)
