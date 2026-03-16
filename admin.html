@@ -1143,18 +1143,21 @@ function resolveEmployeeDepartments(data) {
       empMap[e.name] = { department: e.department || '', section: e.section || '' };
     }
   });
+  let resolved = 0, missed = 0;
   data.forEach(r => {
     const name = (r.name || '').trim();
     const info = empMap[name];
     if (info) {
       r.department = info.department;
       r.section = info.section;
+      if (info.department) resolved++;
     } else {
-      // Employee not in mapping — clear bad values
       r.department = '';
       r.section = '';
+      missed++;
     }
   });
+  console.log('📋 resolveEmployeeDepartments: resolved=' + resolved + ', missed=' + missed + ', mapSize=' + Object.keys(empMap).length + ', firstDept=' + (data[0] && data[0].department));
 }
 
 // ==================== DATA LOADING ====================
