@@ -2036,10 +2036,10 @@ function exportCSV() {
 }
 
 // ==================== DATA MANAGEMENT (CRUD) ====================
-const MGMT_STORAGE_PREFIX = 'qplan_mgmt_';
+var MGMT_STORAGE_PREFIX = 'qplan_mgmt_';
 
 // Default data lists
-const DEFAULT_MGMT = {
+var DEFAULT_MGMT = {
   employees: [],
   departments: ['تطوير الحلول','الاستشارات وهيكلية الحلول','تنفيذ تكامل الحلول'],
   sections: {
@@ -2053,7 +2053,7 @@ const DEFAULT_MGMT = {
 };
 
 // ===== CSV Employee Data (source of truth) =====
-const CSV_EMPLOYEES = [
+var CSV_EMPLOYEES = [
   {name:'مشاعل فهد بويرد',department:'تطوير الحلول',section:'تصميم الحلول'},
   {name:'محمد خالد الفهيد',department:'تطوير الحلول',section:'تصميم الحلول'},
   {name:'أحمد رمضان أحمد',department:'تطوير الحلول',section:'تصميم الحلول'},
@@ -2225,7 +2225,7 @@ const CSV_EMPLOYEES = [
   {name:'فايز عبدالله الشهري',department:'تنفيذ تكامل الحلول',section:'الحلول المؤسسية'}
 ];
 
-const MGMT_CATEGORIES = [
+var MGMT_CATEGORIES = [
   { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...', custom: true },
   { key: 'departments', title: 'الإدارات', icon: '🏢', placeholder: 'أضف إدارة جديدة...' },
   { key: 'sections', title: 'الأقسام', icon: '📂', placeholder: '', custom: true },
