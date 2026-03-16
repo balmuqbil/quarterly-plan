@@ -1143,6 +1143,7 @@ function resolveEmployeeDepartments(data) {
       empMap[e.name] = { department: e.department || '', section: e.section || '' };
     }
   });
+  console.log('📋 DEBUG prefix=' + MGMT_STORAGE_PREFIX + ', rawKey=' + localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees')?.substring(0,50) + ', empCount=' + mgmt.employees.length);
   let resolved = 0, missed = 0;
   data.forEach(r => {
     const name = (r.name || '').trim();
