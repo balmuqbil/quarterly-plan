@@ -278,6 +278,82 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .no-data { text-align:center; padding:60px 20px; color:var(--text-light); }
 .no-data .icon { font-size:48px; margin-bottom:12px; }
 .no-data p { font-size:15px; }
+
+/* ========== CLICKABLE KPI ========== */
+.kpi-card.clickable { cursor:pointer; }
+.kpi-card.clickable:hover { box-shadow:0 8px 30px rgba(99,102,241,0.15); border-color:var(--accent-light); }
+.kpi-card.clickable .kpi-value { color:var(--accent); text-decoration:underline; text-decoration-style:dotted; text-underline-offset:4px; }
+
+/* ========== SECTION VIEWS ========== */
+.section-view { display:none; }
+.section-view.active { display:block; }
+.section-back {
+  display:inline-flex; align-items:center; gap:6px; padding:8px 18px; border-radius:10px;
+  border:1px solid var(--border); background:#fff; font-family:inherit; font-size:13px;
+  font-weight:600; cursor:pointer; transition:all 0.2s; margin-bottom:20px; color:var(--text-primary);
+}
+.section-back:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+/* ========== DETAIL CARDS GRID ========== */
+.detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; margin-bottom:24px; }
+.detail-card {
+  background:#fff; border-radius:14px; padding:20px; border:1px solid var(--border);
+  cursor:pointer; transition:all 0.2s;
+}
+.detail-card:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.08); border-color:var(--accent-light); }
+.detail-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.detail-card-name { font-size:15px; font-weight:700; color:var(--text-primary); }
+.detail-card-badge { font-size:11px; padding:4px 10px; border-radius:6px; font-weight:600; }
+.detail-card-stats { display:flex; gap:16px; flex-wrap:wrap; }
+.detail-stat { text-align:center; }
+.detail-stat-value { font-size:18px; font-weight:800; color:var(--accent); }
+.detail-stat-label { font-size:11px; color:var(--text-secondary); }
+.detail-card-bar { margin-top:12px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; }
+.detail-card-bar-fill { height:100%; border-radius:3px; transition:width 0.5s; }
+
+/* ========== DRILL-DOWN MODAL ========== */
+.drill-modal {
+  position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.6);
+  display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(6px);
+}
+.drill-modal.show { display:flex; }
+.drill-content {
+  background:#fff; border-radius:20px; padding:32px; width:900px; max-width:95vw;
+  max-height:90vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.25);
+}
+.drill-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+.drill-title { font-size:20px; font-weight:800; }
+.drill-subtitle { font-size:13px; color:var(--text-secondary); margin-top:2px; }
+.drill-close {
+  background:none; border:none; font-size:28px; cursor:pointer;
+  color:var(--text-secondary); padding:4px 8px; border-radius:8px; transition:all 0.2s;
+}
+.drill-close:hover { background:rgba(0,0,0,0.05); color:var(--text-primary); }
+.drill-stats-row { display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
+.drill-stat-card {
+  flex:1; min-width:120px; background:var(--bg-card-dark); border-radius:12px;
+  padding:16px; text-align:center; border:1px solid var(--border);
+}
+.drill-stat-card .value { font-size:24px; font-weight:800; color:var(--accent); }
+.drill-stat-card .label { font-size:11px; color:var(--text-secondary); margin-top:4px; }
+.drill-chart-container { position:relative; height:300px; margin-bottom:24px; }
+.drill-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:16px; }
+.drill-table th { padding:12px; text-align:right; background:var(--bg-card-dark); font-size:12px; color:var(--text-secondary); border-bottom:2px solid var(--border); }
+.drill-table td { padding:10px 12px; border-bottom:1px solid var(--border); }
+.drill-table tr:hover td { background:rgba(99,102,241,0.03); }
+.drill-tabs { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+.drill-tab {
+  padding:8px 16px; border-radius:8px; border:1px solid var(--border);
+  background:#fff; font-family:inherit; font-size:12px; font-weight:600;
+  cursor:pointer; transition:all 0.2s;
+}
+.drill-tab:hover { border-color:var(--accent-light); }
+.drill-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+/* ========== PLATFORM CARDS ========== */
+.platform-card-icon { font-size:32px; margin-bottom:8px; }
+.platform-card .detail-card-stats { justify-content:space-around; }
 </style>
 </head>
 <body>
@@ -346,158 +422,218 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 <!-- MAIN CONTENT -->
 <div class="main" id="mainContent" style="display:none;">
 
-  <!-- TOP BAR -->
-  <div class="top-bar">
-    <div>
-      <h1>نظرة عامة على الخطة <span class="status-dot green"></span></h1>
-      <div class="subtitle">لوحة مؤشرات الأداء — خطة العمل الربعية</div>
-    </div>
-    <div class="top-actions">
-      <span class="last-update" id="lastUpdate"></span>
-      <select class="quarter-filter" id="quarterFilter" onchange="applyFilters()">
-        <option value="all">جميع الأرباع</option>
-        <option value="الأول">الربع الأول</option>
-        <option value="الثاني">الربع الثاني</option>
-        <option value="الثالث">الربع الثالث</option>
-        <option value="الرابع">الربع الرابع</option>
-      </select>
-      <button class="export-btn" onclick="exportCSV()">📥 تصدير CSV</button>
-      <button class="refresh-btn" onclick="loadData()">🔄 تحديث</button>
-    </div>
-  </div>
-
-  <!-- KPI CARDS -->
-  <div class="kpi-grid" id="kpiGrid">
-    <div class="kpi-card animate-in delay-1">
-      <div class="kpi-icon">👥</div>
-      <div class="kpi-value" id="kpiEmployees">—</div>
-      <div class="kpi-label">إجمالي الموظفين</div>
-      <span class="kpi-change neutral" id="kpiEmpChange">—</span>
-    </div>
-    <div class="kpi-card animate-in delay-2">
-      <div class="kpi-icon">📋</div>
-      <div class="kpi-value" id="kpiTasks">—</div>
-      <div class="kpi-label">إجمالي المهام المسجلة</div>
-      <span class="kpi-change neutral" id="kpiTaskChange">—</span>
-    </div>
-    <div class="kpi-card animate-in delay-3">
-      <div class="kpi-icon">📊</div>
-      <div class="kpi-value" id="kpiAvgOcc">—</div>
-      <div class="kpi-label">متوسط الإشغال</div>
-      <span class="kpi-change neutral" id="kpiOccChange">—</span>
-    </div>
-    <div class="kpi-card animate-in delay-4">
-      <div class="kpi-icon">💻</div>
-      <div class="kpi-value" id="kpiPlatforms">—</div>
-      <div class="kpi-label">المنصات النشطة</div>
-      <span class="kpi-change neutral">من أصل 5 منصات</span>
-    </div>
-    <div class="kpi-card animate-in delay-1">
-      <div class="kpi-icon">⚡</div>
-      <div class="kpi-value" id="kpiHighOcc">—</div>
-      <div class="kpi-label">موظفون بإشغال ≥ 100%</div>
-      <span class="kpi-change neutral" id="kpiHighChange">تحتاج متابعة</span>
-    </div>
-    <div class="kpi-card animate-in delay-2">
-      <div class="kpi-icon">🏢</div>
-      <div class="kpi-value" id="kpiTeams">—</div>
-      <div class="kpi-label">الفرق المشاركة</div>
-      <span class="kpi-change neutral" id="kpiTeamChange">—</span>
-    </div>
-  </div>
-
-  <!-- CHARTS ROW 1 -->
-  <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">توزيع المنصات</div>
-          <div class="chart-subtitle">نسبة المهام لكل منصة</div>
-        </div>
-      </div>
-      <div class="chart-container medium"><canvas id="platformChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">أنواع المهام</div>
-          <div class="chart-subtitle">عدد المهام حسب النوع</div>
-        </div>
-      </div>
-      <div class="chart-container medium"><canvas id="taskTypeChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">توزيع الفرق</div>
-          <div class="chart-subtitle">عدد الموظفين والمهام لكل فريق</div>
-        </div>
-      </div>
-      <div class="chart-container medium"><canvas id="teamChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">الإشغال الشهري</div>
-          <div class="chart-subtitle">متوسط إشغال الموظفين شهرياً</div>
-        </div>
-      </div>
-      <div class="chart-container medium"><canvas id="monthlyChart"></canvas></div>
-    </div>
-    <div class="chart-card full">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">أعلى 15 موظف إشغالاً</div>
-          <div class="chart-subtitle">إجمالي نسب الإشغال لأعلى الموظفين</div>
-        </div>
-      </div>
-      <div class="chart-container" style="height:350px;"><canvas id="topEmployeesChart"></canvas></div>
-    </div>
-    <div class="chart-card full">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">خريطة الإشغال — الفريق × الشهر</div>
-          <div class="chart-subtitle">متوسط إشغال كل فريق في كل شهر</div>
-        </div>
-      </div>
-      <div id="heatmapContainer"></div>
-    </div>
-  </div>
-
-  <!-- DATA TABLE -->
-  <div class="table-card">
-    <div class="chart-header">
+  <!-- ===== DASHBOARD SECTION ===== -->
+  <div class="section-view active" id="section-dashboard">
+    <div class="top-bar">
       <div>
-        <div class="chart-title">سجل البيانات التفصيلي</div>
-        <div class="chart-subtitle">جميع مدخلات خطة العمل</div>
+        <h1>نظرة عامة على الخطة <span class="status-dot green"></span></h1>
+        <div class="subtitle">لوحة مؤشرات الأداء — خطة العمل الربعية</div>
+      </div>
+      <div class="top-actions">
+        <span class="last-update" id="lastUpdate"></span>
+        <select class="quarter-filter" id="quarterFilter" onchange="applyFilters()">
+          <option value="all">جميع الأرباع</option>
+          <option value="الأول">الربع الأول</option>
+          <option value="الثاني">الربع الثاني</option>
+          <option value="الثالث">الربع الثالث</option>
+          <option value="الرابع">الربع الرابع</option>
+        </select>
+        <button class="export-btn" onclick="exportCSV()">📥 تصدير CSV</button>
+        <button class="refresh-btn" onclick="loadData()">🔄 تحديث</button>
       </div>
     </div>
-    <div class="table-toolbar">
-      <input type="text" class="search-box" id="tableSearch" placeholder="🔍 بحث بالاسم، الفريق، المنصة..." oninput="filterTable()">
-      <span style="color:var(--text-light); font-size:12px;" id="tableCount">0 سجل</span>
+
+    <!-- KPI CARDS — now clickable -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card clickable animate-in delay-1" onclick="navigateTo('employees')">
+        <div class="kpi-icon">👥</div>
+        <div class="kpi-value" id="kpiEmployees">—</div>
+        <div class="kpi-label">إجمالي الموظفين</div>
+        <span class="kpi-change neutral" id="kpiEmpChange">—</span>
+      </div>
+      <div class="kpi-card clickable animate-in delay-2" onclick="navigateTo('tasks')">
+        <div class="kpi-icon">📋</div>
+        <div class="kpi-value" id="kpiTasks">—</div>
+        <div class="kpi-label">إجمالي المهام المسجلة</div>
+        <span class="kpi-change neutral" id="kpiTaskChange">—</span>
+      </div>
+      <div class="kpi-card clickable animate-in delay-3" onclick="showOccupancyDrill()">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-value" id="kpiAvgOcc">—</div>
+        <div class="kpi-label">متوسط الإشغال</div>
+        <span class="kpi-change neutral" id="kpiOccChange">—</span>
+      </div>
+      <div class="kpi-card clickable animate-in delay-4" onclick="navigateTo('platforms')">
+        <div class="kpi-icon">💻</div>
+        <div class="kpi-value" id="kpiPlatforms">—</div>
+        <div class="kpi-label">المنصات النشطة</div>
+        <span class="kpi-change neutral">من أصل 5 منصات</span>
+      </div>
+      <div class="kpi-card clickable animate-in delay-1" onclick="showHighOccDrill()">
+        <div class="kpi-icon">⚡</div>
+        <div class="kpi-value" id="kpiHighOcc">—</div>
+        <div class="kpi-label">موظفون بإشغال ≥ 100%</div>
+        <span class="kpi-change neutral" id="kpiHighChange">تحتاج متابعة</span>
+      </div>
+      <div class="kpi-card clickable animate-in delay-2" onclick="showTeamsDrill()">
+        <div class="kpi-icon">🏢</div>
+        <div class="kpi-value" id="kpiTeams">—</div>
+        <div class="kpi-label">الفرق المشاركة</div>
+        <span class="kpi-change neutral" id="kpiTeamChange">—</span>
+      </div>
     </div>
-    <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>الاسم</th>
-            <th>الفريق</th>
-            <th>الشهر</th>
-            <th>الربع</th>
-            <th>المنصة</th>
-            <th>نوع المهمة</th>
-            <th>الإشغال</th>
-            <th>الوصف</th>
-            <th>تاريخ الإرسال</th>
-          </tr>
-        </thead>
-        <tbody id="dataTableBody"></tbody>
-      </table>
+
+    <!-- CHARTS -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">توزيع المنصات</div>
+            <div class="chart-subtitle">اضغط على أي شريحة للتفاصيل</div>
+          </div>
+        </div>
+        <div class="chart-container medium"><canvas id="platformChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">أنواع المهام</div>
+            <div class="chart-subtitle">اضغط على أي شريط للتفاصيل</div>
+          </div>
+        </div>
+        <div class="chart-container medium"><canvas id="taskTypeChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">توزيع الفرق</div>
+            <div class="chart-subtitle">اضغط على أي فريق للتفاصيل</div>
+          </div>
+        </div>
+        <div class="chart-container medium"><canvas id="teamChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">الإشغال الشهري</div>
+            <div class="chart-subtitle">اضغط على أي شهر للتفاصيل</div>
+          </div>
+        </div>
+        <div class="chart-container medium"><canvas id="monthlyChart"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">أعلى 15 موظف إشغالاً</div>
+            <div class="chart-subtitle">اضغط على أي موظف لعرض تفاصيل الإشغال الشهري</div>
+          </div>
+        </div>
+        <div class="chart-container" style="height:350px;"><canvas id="topEmployeesChart"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">خريطة الإشغال — الفريق × الشهر</div>
+            <div class="chart-subtitle">اضغط على أي خلية للتفاصيل</div>
+          </div>
+        </div>
+        <div id="heatmapContainer"></div>
+      </div>
     </div>
-    <div class="pagination" id="pagination"></div>
+
+    <!-- DATA TABLE -->
+    <div class="table-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">سجل البيانات التفصيلي</div>
+          <div class="chart-subtitle">جميع مدخلات خطة العمل</div>
+        </div>
+      </div>
+      <div class="table-toolbar">
+        <input type="text" class="search-box" id="tableSearch" placeholder="🔍 بحث بالاسم، الفريق، المنصة..." oninput="filterTable()">
+        <span style="color:var(--text-light); font-size:12px;" id="tableCount">0 سجل</span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>الاسم</th><th>الفريق</th><th>الشهر</th><th>الربع</th>
+              <th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th><th>تاريخ الإرسال</th>
+            </tr>
+          </thead>
+          <tbody id="dataTableBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
   </div>
 
+  <!-- ===== EMPLOYEES SECTION ===== -->
+  <div class="section-view" id="section-employees">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>👥 إدارة الموظفين</h1>
+        <div class="subtitle">عرض تفصيلي لجميع الموظفين — اضغط على أي بطاقة لعرض التفاصيل</div>
+      </div>
+      <div class="top-actions">
+        <input type="text" class="search-box" id="empSearch" placeholder="🔍 بحث عن موظف..." oninput="renderEmployeesSection()">
+      </div>
+    </div>
+    <div class="detail-grid" id="employeesGrid"></div>
+  </div>
+
+  <!-- ===== PLATFORMS SECTION ===== -->
+  <div class="section-view" id="section-platforms">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>💻 المنصات</h1>
+        <div class="subtitle">عرض تفصيلي لجميع المنصات — اضغط على أي بطاقة للتفاصيل</div>
+      </div>
+    </div>
+    <div class="detail-grid" id="platformsGrid"></div>
+  </div>
+
+  <!-- ===== TASKS SECTION ===== -->
+  <div class="section-view" id="section-tasks">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>📋 المهام</h1>
+        <div class="subtitle">عرض تفصيلي لجميع أنواع المهام</div>
+      </div>
+      <div class="top-actions">
+        <input type="text" class="search-box" id="taskSearch" placeholder="🔍 بحث في المهام..." oninput="renderTasksSection()">
+      </div>
+    </div>
+    <div class="detail-grid" id="tasksGrid"></div>
+    <div class="table-card" style="margin-top:20px;">
+      <div class="chart-header"><div><div class="chart-title">جدول المهام التفصيلي</div></div></div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>#</th><th>الموظف</th><th>الفريق</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th></tr></thead>
+          <tbody id="tasksTableBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="tasksPagination"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== DRILL-DOWN MODAL ===== -->
+<div class="drill-modal" id="drillModal">
+  <div class="drill-content">
+    <div class="drill-header">
+      <div>
+        <div class="drill-title" id="drillTitle"></div>
+        <div class="drill-subtitle" id="drillSubtitle"></div>
+      </div>
+      <button class="drill-close" onclick="closeDrill()">&times;</button>
+    </div>
+    <div id="drillBody"></div>
+  </div>
 </div>
 
 <!-- SETTINGS MODAL -->
@@ -526,6 +662,9 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 // ==================== CONFIG ====================
 const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbzadKc3RXC9_vof_Hz4vd-WEMa8B8jTOgrKqHF11_Rq0UwzvoDJpf8WbV_RbxQLXrLZzQ/exec';
 const STORAGE_PREFIX = 'qplan_admin_';
+const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
+const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','Other':'💻'};
 
 let SHEET_URL = localStorage.getItem(STORAGE_PREFIX + 'url') || DEFAULT_URL;
 let ADMIN_USER = localStorage.getItem(STORAGE_PREFIX + 'user') || 'admin';
@@ -534,7 +673,9 @@ let ADMIN_PASS = localStorage.getItem(STORAGE_PREFIX + 'pass') || 'admin123';
 let allData = [];
 let filteredData = [];
 let charts = {};
+let drillCharts = {};
 let currentPage = 1;
+let tasksPage = 1;
 const PAGE_SIZE = 25;
 
 // ==================== AUTH ====================
@@ -562,22 +703,29 @@ function logout() {
   document.getElementById('loginPass').value = '';
   document.getElementById('loginError').textContent = '';
 }
-
-// Auto-login if session active
 if (sessionStorage.getItem(STORAGE_PREFIX + 'auth') === 'true') {
   document.getElementById('loginOverlay').classList.add('hidden');
   document.getElementById('mainContent').style.display = 'block';
   loadData();
 }
 
-// ==================== SIDEBAR NAV ====================
+// ==================== NAVIGATION ====================
+function navigateTo(section) {
+  document.querySelectorAll('.section-view').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const sectionEl = document.getElementById('section-' + section);
+  if (sectionEl) sectionEl.classList.add('active');
+  const navEl = document.querySelector(`.nav-item[data-section="${section}"]`);
+  if (navEl) navEl.classList.add('active');
+  if (section === 'employees') renderEmployeesSection();
+  if (section === 'platforms') renderPlatformsSection();
+  if (section === 'tasks') renderTasksSection();
+  if (section === 'settings') openSettings();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => {
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    item.classList.add('active');
-    const section = item.dataset.section;
-    if (section === 'settings') openSettings();
-  });
+  item.addEventListener('click', () => navigateTo(item.dataset.section));
 });
 
 // ==================== SETTINGS ====================
@@ -603,38 +751,28 @@ function saveSettings() {
 function loadData() {
   const loading = document.getElementById('loadingOverlay');
   loading.classList.remove('hidden');
-
-  // Use JSONP (script tag injection) to bypass CORS restrictions from file:// protocol
   var callbackName = '_qplanCallback_' + Date.now();
   window[callbackName] = function(json) {
-    // Clean up
     delete window[callbackName];
     var scriptEl = document.getElementById('jsonp-loader');
     if (scriptEl) scriptEl.remove();
-
     if (json && json.status === 'success' && json.data) {
       allData = json.data;
       applyFilters();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
     } else {
-      allData = [];
-      applyFilters();
+      allData = []; applyFilters();
       document.getElementById('lastUpdate').textContent = '⚠️ لا توجد بيانات';
     }
     loading.classList.add('hidden');
   };
-
-  // Remove any previous script
   var old = document.getElementById('jsonp-loader');
   if (old) old.remove();
-
   var script = document.createElement('script');
   script.id = 'jsonp-loader';
   script.src = SHEET_URL + '?action=getData&callback=' + callbackName;
   script.onerror = function() {
-    delete window[callbackName];
-    allData = [];
-    applyFilters();
+    delete window[callbackName]; allData = []; applyFilters();
     document.getElementById('lastUpdate').textContent = '⚠️ تعذر التحميل — تحقق من الإعدادات';
     loading.classList.add('hidden');
   };
@@ -644,29 +782,28 @@ function loadData() {
 function applyFilters() {
   const quarter = document.getElementById('quarterFilter').value;
   filteredData = quarter === 'all' ? [...allData] : allData.filter(r => r.quarter === quarter);
-  updateKPIs();
-  renderCharts();
-  currentPage = 1;
-  renderTable();
-  renderHeatmap();
+  updateKPIs(); renderCharts(); currentPage = 1; renderTable(); renderHeatmap();
 }
 
 // ==================== KPIs ====================
+function getHighOccEmployees() {
+  const empMonthOcc = {};
+  filteredData.forEach(r => {
+    const key = r.name + '|' + r.month;
+    empMonthOcc[key] = (empMonthOcc[key]||0) + (parseFloat(r.occupancy)||0);
+  });
+  const highOcc = new Set();
+  Object.entries(empMonthOcc).forEach(([k,v]) => { if (v >= 100) highOcc.add(k.split('|')[0]); });
+  return highOcc;
+}
+
 function updateKPIs() {
   const d = filteredData;
   const employees = [...new Set(d.map(r => r.name))];
   const platforms = [...new Set(d.map(r => r.platform))];
   const teams = [...new Set(d.map(r => r.team))];
   const avgOcc = d.length > 0 ? (d.reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0) / d.length) : 0;
-
-  // Calculate per-employee total occupancy per month to find those >= 100%
-  const empMonthOcc = {};
-  d.forEach(r => {
-    const key = r.name + '|' + r.month;
-    empMonthOcc[key] = (empMonthOcc[key]||0) + (parseFloat(r.occupancy)||0);
-  });
-  const highOccEmployees = new Set();
-  Object.entries(empMonthOcc).forEach(([k,v]) => { if (v >= 100) highOccEmployees.add(k.split('|')[0]); });
+  const highOccEmployees = getHighOccEmployees();
 
   animateValue('kpiEmployees', employees.length);
   animateValue('kpiTasks', d.length);
@@ -675,42 +812,386 @@ function updateKPIs() {
   animateValue('kpiHighOcc', highOccEmployees.size);
   animateValue('kpiTeams', teams.length);
 
-  document.getElementById('kpiEmpChange').textContent = 'موظف مسجل في الخطة';
-  document.getElementById('kpiTaskChange').textContent = d.length > 100 ? 'حجم بيانات كبير' : 'مهمة مسجلة';
+  document.getElementById('kpiEmpChange').textContent = 'اضغط لعرض الموظفين';
+  document.getElementById('kpiTaskChange').textContent = 'اضغط لعرض المهام';
   const occClass = avgOcc > 80 ? 'up' : avgOcc > 50 ? 'neutral' : 'down';
   document.getElementById('kpiOccChange').className = 'kpi-change ' + occClass;
   document.getElementById('kpiOccChange').textContent = avgOcc > 80 ? '⬆ إشغال مرتفع' : avgOcc > 50 ? '— إشغال متوسط' : '⬇ إشغال منخفض';
-
   const highClass = highOccEmployees.size > 5 ? 'down' : 'neutral';
   document.getElementById('kpiHighChange').className = 'kpi-change ' + highClass;
-  document.getElementById('kpiHighChange').textContent = highOccEmployees.size > 0 ? '⚠ تحتاج مراجعة' : '✓ ضمن الحدود';
+  document.getElementById('kpiHighChange').textContent = highOccEmployees.size > 0 ? '⚠ اضغط للمراجعة' : '✓ ضمن الحدود';
 }
 
 function animateValue(id, target) {
   const el = document.getElementById(id);
   const start = parseInt(el.textContent) || 0;
-  const dur = 600;
-  const t0 = performance.now();
+  const dur = 600, t0 = performance.now();
   function step(t) {
     const p = Math.min((t - t0) / dur, 1);
-    const ease = 1 - Math.pow(1 - p, 3);
-    el.textContent = Math.round(start + (target - start) * ease);
+    el.textContent = Math.round(start + (target - start) * (1 - Math.pow(1 - p, 3)));
     if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
-// ==================== CHARTS ====================
-const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
+// ==================== EMPLOYEES SECTION ====================
+function renderEmployeesSection() {
+  const search = (document.getElementById('empSearch')?.value || '').trim().toLowerCase();
+  const empMap = {};
+  filteredData.forEach(r => {
+    if (!empMap[r.name]) empMap[r.name] = { name: r.name, team: r.team, tasks: [], totalOcc: 0, months: new Set(), platforms: new Set() };
+    empMap[r.name].tasks.push(r);
+    empMap[r.name].totalOcc += parseFloat(r.occupancy) || 0;
+    empMap[r.name].months.add(r.month);
+    empMap[r.name].platforms.add(r.platform);
+  });
+  let employees = Object.values(empMap).sort((a,b) => b.totalOcc - a.totalOcc);
+  if (search) employees = employees.filter(e => e.name.includes(search) || e.team.includes(search));
 
-function renderCharts() {
-  renderPlatformChart();
-  renderTaskTypeChart();
-  renderTeamChart();
-  renderMonthlyChart();
-  renderTopEmployeesChart();
+  const grid = document.getElementById('employeesGrid');
+  grid.innerHTML = employees.map(e => {
+    const avgOcc = (e.totalOcc / e.tasks.length).toFixed(0);
+    const barColor = avgOcc >= 80 ? '#ef4444' : avgOcc >= 50 ? '#f59e0b' : '#10b981';
+    return `<div class="detail-card" onclick="showEmployeeDrill('${e.name.replace(/'/g,"\\'")}')">
+      <div class="detail-card-header">
+        <div class="detail-card-name">${e.name}</div>
+        <span class="detail-card-badge badge-team">${e.team}</span>
+      </div>
+      <div class="detail-card-stats">
+        <div class="detail-stat"><div class="detail-stat-value">${e.tasks.length}</div><div class="detail-stat-label">مهام</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${avgOcc}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${e.months.size}</div><div class="detail-stat-label">أشهر</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${e.platforms.size}</div><div class="detail-stat-label">منصات</div></div>
+      </div>
+      <div class="detail-card-bar"><div class="detail-card-bar-fill" style="width:${Math.min(avgOcc,100)}%;background:${barColor};"></div></div>
+    </div>`;
+  }).join('');
+  if (!employees.length) grid.innerHTML = '<div class="no-data"><div class="icon">👥</div><p>لا يوجد موظفون مطابقون للبحث</p></div>';
 }
 
+// ==================== PLATFORMS SECTION ====================
+function renderPlatformsSection() {
+  const platMap = {};
+  filteredData.forEach(r => {
+    if (!platMap[r.platform]) platMap[r.platform] = { name: r.platform, tasks: 0, employees: new Set(), teams: new Set(), totalOcc: 0 };
+    platMap[r.platform].tasks++;
+    platMap[r.platform].employees.add(r.name);
+    platMap[r.platform].teams.add(r.team);
+    platMap[r.platform].totalOcc += parseFloat(r.occupancy) || 0;
+  });
+  const platforms = Object.values(platMap).sort((a,b) => b.tasks - a.tasks);
+  const grid = document.getElementById('platformsGrid');
+  grid.innerHTML = platforms.map((p,i) => {
+    const icon = Object.entries(PLATFORM_ICONS).find(([k]) => p.name.includes(k));
+    return `<div class="detail-card platform-card" onclick="showPlatformDrill('${p.name.replace(/'/g,"\\'")}')">
+      <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
+      <div class="detail-card-header">
+        <div class="detail-card-name">${p.name}</div>
+        <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${p.tasks} مهمة</span>
+      </div>
+      <div class="detail-card-stats">
+        <div class="detail-stat"><div class="detail-stat-value">${p.employees.size}</div><div class="detail-stat-label">موظف</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${p.teams.size}</div><div class="detail-stat-label">فرق</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${(p.totalOcc/p.tasks).toFixed(0)}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
+      </div>
+    </div>`;
+  }).join('');
+  if (!platforms.length) grid.innerHTML = '<div class="no-data"><div class="icon">💻</div><p>لا توجد منصات</p></div>';
+}
+
+// ==================== TASKS SECTION ====================
+function renderTasksSection() {
+  const search = (document.getElementById('taskSearch')?.value || '').trim().toLowerCase();
+  // Task type cards
+  const typeMap = {};
+  filteredData.forEach(r => {
+    if (!typeMap[r.taskType]) typeMap[r.taskType] = { name: r.taskType, count: 0, employees: new Set(), platforms: new Set(), totalOcc: 0 };
+    typeMap[r.taskType].count++;
+    typeMap[r.taskType].employees.add(r.name);
+    typeMap[r.taskType].platforms.add(r.platform);
+    typeMap[r.taskType].totalOcc += parseFloat(r.occupancy) || 0;
+  });
+  const types = Object.values(typeMap).sort((a,b) => b.count - a.count);
+  const grid = document.getElementById('tasksGrid');
+  grid.innerHTML = types.map((t,i) => `<div class="detail-card" onclick="showTaskTypeDrill('${t.name.replace(/'/g,"\\'")}')">
+    <div class="detail-card-header">
+      <div class="detail-card-name">${t.name}</div>
+      <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${t.count} مهمة</span>
+    </div>
+    <div class="detail-card-stats">
+      <div class="detail-stat"><div class="detail-stat-value">${t.employees.size}</div><div class="detail-stat-label">موظف</div></div>
+      <div class="detail-stat"><div class="detail-stat-value">${t.platforms.size}</div><div class="detail-stat-label">منصات</div></div>
+      <div class="detail-stat"><div class="detail-stat-value">${(t.totalOcc/t.count).toFixed(0)}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
+    </div>
+  </div>`).join('');
+
+  // Tasks table
+  let data = filteredData;
+  if (search) data = data.filter(r => (r.name||'').includes(search) || (r.taskType||'').includes(search) || (r.platform||'').includes(search) || (r.description||'').includes(search));
+  const totalPages = Math.ceil(data.length / PAGE_SIZE) || 1;
+  if (tasksPage > totalPages) tasksPage = totalPages;
+  const start = (tasksPage - 1) * PAGE_SIZE;
+  const pageData = data.slice(start, start + PAGE_SIZE);
+  document.getElementById('tasksTableBody').innerHTML = pageData.map((r,i) => {
+    const occ = parseFloat(r.occupancy)||0;
+    const occColor = occ >= 80 ? '#ef4444' : occ >= 50 ? '#f59e0b' : '#10b981';
+    return `<tr style="cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')">
+      <td>${start+i+1}</td><td style="font-weight:600">${r.name||''}</td><td><span class="badge badge-team">${r.team||''}</span></td>
+      <td><span class="badge badge-platform">${r.platform||''}</span></td><td><span class="badge badge-task">${r.taskType||''}</span></td>
+      <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
+      <td>${r.month||''}</td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td>
+    </tr>`;
+  }).join('');
+  renderPaginationFor('tasksPagination', totalPages, tasksPage, p => { tasksPage = p; renderTasksSection(); });
+}
+
+function renderPaginationFor(id, totalPages, curPage, onPage) {
+  const pag = document.getElementById(id);
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+  window['_pagFn_'+id] = onPage;
+  let h = `<button class="page-btn" onclick="_pagFn_${id}(${curPage-1})" ${curPage===1?'disabled':''}>‹</button>`;
+  let s = Math.max(1, curPage-3), e = Math.min(totalPages, s+6);
+  if (e-s<6) s = Math.max(1,e-6);
+  for (let p=s;p<=e;p++) h += `<button class="page-btn ${p===curPage?'active':''}" onclick="_pagFn_${id}(${p})">${p}</button>`;
+  h += `<button class="page-btn" onclick="_pagFn_${id}(${curPage+1})" ${curPage===totalPages?'disabled':''}>›</button>`;
+  pag.innerHTML = h;
+}
+
+// ==================== DRILL-DOWN MODAL ====================
+function openDrill(title, subtitle) {
+  document.getElementById('drillTitle').textContent = title;
+  document.getElementById('drillSubtitle').textContent = subtitle;
+  document.getElementById('drillModal').classList.add('show');
+}
+function closeDrill() {
+  document.getElementById('drillModal').classList.remove('show');
+  Object.values(drillCharts).forEach(c => { if (c) c.destroy(); });
+  drillCharts = {};
+}
+document.getElementById('drillModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeDrill(); });
+
+// ---- Employee Drill ----
+function showEmployeeDrill(name) {
+  const empData = filteredData.filter(r => r.name === name);
+  if (!empData.length) return;
+  const team = empData[0].team;
+  const totalOcc = empData.reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0);
+  const avgOcc = (totalOcc / empData.length).toFixed(1);
+  const platforms = [...new Set(empData.map(r => r.platform))];
+  const months = MONTHS.filter(m => empData.some(r => r.month === m));
+
+  // Monthly occupancy breakdown
+  const monthOcc = {};
+  empData.forEach(r => { monthOcc[r.month] = (monthOcc[r.month]||0) + (parseFloat(r.occupancy)||0); });
+
+  let html = `<div class="drill-stats-row">
+    <div class="drill-stat-card"><div class="value">${empData.length}</div><div class="label">مهام</div></div>
+    <div class="drill-stat-card"><div class="value">${avgOcc}%</div><div class="label">متوسط إشغال</div></div>
+    <div class="drill-stat-card"><div class="value">${months.length}</div><div class="label">أشهر نشطة</div></div>
+    <div class="drill-stat-card"><div class="value">${platforms.length}</div><div class="label">منصات</div></div>
+  </div>
+  <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;">📈 الإشغال الشهري</h3>
+  <div class="drill-chart-container"><canvas id="drillEmpMonthly"></canvas></div>
+  <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📊 توزيع المنصات</h3>
+  <div class="drill-chart-container" style="height:220px;"><canvas id="drillEmpPlatforms"></canvas></div>
+  <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📋 تفاصيل المهام</h3>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
+  <table class="drill-table"><thead><tr><th>الشهر</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th></tr></thead><tbody>`;
+  empData.forEach(r => {
+    const occ = parseFloat(r.occupancy)||0;
+    const c = occ>=80?'#ef4444':occ>=50?'#f59e0b':'#10b981';
+    html += `<tr><td>${r.month}</td><td><span class="badge badge-platform">${r.platform}</span></td><td><span class="badge badge-task">${r.taskType}</span></td>
+    <td><span style="color:${c};font-weight:700;">${occ}%</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill(name, `${team} — عرض تفصيلي للموظف`);
+
+  // Render monthly chart
+  setTimeout(() => {
+    const mLabels = MONTHS.filter(m => monthOcc[m] !== undefined);
+    const mData = mLabels.map(m => monthOcc[m]);
+    const mColors = mData.map(v => v >= 100 ? '#ef4444' : v >= 70 ? '#f59e0b' : '#10b981');
+    drillCharts.empMonthly = new Chart(document.getElementById('drillEmpMonthly'), {
+      type: 'bar', data: { labels: mLabels, datasets: [{ data: mData, backgroundColor: mColors, borderRadius: 8 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'إشغال: '+c.parsed.y+'%'}}},
+        scales:{ x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}}, y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'},suggestedMax:120}} }
+    });
+    // Platform pie
+    const platCounts = {};
+    empData.forEach(r => { platCounts[r.platform] = (platCounts[r.platform]||0) + 1; });
+    drillCharts.empPlat = new Chart(document.getElementById('drillEmpPlatforms'), {
+      type: 'doughnut', data: { labels: Object.keys(platCounts), datasets: [{ data: Object.values(platCounts), backgroundColor: COLORS.slice(0, Object.keys(platCounts).length), borderWidth:0 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{family:'Tajawal',size:11}}}} }
+    });
+  }, 100);
+}
+
+// ---- Platform Drill ----
+function showPlatformDrill(platform) {
+  const pData = filteredData.filter(r => r.platform === platform);
+  if (!pData.length) return;
+  const empNames = [...new Set(pData.map(r => r.name))];
+  const teams = [...new Set(pData.map(r => r.team))];
+  const avgOcc = (pData.reduce((s,r) => s+(parseFloat(r.occupancy)||0),0)/pData.length).toFixed(1);
+
+  const monthOcc = {};
+  pData.forEach(r => {
+    if (!monthOcc[r.month]) monthOcc[r.month] = {sum:0,count:0};
+    monthOcc[r.month].sum += parseFloat(r.occupancy)||0;
+    monthOcc[r.month].count++;
+  });
+
+  let html = `<div class="drill-stats-row">
+    <div class="drill-stat-card"><div class="value">${pData.length}</div><div class="label">مهام</div></div>
+    <div class="drill-stat-card"><div class="value">${empNames.length}</div><div class="label">موظف</div></div>
+    <div class="drill-stat-card"><div class="value">${avgOcc}%</div><div class="label">متوسط إشغال</div></div>
+    <div class="drill-stat-card"><div class="value">${teams.length}</div><div class="label">فرق</div></div>
+  </div>
+  <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;">📈 الإشغال الشهري للمنصة</h3>
+  <div class="drill-chart-container"><canvas id="drillPlatMonthly"></canvas></div>
+  <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">👥 الموظفون على هذه المنصة</h3>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
+  const empStats = {};
+  pData.forEach(r => {
+    if (!empStats[r.name]) empStats[r.name] = {team:r.team,count:0,occ:0};
+    empStats[r.name].count++;
+    empStats[r.name].occ += parseFloat(r.occupancy)||0;
+  });
+  Object.entries(empStats).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,s]) => {
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
+      <td style="font-weight:600">${name}</td><td><span class="badge badge-team">${s.team}</span></td><td>${s.count}</td>
+      <td><span style="color:${s.occ>=100?'#ef4444':'#10b981'};font-weight:700">${s.occ.toFixed(0)}%</span></td></tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill(platform, 'تفاصيل المنصة');
+  setTimeout(() => {
+    const mLabels = MONTHS.filter(m => monthOcc[m]);
+    drillCharts.platMonthly = new Chart(document.getElementById('drillPlatMonthly'), {
+      type:'bar', data:{ labels:mLabels, datasets:[
+        {type:'line',label:'متوسط إشغال %',data:mLabels.map(m=>(monthOcc[m].sum/monthOcc[m].count).toFixed(1)),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#ef4444'},
+        {label:'عدد المهام',data:mLabels.map(m=>monthOcc[m].count),backgroundColor:'rgba(99,102,241,0.7)',borderRadius:6}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Tajawal'}}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
+    });
+  }, 100);
+}
+
+// ---- Task Type Drill ----
+function showTaskTypeDrill(taskType) {
+  const tData = filteredData.filter(r => r.taskType === taskType);
+  if (!tData.length) return;
+  const empNames = [...new Set(tData.map(r => r.name))];
+  const avgOcc = (tData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/tData.length).toFixed(1);
+
+  let html = `<div class="drill-stats-row">
+    <div class="drill-stat-card"><div class="value">${tData.length}</div><div class="label">مهام</div></div>
+    <div class="drill-stat-card"><div class="value">${empNames.length}</div><div class="label">موظف</div></div>
+    <div class="drill-stat-card"><div class="value">${avgOcc}%</div><div class="label">متوسط إشغال</div></div>
+  </div>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>المنصة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th></tr></thead><tbody>`;
+  tData.forEach(r => {
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}'),200)">
+      <td style="font-weight:600">${r.name}</td><td><span class="badge badge-team">${r.team}</span></td>
+      <td><span class="badge badge-platform">${r.platform}</span></td><td>${r.occupancy}%</td><td>${r.month}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill(taskType, 'تفاصيل نوع المهمة');
+}
+
+// ---- KPI Drills ----
+function showOccupancyDrill() {
+  const empOcc = {};
+  filteredData.forEach(r => {
+    if (!empOcc[r.name]) empOcc[r.name] = {team:r.team, sum:0, count:0};
+    empOcc[r.name].sum += parseFloat(r.occupancy)||0;
+    empOcc[r.name].count++;
+  });
+  let html = `<div class="drill-stats-row">
+    <div class="drill-stat-card"><div class="value" style="color:#10b981">${Object.values(empOcc).filter(e=>(e.sum/e.count)<50).length}</div><div class="label">إشغال منخفض (&lt;50%)</div></div>
+    <div class="drill-stat-card"><div class="value" style="color:#f59e0b">${Object.values(empOcc).filter(e=>{const a=e.sum/e.count;return a>=50&&a<80;}).length}</div><div class="label">إشغال متوسط (50-80%)</div></div>
+    <div class="drill-stat-card"><div class="value" style="color:#ef4444">${Object.values(empOcc).filter(e=>(e.sum/e.count)>=80).length}</div><div class="label">إشغال مرتفع (≥80%)</div></div>
+  </div>
+  <div class="drill-chart-container" style="height:350px;"><canvas id="drillOccDist"></canvas></div>`;
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill('توزيع الإشغال', 'تحليل مستويات الإشغال لجميع الموظفين');
+  setTimeout(() => {
+    const sorted = Object.entries(empOcc).map(([n,d])=>({name:n,avg:(d.sum/d.count).toFixed(1)})).sort((a,b)=>b.avg-a.avg).slice(0,20);
+    drillCharts.occDist = new Chart(document.getElementById('drillOccDist'), {
+      type:'bar', data:{labels:sorted.map(s=>s.name), datasets:[{data:sorted.map(s=>s.avg),backgroundColor:sorted.map(s=>s.avg>=80?'#ef4444':s.avg>=50?'#f59e0b':'#10b981'),borderRadius:6}]},
+      options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
+        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}}}}
+    });
+  }, 100);
+}
+
+function showHighOccDrill() {
+  const highOcc = getHighOccEmployees();
+  const empData = filteredData.filter(r => highOcc.has(r.name));
+  const empMap = {};
+  empData.forEach(r => {
+    if (!empMap[r.name]) empMap[r.name] = {team:r.team, months:{}};
+    empMap[r.name].months[r.month] = (empMap[r.name].months[r.month]||0) + (parseFloat(r.occupancy)||0);
+  });
+  let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">الموظفون الذين يتجاوز إشغالهم 100% في شهر واحد على الأقل</p>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>الشهر</th><th>الإشغال</th></tr></thead><tbody>`;
+  Object.entries(empMap).forEach(([name,d]) => {
+    Object.entries(d.months).filter(([_,v])=>v>=100).sort((a,b)=>b[1]-a[1]).forEach(([month,occ]) => {
+      html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
+        <td style="font-weight:600">${name}</td><td><span class="badge badge-team">${d.team}</span></td>
+        <td>${month}</td><td style="color:#ef4444;font-weight:700">${occ.toFixed(0)}%</td></tr>`;
+    });
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill(`⚡ موظفون بإشغال مرتفع (${highOcc.size})`, 'تحتاج مراجعة وإعادة توزيع');
+}
+
+function showTeamsDrill() {
+  const teamMap = {};
+  filteredData.forEach(r => {
+    if (!teamMap[r.team]) teamMap[r.team] = {employees:new Set(), tasks:0, totalOcc:0};
+    teamMap[r.team].employees.add(r.name);
+    teamMap[r.team].tasks++;
+    teamMap[r.team].totalOcc += parseFloat(r.occupancy)||0;
+  });
+  let html = `<div class="drill-chart-container" style="height:300px;"><canvas id="drillTeams"></canvas></div>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
+  <table class="drill-table"><thead><tr><th>الفريق</th><th>عدد الموظفين</th><th>عدد المهام</th><th>متوسط الإشغال</th></tr></thead><tbody>`;
+  Object.entries(teamMap).sort((a,b)=>b[1].tasks-a[1].tasks).forEach(([team,d]) => {
+    const avg = (d.totalOcc/d.tasks).toFixed(1);
+    html += `<tr><td style="font-weight:600">${team}</td><td>${d.employees.size}</td><td>${d.tasks}</td>
+      <td><span style="color:${avg>=80?'#ef4444':avg>=50?'#f59e0b':'#10b981'};font-weight:700">${avg}%</span></td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill('🏢 الفرق المشاركة', 'تحليل أداء الفرق');
+  setTimeout(() => {
+    const labels = Object.keys(teamMap);
+    drillCharts.teams = new Chart(document.getElementById('drillTeams'), {
+      type:'bar', data:{labels, datasets:[
+        {label:'موظفون',data:labels.map(l=>teamMap[l].employees.size),backgroundColor:'#10b981',borderRadius:6},
+        {label:'مهام',data:labels.map(l=>teamMap[l].tasks),backgroundColor:'#6366f1',borderRadius:6},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
+        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
+    });
+  }, 100);
+}
+
+// ==================== CHARTS (with click handlers) ====================
+function renderCharts() {
+  renderPlatformChart(); renderTaskTypeChart(); renderTeamChart();
+  renderMonthlyChart(); renderTopEmployeesChart();
+}
 function destroyChart(name) { if (charts[name]) { charts[name].destroy(); charts[name] = null; } }
 
 function renderPlatformChart() {
@@ -718,21 +1199,10 @@ function renderPlatformChart() {
   const counts = {};
   filteredData.forEach(r => { counts[r.platform] = (counts[r.platform]||0) + 1; });
   const labels = Object.keys(counts);
-  const data = Object.values(counts);
   charts.platform = new Chart(document.getElementById('platformChart'), {
-    type: 'doughnut',
-    data: {
-      labels, datasets: [{
-        data, backgroundColor: COLORS.slice(0, labels.length),
-        borderWidth: 0, hoverOffset: 8
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom', labels: { font: { family: 'Tajawal', size: 12 }, padding: 16 } }
-      }
-    }
+    type:'doughnut', data:{ labels, datasets:[{data:Object.values(counts),backgroundColor:COLORS.slice(0,labels.length),borderWidth:0,hoverOffset:8}] },
+    options:{responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length){showPlatformDrill(labels[els[0].index]);}},
+      plugins:{legend:{position:'bottom',labels:{font:{family:'Tajawal',size:12},padding:16}}}}
   });
 }
 
@@ -742,19 +1212,11 @@ function renderTaskTypeChart() {
   filteredData.forEach(r => { counts[r.taskType] = (counts[r.taskType]||0) + 1; });
   const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]);
   charts.taskType = new Chart(document.getElementById('taskTypeChart'), {
-    type: 'bar',
-    data: {
-      labels: sorted.map(s => s[0]),
-      datasets: [{ data: sorted.map(s => s[1]), backgroundColor: COLORS.slice(0, sorted.length), borderRadius: 6, borderSkipped: false }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { family: 'Tajawal' } } },
-        y: { grid: { display: false }, ticks: { font: { family: 'Tajawal', size: 11 } } }
-      }
-    }
+    type:'bar', data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:COLORS.slice(0,sorted.length),borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      onClick:(e,els)=>{if(els.length){showTaskTypeDrill(sorted[els[0].index][0]);}},
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}},y:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}}}}
   });
 }
 
@@ -768,124 +1230,142 @@ function renderTeamChart() {
   });
   const labels = Object.keys(taskCounts);
   charts.team = new Chart(document.getElementById('teamChart'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'المهام', data: labels.map(l => taskCounts[l]), backgroundColor: '#6366f1', borderRadius: 6 },
-        { label: 'الموظفون', data: labels.map(l => empSets[l]?.size||0), backgroundColor: '#10b981', borderRadius: 6 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { font: { family: 'Tajawal' } } } },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { family: 'Tajawal', size: 11 } } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Tajawal' } } }
-      }
-    }
+    type:'bar', data:{labels,datasets:[
+      {label:'المهام',data:labels.map(l=>taskCounts[l]),backgroundColor:'#6366f1',borderRadius:6},
+      {label:'الموظفون',data:labels.map(l=>empSets[l]?.size||0),backgroundColor:'#10b981',borderRadius:6}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(e,els)=>{if(els.length){const team=labels[els[0].index];const emps=filteredData.filter(r=>r.team===team);if(emps.length){showTeamMembersDrill(team);}}},
+      plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
   });
+}
+
+function showTeamMembersDrill(team) {
+  const tData = filteredData.filter(r => r.team === team);
+  const empMap = {};
+  tData.forEach(r => {
+    if (!empMap[r.name]) empMap[r.name] = {count:0, occ:0, months:new Set()};
+    empMap[r.name].count++;
+    empMap[r.name].occ += parseFloat(r.occupancy)||0;
+    empMap[r.name].months.add(r.month);
+  });
+  let html = `<div class="drill-stats-row">
+    <div class="drill-stat-card"><div class="value">${Object.keys(empMap).length}</div><div class="label">موظف</div></div>
+    <div class="drill-stat-card"><div class="value">${tData.length}</div><div class="label">مهام</div></div>
+    <div class="drill-stat-card"><div class="value">${(tData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/tData.length).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
+  </div>
+  <div class="drill-chart-container"><canvas id="drillTeamMembers"></canvas></div>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>عدد المهام</th><th>إجمالي الإشغال</th><th>أشهر نشطة</th></tr></thead><tbody>`;
+  Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,d]) => {
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
+      <td style="font-weight:600">${name}</td><td>${d.count}</td>
+      <td><span style="color:${d.occ>=200?'#ef4444':'#10b981'};font-weight:700">${d.occ.toFixed(0)}%</span></td><td>${d.months.size}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill('🏢 ' + team, 'أعضاء الفريق وإشغالهم');
+  setTimeout(() => {
+    const names = Object.keys(empMap);
+    drillCharts.teamMembers = new Chart(document.getElementById('drillTeamMembers'), {
+      type:'bar',data:{labels:names,datasets:[{data:names.map(n=>empMap[n].occ),backgroundColor:names.map(n=>empMap[n].occ>=200?'#ef4444':empMap[n].occ>=100?'#f59e0b':'#10b981'),borderRadius:6}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
+    });
+  }, 100);
 }
 
 function renderMonthlyChart() {
   destroyChart('monthly');
-  const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   const monthData = {};
   filteredData.forEach(r => {
-    if (!monthData[r.month]) monthData[r.month] = { sum: 0, count: 0 };
-    monthData[r.month].sum += parseFloat(r.occupancy) || 0;
+    if (!monthData[r.month]) monthData[r.month] = { sum:0, count:0 };
+    monthData[r.month].sum += parseFloat(r.occupancy)||0;
     monthData[r.month].count++;
   });
   const presentMonths = MONTHS.filter(m => monthData[m]);
-  const avgData = presentMonths.map(m => monthData[m] ? (monthData[m].sum / monthData[m].count).toFixed(1) : 0);
-  const countData = presentMonths.map(m => monthData[m]?.count || 0);
-
   charts.monthly = new Chart(document.getElementById('monthlyChart'), {
-    type: 'bar',
-    data: {
-      labels: presentMonths,
-      datasets: [
-        {
-          type: 'line', label: 'متوسط الإشغال %', data: avgData,
-          borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)',
-          fill: true, tension: 0.4, pointRadius: 5, pointBackgroundColor: '#ef4444', yAxisID: 'y1'
-        },
-        {
-          label: 'عدد المهام', data: countData,
-          backgroundColor: 'rgba(99,102,241,0.7)', borderRadius: 6, yAxisID: 'y'
-        }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { font: { family: 'Tajawal' } } } },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { family: 'Tajawal' } } },
-        y: { position: 'right', grid: { color: '#f1f5f9' }, title: { display: true, text: 'عدد المهام', font: { family: 'Tajawal' } } },
-        y1: { position: 'left', grid: { display: false }, min: 0, max: 120, title: { display: true, text: 'الإشغال %', font: { family: 'Tajawal' } } }
-      }
-    }
+    type:'bar', data:{labels:presentMonths,datasets:[
+      {type:'line',label:'متوسط الإشغال %',data:presentMonths.map(m=>(monthData[m].sum/monthData[m].count).toFixed(1)),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#ef4444',yAxisID:'y1'},
+      {label:'عدد المهام',data:presentMonths.map(m=>monthData[m]?.count||0),backgroundColor:'rgba(99,102,241,0.7)',borderRadius:6,yAxisID:'y'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(e,els)=>{if(els.length){showMonthDrill(presentMonths[els[0].index]);}},
+      plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}},y:{position:'right',grid:{color:'#f1f5f9'},title:{display:true,text:'عدد المهام',font:{family:'Tajawal'}}},y1:{position:'left',grid:{display:false},min:0,max:120,title:{display:true,text:'الإشغال %',font:{family:'Tajawal'}}}}}
   });
+}
+
+function showMonthDrill(month) {
+  const mData = filteredData.filter(r => r.month === month);
+  const empMap = {};
+  mData.forEach(r => {
+    if (!empMap[r.name]) empMap[r.name] = {team:r.team, occ:0, count:0};
+    empMap[r.name].occ += parseFloat(r.occupancy)||0;
+    empMap[r.name].count++;
+  });
+  let html = `<div class="drill-stats-row">
+    <div class="drill-stat-card"><div class="value">${mData.length}</div><div class="label">مهام</div></div>
+    <div class="drill-stat-card"><div class="value">${Object.keys(empMap).length}</div><div class="label">موظف</div></div>
+    <div class="drill-stat-card"><div class="value">${(mData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/mData.length).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
+  </div>
+  <div class="drill-chart-container" style="height:350px;"><canvas id="drillMonth"></canvas></div>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
+  Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,d]) => {
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
+      <td style="font-weight:600">${name}</td><td><span class="badge badge-team">${d.team}</span></td><td>${d.count}</td>
+      <td><span style="color:${d.occ>=100?'#ef4444':'#10b981'};font-weight:700">${d.occ.toFixed(0)}%</span></td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill('📅 ' + month, 'تفاصيل الشهر');
+  setTimeout(() => {
+    const sorted = Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).slice(0,15);
+    drillCharts.month = new Chart(document.getElementById('drillMonth'), {
+      type:'bar',data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1].occ),backgroundColor:sorted.map(s=>s[1].occ>=100?'#ef4444':s[1].occ>=70?'#f59e0b':'#10b981'),borderRadius:6}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
+    });
+  }, 100);
 }
 
 function renderTopEmployeesChart() {
   destroyChart('topEmp');
   const empOcc = {};
-  filteredData.forEach(r => {
-    empOcc[r.name] = (empOcc[r.name]||0) + (parseFloat(r.occupancy)||0);
-  });
+  filteredData.forEach(r => { empOcc[r.name] = (empOcc[r.name]||0) + (parseFloat(r.occupancy)||0); });
   const sorted = Object.entries(empOcc).sort((a,b) => b[1] - a[1]).slice(0, 15);
   const colors = sorted.map(([_,v]) => v > 300 ? '#ef4444' : v > 200 ? '#f59e0b' : '#6366f1');
-
   charts.topEmp = new Chart(document.getElementById('topEmployeesChart'), {
-    type: 'bar',
-    data: {
-      labels: sorted.map(s => s[0]),
-      datasets: [{ data: sorted.map(s => s[1]), backgroundColor: colors, borderRadius: 6 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => 'إجمالي الإشغال: ' + ctx.parsed.y + '%'
-          }
-        }
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { family: 'Tajawal', size: 11 }, maxRotation: 45 } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Tajawal' }, callback: v => v + '%' } }
-      }
-    }
+    type:'bar', data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:colors,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(e,els)=>{if(els.length){showEmployeeDrill(sorted[els[0].index][0]);}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'إجمالي الإشغال: '+ctx.parsed.y+'%'}}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
   });
 }
 
-// ==================== HEATMAP ====================
+// ==================== HEATMAP (clickable) ====================
 function renderHeatmap() {
-  const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   const teams = [...new Set(filteredData.map(r => r.team))].filter(Boolean);
   const months = MONTHS.filter(m => filteredData.some(r => r.month === m));
   if (!teams.length || !months.length) {
     document.getElementById('heatmapContainer').innerHTML = '<div class="no-data"><p>لا توجد بيانات كافية للخريطة الحرارية</p></div>';
     return;
   }
-
   const grid = {};
   filteredData.forEach(r => {
     const k = r.team + '|' + r.month;
-    if (!grid[k]) grid[k] = { sum: 0, count: 0 };
-    grid[k].sum += parseFloat(r.occupancy) || 0;
+    if (!grid[k]) grid[k] = { sum:0, count:0 };
+    grid[k].sum += parseFloat(r.occupancy)||0;
     grid[k].count++;
   });
-
-  const cols = months.length + 1;
   let html = `<div class="heatmap-grid" style="grid-template-columns: 120px repeat(${months.length}, 1fr);">`;
   html += '<div class="heatmap-label"></div>';
   months.forEach(m => { html += `<div class="heatmap-label">${m}</div>`; });
-
   teams.forEach(team => {
-    html += `<div class="heatmap-label" style="text-align:right;">${team}</div>`;
+    html += `<div class="heatmap-label" style="text-align:right;cursor:pointer;" onclick="showTeamMembersDrill('${team.replace(/'/g,"\\'")}')"><u>${team}</u></div>`;
     months.forEach(month => {
       const k = team + '|' + month;
       const d = grid[k];
@@ -896,11 +1376,33 @@ function renderHeatmap() {
       else if (avg >= 90) { bg = `rgba(239,68,68,${0.2+intensity*0.6})`; fg = '#991b1b'; }
       else if (avg >= 60) { bg = `rgba(245,158,11,${0.15+intensity*0.4})`; fg = '#92400e'; }
       else { bg = `rgba(16,185,129,${0.15+intensity*0.4})`; fg = '#065f46'; }
-      html += `<div class="heatmap-cell" style="background:${bg};color:${fg};">${d ? avg+'%' : '—'}</div>`;
+      const clickHandler = d ? `onclick="showHeatmapCellDrill('${team.replace(/'/g,"\\'")}','${month}')"` : '';
+      html += `<div class="heatmap-cell" style="background:${bg};color:${fg};${d?'cursor:pointer;':''}" ${clickHandler}>${d ? avg+'%' : '—'}</div>`;
     });
   });
   html += '</div>';
   document.getElementById('heatmapContainer').innerHTML = html;
+}
+
+function showHeatmapCellDrill(team, month) {
+  const cData = filteredData.filter(r => r.team === team && r.month === month);
+  if (!cData.length) return;
+  let html = `<div class="drill-stats-row">
+    <div class="drill-stat-card"><div class="value">${cData.length}</div><div class="label">مهام</div></div>
+    <div class="drill-stat-card"><div class="value">${[...new Set(cData.map(r=>r.name))].length}</div><div class="label">موظف</div></div>
+    <div class="drill-stat-card"><div class="value">${(cData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/cData.length).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
+  </div>
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th></tr></thead><tbody>`;
+  cData.forEach(r => {
+    html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}'),200)">
+      <td style="font-weight:600">${r.name}</td><td><span class="badge badge-platform">${r.platform}</span></td>
+      <td><span class="badge badge-task">${r.taskType}</span></td><td>${r.occupancy}%</td>
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill(`${team} — ${month}`, 'تفاصيل خلية الخريطة الحرارية');
 }
 
 // ==================== DATA TABLE ====================
@@ -909,55 +1411,30 @@ function renderTable() {
   const search = document.getElementById('tableSearch').value.trim().toLowerCase();
   let data = filteredData;
   if (search) {
-    data = data.filter(r =>
-      (r.name||'').includes(search) || (r.team||'').includes(search) ||
-      (r.platform||'').includes(search) || (r.taskType||'').includes(search) ||
-      (r.description||'').includes(search) || (r.month||'').includes(search)
-    );
+    data = data.filter(r => (r.name||'').includes(search)||(r.team||'').includes(search)||(r.platform||'').includes(search)||(r.taskType||'').includes(search)||(r.description||'').includes(search)||(r.month||'').includes(search));
   }
-
   document.getElementById('tableCount').textContent = data.length + ' سجل';
   const totalPages = Math.ceil(data.length / PAGE_SIZE) || 1;
   if (currentPage > totalPages) currentPage = totalPages;
   const start = (currentPage - 1) * PAGE_SIZE;
   const pageData = data.slice(start, start + PAGE_SIZE);
-
   tbody.innerHTML = pageData.map((r, i) => {
-    const occ = parseFloat(r.occupancy) || 0;
-    const occColor = occ >= 80 ? '#ef4444' : occ >= 50 ? '#f59e0b' : '#10b981';
-    return `<tr>
-      <td style="color:var(--text-light)">${start + i + 1}</td>
+    const occ = parseFloat(r.occupancy)||0;
+    const occColor = occ>=80?'#ef4444':occ>=50?'#f59e0b':'#10b981';
+    return `<tr style="cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')">
+      <td style="color:var(--text-light)">${start+i+1}</td>
       <td style="font-weight:600">${r.name||''}</td>
       <td><span class="badge badge-team">${r.team||''}</span></td>
-      <td>${r.month||''}</td>
-      <td>${r.quarter||''}</td>
+      <td>${r.month||''}</td><td>${r.quarter||''}</td>
       <td><span class="badge badge-platform">${r.platform||''}</span></td>
       <td><span class="badge badge-task">${r.taskType||''}</span></td>
-      <td>
-        ${occ}%
-        <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div>
-      </td>
-      <td style="max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td>
-      <td style="font-size:11px; color:var(--text-light); direction:ltr; text-align:left;">${r.timestamp||''}</td>
+      <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td>
+      <td style="font-size:11px;color:var(--text-light);direction:ltr;text-align:left;">${r.timestamp||''}</td>
     </tr>`;
   }).join('');
-
-  // Pagination
-  const pag = document.getElementById('pagination');
-  if (totalPages <= 1) { pag.innerHTML = ''; return; }
-  let pagHtml = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
-  const maxShow = 7;
-  let startP = Math.max(1, currentPage - 3);
-  let endP = Math.min(totalPages, startP + maxShow - 1);
-  if (endP - startP < maxShow - 1) startP = Math.max(1, endP - maxShow + 1);
-  for (let p = startP; p <= endP; p++) {
-    pagHtml += `<button class="page-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
-  }
-  pagHtml += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>›</button>`;
-  pag.innerHTML = pagHtml;
+  renderPaginationFor('pagination', totalPages, currentPage, p => { currentPage = p; renderTable(); });
 }
-
-function goPage(p) { currentPage = p; renderTable(); }
 function filterTable() { currentPage = 1; renderTable(); }
 
 // ==================== CSV EXPORT ====================
@@ -966,8 +1443,8 @@ function exportCSV() {
   const BOM = '\uFEFF';
   const headers = ['الاسم','الفريق','الشهر','الربع','المنصة','نوع المهمة','الإشغال','الوصف','الخدمة','تاريخ الإرسال'];
   const rows = filteredData.map(r =>
-    [r.name, r.team, r.month, r.quarter, r.platform, r.taskType, r.occupancy, r.description, r.service, r.timestamp]
-      .map(v => '"' + (v||'').toString().replace(/"/g,'""') + '"').join(',')
+    [r.name,r.team,r.month,r.quarter,r.platform,r.taskType,r.occupancy,r.description,r.service,r.timestamp]
+      .map(v => '"'+(v||'').toString().replace(/"/g,'""')+'"').join(',')
   );
   const csv = BOM + headers.join(',') + '\n' + rows.join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
