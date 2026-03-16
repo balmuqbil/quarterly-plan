@@ -193,7 +193,8 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 }
 .badge-platform { background:rgba(99,102,241,0.1); color:var(--accent); }
 .badge-task { background:rgba(16,185,129,0.1); color:var(--success); }
-.badge-team { background:rgba(245,158,11,0.1); color:#b45309; }
+.badge-dept { background:rgba(245,158,11,0.1); color:#b45309; }
+.badge-section { background:rgba(139,92,246,0.1); color:#7c3aed; }
 .occupancy-bar {
   width:80px; height:8px; background:#e2e8f0; border-radius:4px; display:inline-block; vertical-align:middle; margin-left:8px;
 }
@@ -396,6 +397,17 @@ tr:hover td { background:rgba(99,102,241,0.03); }
   cursor:pointer; transition:all 0.2s; white-space:nowrap;
 }
 .mgmt-add-btn:hover { background:var(--accent-light); transform:translateY(-1px); }
+.mgmt-dept-group { margin-bottom:16px; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.mgmt-dept-header { font-weight:700; font-size:14px; padding:12px 16px; background:var(--bg-card-dark); display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+.mgmt-dept-header:hover { background:#eef2ff; }
+.mgmt-section-item { padding-right:24px; }
+.section-hc-input { width:60px; padding:4px 8px; border:1.5px solid var(--border); border-radius:6px; font-family:inherit; font-size:12px; text-align:center; direction:ltr; }
+.section-hc-input:focus { border-color:var(--accent); outline:none; }
+.mgmt-emp-info { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.mgmt-add-emp-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.mgmt-add-emp-row select, .mgmt-add-emp-row input { padding:8px 10px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:12px; }
+.capacity-bar { height:8px; background:#e2e8f0; border-radius:4px; margin-top:6px; overflow:hidden; }
+.capacity-fill { height:100%; border-radius:4px; transition:width 0.5s; }
 .mgmt-edit-input {
   padding:6px 10px; border:1.5px solid var(--accent); border-radius:6px;
   font-family:inherit; font-size:13px; outline:none; width:100%;
@@ -640,11 +652,17 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <div class="kpi-label">موظفون بإشغال ≥ 100%</div>
         <span class="kpi-change neutral" id="kpiHighChange">تحتاج متابعة</span>
       </div>
-      <div class="kpi-card clickable animate-in delay-2" onclick="showTeamsDrill()">
+      <div class="kpi-card clickable animate-in delay-2" onclick="showDepartmentsDrill()">
         <div class="kpi-icon">🏢</div>
-        <div class="kpi-value" id="kpiTeams">—</div>
-        <div class="kpi-label">الفرق المشاركة</div>
-        <span class="kpi-change neutral" id="kpiTeamChange">—</span>
+        <div class="kpi-value" id="kpiDepartments">—</div>
+        <div class="kpi-label">الإدارات المشاركة</div>
+        <span class="kpi-change neutral" id="kpiDeptChange">—</span>
+      </div>
+      <div class="kpi-card clickable animate-in delay-3" onclick="showCapacityDrill()">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-value" id="kpiCapacity">—</div>
+        <div class="kpi-label">استغلال السعة</div>
+        <span class="kpi-change neutral" id="kpiCapChange">—</span>
       </div>
     </div>
 
@@ -671,11 +689,11 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">توزيع الفرق</div>
-            <div class="chart-subtitle">اضغط على أي فريق للتفاصيل</div>
+            <div class="chart-title">توزيع الإدارات</div>
+            <div class="chart-subtitle">اضغط على أي إدارة للتفاصيل</div>
           </div>
         </div>
-        <div class="chart-container medium"><canvas id="teamChart"></canvas></div>
+        <div class="chart-container medium"><canvas id="departmentChart"></canvas></div>
       </div>
       <div class="chart-card">
         <div class="chart-header">
@@ -698,7 +716,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="chart-card full">
         <div class="chart-header">
           <div>
-            <div class="chart-title">خريطة الإشغال — الفريق × الشهر</div>
+            <div class="chart-title">خريطة الإشغال — الإدارة × الشهر</div>
             <div class="chart-subtitle">اضغط على أي خلية للتفاصيل</div>
           </div>
         </div>
@@ -715,14 +733,14 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         </div>
       </div>
       <div class="table-toolbar">
-        <input type="text" class="search-box" id="tableSearch" placeholder="🔍 بحث بالاسم، الفريق، المنصة..." oninput="filterTable()">
+        <input type="text" class="search-box" id="tableSearch" placeholder="🔍 بحث بالاسم، الإدارة، المنصة..." oninput="filterTable()">
         <span style="color:var(--text-light); font-size:12px;" id="tableCount">0 سجل</span>
       </div>
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>#</th><th>الاسم</th><th>الفريق</th><th>الشهر</th><th>الربع</th><th>السنة</th>
+              <th>#</th><th>الاسم</th><th>الإدارة</th><th>القسم</th><th>الشهر</th><th>الربع</th><th>السنة</th>
               <th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th><th>تاريخ الإرسال</th>
             </tr>
           </thead>
@@ -778,7 +796,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="chart-header"><div><div class="chart-title">جدول المهام التفصيلي</div></div></div>
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>#</th><th>الموظف</th><th>الفريق</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>#</th><th>الموظف</th><th>الإدارة</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th><th>إجراءات</th></tr></thead>
           <tbody id="tasksTableBody"></tbody>
         </table>
       </div>
@@ -797,8 +815,12 @@ tr:hover td { background:rgba(99,102,241,0.03); }
           <select id="taskField_name"></select>
         </div>
         <div class="task-modal-field">
-          <label>الفريق</label>
-          <select id="taskField_team"></select>
+          <label>الإدارة</label>
+          <select id="taskField_department"></select>
+        </div>
+        <div class="task-modal-field">
+          <label>القسم</label>
+          <select id="taskField_section"><option value="">— اختر —</option></select>
         </div>
         <div class="task-modal-field">
           <label>المنصة / المنتج</label>
@@ -1002,30 +1024,30 @@ function normalizeOccupancy(val) {
   return Math.round(v * 100) / 100; // clean floating point
 }
 
-function fixTeamPlatformSwap(data) {
-  // Known teams and platforms to detect swaps
+function fixDepartmentPlatformSwap(data) {
+  // Known departments and platforms to detect swaps
   const mgmt = getMgmtData();
-  const knownTeams = new Set(mgmt.teams.length ? mgmt.teams : DEFAULT_MGMT.teams);
+  const knownDepartments = new Set(mgmt.departments.length ? mgmt.departments : DEFAULT_MGMT.departments);
   const knownPlatforms = new Set(mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms);
 
   data.forEach(r => {
-    const team = (r.team || '').trim();
+    const department = (r.department || '').trim();
     const platform = (r.platform || '').trim();
 
-    // Case 1: team field has a platform name AND platform field has a team name → swap
-    if (knownPlatforms.has(team) && knownTeams.has(platform)) {
-      r.team = platform;
-      r.platform = team;
+    // Case 1: department field has a platform name AND platform field has a department name → swap
+    if (knownPlatforms.has(department) && knownDepartments.has(platform)) {
+      r.department = platform;
+      r.platform = department;
     }
-    // Case 2: team field has a platform name but platform field is also wrong/unknown
-    else if (knownPlatforms.has(team) && !knownTeams.has(platform)) {
-      r.team = platform; // move whatever is in platform to team
-      r.platform = team; // move the known platform name to platform
+    // Case 2: department field has a platform name but platform field is also wrong/unknown
+    else if (knownPlatforms.has(department) && !knownDepartments.has(platform)) {
+      r.department = platform;
+      r.platform = department;
     }
-    // Case 3: platform field has a team name but team field is also wrong/unknown
-    else if (knownTeams.has(platform) && !knownPlatforms.has(team)) {
-      r.platform = team;
-      r.team = platform;
+    // Case 3: platform field has a department name but department field is also wrong/unknown
+    else if (knownDepartments.has(platform) && !knownPlatforms.has(department)) {
+      r.platform = department;
+      r.department = platform;
     }
   });
 
@@ -1036,8 +1058,8 @@ function cleanOccupancyData(data) {
   const MIN_OCC = 25;  // 25%
   const MAX_OCC = 120; // 120%
 
-  // Fix swapped team/platform fields
-  fixTeamPlatformSwap(data);
+  // Fix swapped department/platform fields
+  fixDepartmentPlatformSwap(data);
 
   // Normalize all occupancy values to percentage format
   data.forEach(r => { r.occupancy = normalizeOccupancy(r.occupancy); });
@@ -1077,24 +1099,24 @@ function cleanOccupancyData(data) {
 }
 
 function seedEmployeesFromData(data) {
-  // Extract unique employee names from task data
-  const namesFromData = [...new Set(data.map(r => (r.name || '').trim()).filter(Boolean))];
-  if (namesFromData.length === 0) return;
-
-  // Merge with existing management list (don't overwrite manual edits)
+  const empInfo = {};
+  data.forEach(r => {
+    const name = (r.name || '').trim();
+    if (!name) return;
+    if (!empInfo[name]) empInfo[name] = { department: r.department || '', section: r.section || '' };
+  });
+  if (!Object.keys(empInfo).length) return;
   const mgmt = getMgmtData();
-  const existing = new Set(mgmt.employees);
+  const existingNames = new Set(mgmt.employees.map(e => e.name));
   let added = 0;
-  namesFromData.forEach(name => {
-    if (!existing.has(name)) {
-      mgmt.employees.push(name);
-      existing.add(name);
+  Object.entries(empInfo).forEach(([name, info]) => {
+    if (!existingNames.has(name)) {
+      mgmt.employees.push({ name, department: info.department, section: info.section });
+      existingNames.add(name);
       added++;
     }
   });
-  if (added > 0) {
-    saveMgmtList('employees', mgmt.employees);
-  }
+  if (added > 0) saveMgmtList('employees', mgmt.employees);
 }
 
 // ==================== DATA LOADING ====================
@@ -1107,7 +1129,12 @@ function loadData() {
     var scriptEl = document.getElementById('jsonp-loader');
     if (scriptEl) scriptEl.remove();
     if (json && json.status === 'success' && json.data) {
-      allData = cleanOccupancyData(json.data.map(r => ({ ...r, year: r.year || '2026' })));
+      allData = cleanOccupancyData(json.data.map(r => ({
+        ...r,
+        department: r.department || r.team || '',
+        section: r.section || '',
+        year: r.year || '2026'
+      })));
       seedEmployeesFromData(allData);
       applyFilters();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
@@ -1155,7 +1182,7 @@ function updateKPIs() {
   const d = filteredData;
   const employees = [...new Set(d.map(r => r.name))];
   const platforms = [...new Set(d.map(r => r.platform))];
-  const teams = [...new Set(d.map(r => r.team))];
+  const departments = [...new Set(d.map(r => r.department))];
   const avgOcc = d.length > 0 ? (d.reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0) / d.length) : 0;
   const highOccEmployees = getHighOccEmployees();
 
@@ -1164,7 +1191,7 @@ function updateKPIs() {
   document.getElementById('kpiAvgOcc').textContent = avgOcc.toFixed(1) + '%';
   animateValue('kpiPlatforms', platforms.length);
   animateValue('kpiHighOcc', highOccEmployees.size);
-  animateValue('kpiTeams', teams.length);
+  animateValue('kpiDepartments', departments.length);
 
   document.getElementById('kpiEmpChange').textContent = 'اضغط لعرض الموظفين';
   document.getElementById('kpiTaskChange').textContent = 'اضغط لعرض المهام';
@@ -1174,6 +1201,23 @@ function updateKPIs() {
   const highClass = highOccEmployees.size > 5 ? 'down' : 'neutral';
   document.getElementById('kpiHighChange').className = 'kpi-change ' + highClass;
   document.getElementById('kpiHighChange').textContent = highOccEmployees.size > 0 ? '⚠ اضغط للمراجعة' : '✓ ضمن الحدود';
+
+  // Capacity
+  const capData = getCapacityData();
+  const totalHC = Object.values(capData).reduce((s, dept) => s + dept.totalHeadCount, 0);
+  const activeMonths = [...new Set(d.map(r => r.month))].length || 1;
+  const totalCapacity = totalHC * 100 * activeMonths;
+  const totalUsed = d.reduce((s, r) => s + (parseFloat(r.occupancy) || 0), 0);
+  const capUtil = totalCapacity > 0 ? ((totalUsed / totalCapacity) * 100).toFixed(1) : '—';
+  document.getElementById('kpiCapacity').textContent = totalCapacity > 0 ? capUtil + '%' : '—';
+  const capEl = document.getElementById('kpiCapChange');
+  if (totalCapacity > 0) {
+    capEl.textContent = totalHC + ' موظف × ' + activeMonths + ' شهر';
+    capEl.className = 'kpi-change ' + (capUtil > 90 ? 'down' : capUtil > 70 ? 'neutral' : 'up');
+  } else {
+    capEl.textContent = 'لم يتم تحديد السعة';
+    capEl.className = 'kpi-change neutral';
+  }
 }
 
 function animateValue(id, target) {
@@ -1193,14 +1237,14 @@ function renderEmployeesSection() {
   const search = (document.getElementById('empSearch')?.value || '').trim().toLowerCase();
   const empMap = {};
   filteredData.forEach(r => {
-    if (!empMap[r.name]) empMap[r.name] = { name: r.name, team: r.team, tasks: [], totalOcc: 0, months: new Set(), platforms: new Set() };
+    if (!empMap[r.name]) empMap[r.name] = { name: r.name, department: r.department, section: r.section || '', tasks: [], totalOcc: 0, months: new Set(), platforms: new Set() };
     empMap[r.name].tasks.push(r);
     empMap[r.name].totalOcc += parseFloat(r.occupancy) || 0;
     empMap[r.name].months.add(r.month);
     empMap[r.name].platforms.add(r.platform);
   });
   let employees = Object.values(empMap).sort((a,b) => b.totalOcc - a.totalOcc);
-  if (search) employees = employees.filter(e => e.name.includes(search) || e.team.includes(search));
+  if (search) employees = employees.filter(e => e.name.includes(search) || e.department.includes(search));
 
   const grid = document.getElementById('employeesGrid');
   grid.innerHTML = employees.map(e => {
@@ -1209,7 +1253,8 @@ function renderEmployeesSection() {
     return `<div class="detail-card" onclick="showEmployeeDrill('${e.name.replace(/'/g,"\\'")}')">
       <div class="detail-card-header">
         <div class="detail-card-name">${e.name}</div>
-        <span class="detail-card-badge badge-team">${e.team}</span>
+        <span class="detail-card-badge badge-dept">${e.department}</span>
+        ${e.section ? '<span class="detail-card-badge badge-section">' + e.section + '</span>' : ''}
       </div>
       <div class="detail-card-stats">
         <div class="detail-stat"><div class="detail-stat-value">${e.tasks.length}</div><div class="detail-stat-label">مهام</div></div>
@@ -1227,10 +1272,10 @@ function renderEmployeesSection() {
 function renderPlatformsSection() {
   const platMap = {};
   filteredData.forEach(r => {
-    if (!platMap[r.platform]) platMap[r.platform] = { name: r.platform, tasks: 0, employees: new Set(), teams: new Set(), totalOcc: 0 };
+    if (!platMap[r.platform]) platMap[r.platform] = { name: r.platform, tasks: 0, employees: new Set(), departments: new Set(), totalOcc: 0 };
     platMap[r.platform].tasks++;
     platMap[r.platform].employees.add(r.name);
-    platMap[r.platform].teams.add(r.team);
+    platMap[r.platform].departments.add(r.department);
     platMap[r.platform].totalOcc += parseFloat(r.occupancy) || 0;
   });
   const platforms = Object.values(platMap).sort((a,b) => b.tasks - a.tasks);
@@ -1245,7 +1290,7 @@ function renderPlatformsSection() {
       </div>
       <div class="detail-card-stats">
         <div class="detail-stat"><div class="detail-stat-value">${p.employees.size}</div><div class="detail-stat-label">موظف</div></div>
-        <div class="detail-stat"><div class="detail-stat-value">${p.teams.size}</div><div class="detail-stat-label">فرق</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${p.departments.size}</div><div class="detail-stat-label">إدارات</div></div>
         <div class="detail-stat"><div class="detail-stat-value">${(p.totalOcc/p.tasks).toFixed(0)}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
       </div>
     </div>`;
@@ -1293,7 +1338,7 @@ function renderTasksSection() {
     return `<tr>
       <td>${start+i+1}</td>
       <td style="font-weight:600;cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')"><u>${r.name||''}</u></td>
-      <td><span class="badge badge-team">${r.team||''}</span></td>
+      <td><span class="badge badge-dept">${r.department||''}</span></td>
       <td><span class="badge badge-platform">${r.platform||''}</span></td>
       <td><span class="badge badge-task">${r.taskType||''}</span></td>
       <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
@@ -1313,16 +1358,23 @@ function renderTasksSection() {
 // ==================== TASK CRUD ====================
 function populateTaskModalDropdowns() {
   const mgmt = getMgmtData();
-  const employees = mgmt.employees.length ? mgmt.employees : [...new Set(allData.map(r => r.name).filter(Boolean))];
-  const teams = mgmt.teams.length ? mgmt.teams : DEFAULT_MGMT.teams;
+  const empNames = mgmt.employees.length ? mgmt.employees.map(e => typeof e === 'string' ? e : e.name) : [...new Set(allData.map(r => r.name).filter(Boolean))];
+  const departments = mgmt.departments.length ? mgmt.departments : DEFAULT_MGMT.departments;
   const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
   const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
 
-  document.getElementById('taskField_name').innerHTML = '<option value="">— اختر الموظف —</option>' + employees.map(e => `<option value="${e}">${e}</option>`).join('');
-  document.getElementById('taskField_team').innerHTML = '<option value="">— اختر الفريق —</option>' + teams.map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('taskField_name').innerHTML = '<option value="">— اختر الموظف —</option>' + empNames.map(e => `<option value="${e}">${e}</option>`).join('');
+  document.getElementById('taskField_department').innerHTML = '<option value="">— اختر الإدارة —</option>' + departments.map(d => `<option value="${d}">${d}</option>`).join('');
   document.getElementById('taskField_platform').innerHTML = '<option value="">— اختر المنصة —</option>' + platforms.map(p => `<option value="${p}">${p}</option>`).join('');
   document.getElementById('taskField_taskType').innerHTML = '<option value="">— اختر نوع المهمة —</option>' + taskTypes.map(t => `<option value="${t}">${t}</option>`).join('');
   document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الشهر —</option>' + MONTHS.map(m => `<option value="${m}">${m}</option>`).join('');
+  // Section cascading
+  const secData = mgmt.sections || {};
+  document.getElementById('taskField_department').onchange = function() {
+    const secs = secData[this.value] || [];
+    document.getElementById('taskField_section').innerHTML = '<option value="">— اختر القسم —</option>' + secs.map(s => `<option value="${s}">${s}</option>`).join('');
+  };
+  document.getElementById('taskField_section').innerHTML = '<option value="">— اختر القسم —</option>';
 }
 
 function openTaskModal(editIdx) {
@@ -1334,7 +1386,12 @@ function openTaskModal(editIdx) {
   if (isEdit) {
     const r = allData[editIdx];
     document.getElementById('taskField_name').value = r.name || '';
-    document.getElementById('taskField_team').value = r.team || '';
+    document.getElementById('taskField_department').value = r.department || '';
+    // Trigger onchange to populate sections
+    const deptEl = document.getElementById('taskField_department');
+    if (deptEl.onchange) deptEl.onchange.call(deptEl);
+    // Set section after populating
+    setTimeout(() => { document.getElementById('taskField_section').value = r.section || ''; }, 0);
     document.getElementById('taskField_platform').value = r.platform || '';
     document.getElementById('taskField_taskType').value = r.taskType || '';
     document.getElementById('taskField_month').value = r.month || '';
@@ -1344,10 +1401,9 @@ function openTaskModal(editIdx) {
     document.getElementById('taskField_description').value = r.description || '';
     document.getElementById('taskField_service').value = r.service || '';
   } else {
-    ['name','team','platform','taskType','month','quarter','year','occupancy','description','service'].forEach(f => {
+    ['name','department','section','platform','taskType','month','quarter','year','occupancy','description','service'].forEach(f => {
       const el = document.getElementById('taskField_' + f);
-      if (el.tagName === 'SELECT') el.selectedIndex = 0;
-      else el.value = '';
+      if (el) { if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = ''; }
     });
     document.getElementById('taskField_year').value = '2026';
   }
@@ -1360,14 +1416,15 @@ function closeTaskModal() {
 
 function saveTask() {
   const fields = {};
-  ['name','team','platform','taskType','month','quarter','year','description','service'].forEach(f => {
-    fields[f] = document.getElementById('taskField_' + f).value.trim();
+  ['name','department','section','platform','taskType','month','quarter','year','description','service'].forEach(f => {
+    const el = document.getElementById('taskField_' + f);
+    fields[f] = el ? el.value.trim() : '';
   });
   fields.occupancy = parseFloat(document.getElementById('taskField_occupancy').value) || 0;
 
   // Validate required fields
   if (!fields.name) { showMgmtToast('يرجى اختيار الموظف', 'error'); return; }
-  if (!fields.team) { showMgmtToast('يرجى اختيار الفريق', 'error'); return; }
+  if (!fields.department) { showMgmtToast('يرجى اختيار الإدارة', 'error'); return; }
   if (!fields.platform) { showMgmtToast('يرجى اختيار المنصة', 'error'); return; }
   if (!fields.taskType) { showMgmtToast('يرجى اختيار نوع المهمة', 'error'); return; }
   if (!fields.month) { showMgmtToast('يرجى اختيار الشهر', 'error'); return; }
@@ -1472,7 +1529,8 @@ document.getElementById('drillModal').addEventListener('click', e => { if (e.tar
 function showEmployeeDrill(name) {
   const empData = filteredData.filter(r => r.name === name);
   if (!empData.length) return;
-  const team = empData[0].team;
+  const department = empData[0].department;
+  const section = empData[0].section || '';
   const totalOcc = empData.reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0);
   const avgOcc = (totalOcc / empData.length).toFixed(1);
   const platforms = [...new Set(empData.map(r => r.platform))];
@@ -1504,7 +1562,7 @@ function showEmployeeDrill(name) {
   html += '</tbody></table></div>';
 
   document.getElementById('drillBody').innerHTML = html;
-  openDrill(name, `${team} — عرض تفصيلي للموظف`);
+  openDrill(name, `${department}${section ? ' / ' + section : ''} — عرض تفصيلي للموظف`);
 
   // Render monthly chart
   setTimeout(() => {
@@ -1531,7 +1589,7 @@ function showPlatformDrill(platform) {
   const pData = filteredData.filter(r => r.platform === platform);
   if (!pData.length) return;
   const empNames = [...new Set(pData.map(r => r.name))];
-  const teams = [...new Set(pData.map(r => r.team))];
+  const departments = [...new Set(pData.map(r => r.department))];
   const avgOcc = (pData.reduce((s,r) => s+(parseFloat(r.occupancy)||0),0)/pData.length).toFixed(1);
 
   const monthOcc = {};
@@ -1545,22 +1603,22 @@ function showPlatformDrill(platform) {
     <div class="drill-stat-card"><div class="value">${pData.length}</div><div class="label">مهام</div></div>
     <div class="drill-stat-card"><div class="value">${empNames.length}</div><div class="label">موظف</div></div>
     <div class="drill-stat-card"><div class="value">${avgOcc}%</div><div class="label">متوسط إشغال</div></div>
-    <div class="drill-stat-card"><div class="value">${teams.length}</div><div class="label">فرق</div></div>
+    <div class="drill-stat-card"><div class="value">${departments.length}</div><div class="label">إدارات</div></div>
   </div>
   <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;">📈 الإشغال الشهري للمنصة</h3>
   <div class="drill-chart-container"><canvas id="drillPlatMonthly"></canvas></div>
   <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">👥 الموظفون على هذه المنصة</h3>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
   const empStats = {};
   pData.forEach(r => {
-    if (!empStats[r.name]) empStats[r.name] = {team:r.team,count:0,occ:0};
+    if (!empStats[r.name]) empStats[r.name] = {department:r.department,count:0,occ:0};
     empStats[r.name].count++;
     empStats[r.name].occ += parseFloat(r.occupancy)||0;
   });
   Object.entries(empStats).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,s]) => {
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${name}</td><td><span class="badge badge-team">${s.team}</span></td><td>${s.count}</td>
+      <td style="font-weight:600">${name}</td><td><span class="badge badge-dept">${s.department}</span></td><td>${s.count}</td>
       <td><span style="color:${s.occ>=100?'#ef4444':'#10b981'};font-weight:700">${s.occ.toFixed(0)}%</span></td></tr>`;
   });
   html += '</tbody></table></div>';
@@ -1592,10 +1650,10 @@ function showTaskTypeDrill(taskType) {
     <div class="drill-stat-card"><div class="value">${avgOcc}%</div><div class="label">متوسط إشغال</div></div>
   </div>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>المنصة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th></tr></thead><tbody>`;
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>المنصة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th></tr></thead><tbody>`;
   tData.forEach(r => {
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${r.name}</td><td><span class="badge badge-team">${r.team}</span></td>
+      <td style="font-weight:600">${r.name}</td><td><span class="badge badge-dept">${r.department}</span></td>
       <td><span class="badge badge-platform">${r.platform}</span></td><td>${r.occupancy}%</td><td>${r.month}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.description||''}">${r.description||'—'}</td></tr>`;
   });
@@ -1608,7 +1666,7 @@ function showTaskTypeDrill(taskType) {
 function showOccupancyDrill() {
   const empOcc = {};
   filteredData.forEach(r => {
-    if (!empOcc[r.name]) empOcc[r.name] = {team:r.team, sum:0, count:0};
+    if (!empOcc[r.name]) empOcc[r.name] = {department:r.department, sum:0, count:0};
     empOcc[r.name].sum += parseFloat(r.occupancy)||0;
     empOcc[r.name].count++;
   });
@@ -1635,16 +1693,16 @@ function showHighOccDrill() {
   const empData = filteredData.filter(r => highOcc.has(r.name));
   const empMap = {};
   empData.forEach(r => {
-    if (!empMap[r.name]) empMap[r.name] = {team:r.team, months:{}};
+    if (!empMap[r.name]) empMap[r.name] = {department:r.department, months:{}};
     empMap[r.name].months[r.month] = (empMap[r.name].months[r.month]||0) + (parseFloat(r.occupancy)||0);
   });
   let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">الموظفون الذين يتجاوز إشغالهم 100% في شهر واحد على الأقل</p>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>الشهر</th><th>الإشغال</th></tr></thead><tbody>`;
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>الشهر</th><th>الإشغال</th></tr></thead><tbody>`;
   Object.entries(empMap).forEach(([name,d]) => {
     Object.entries(d.months).filter(([_,v])=>v>=100).sort((a,b)=>b[1]-a[1]).forEach(([month,occ]) => {
       html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
-        <td style="font-weight:600">${name}</td><td><span class="badge badge-team">${d.team}</span></td>
+        <td style="font-weight:600">${name}</td><td><span class="badge badge-dept">${d.department}</span></td>
         <td>${month}</td><td style="color:#ef4444;font-weight:700">${occ.toFixed(0)}%</td></tr>`;
     });
   });
@@ -1653,31 +1711,38 @@ function showHighOccDrill() {
   openDrill(`⚡ موظفون بإشغال مرتفع (${highOcc.size})`, 'تحتاج مراجعة وإعادة توزيع');
 }
 
-function showTeamsDrill() {
-  const teamMap = {};
+function showDepartmentsDrill() {
+  const deptMap = {};
   filteredData.forEach(r => {
-    if (!teamMap[r.team]) teamMap[r.team] = {employees:new Set(), tasks:0, totalOcc:0};
-    teamMap[r.team].employees.add(r.name);
-    teamMap[r.team].tasks++;
-    teamMap[r.team].totalOcc += parseFloat(r.occupancy)||0;
+    if (!deptMap[r.department]) deptMap[r.department] = {employees:new Set(), tasks:0, totalOcc:0};
+    deptMap[r.department].employees.add(r.name);
+    deptMap[r.department].tasks++;
+    deptMap[r.department].totalOcc += parseFloat(r.occupancy)||0;
   });
+  const capData = getCapacityData();
+  const activeMonths = [...new Set(filteredData.map(r => r.month))].length || 1;
   let html = `<div class="drill-chart-container" style="height:300px;"><canvas id="drillTeams"></canvas></div>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
-  <table class="drill-table"><thead><tr><th>الفريق</th><th>عدد الموظفين</th><th>عدد المهام</th><th>متوسط الإشغال</th></tr></thead><tbody>`;
-  Object.entries(teamMap).sort((a,b)=>b[1].tasks-a[1].tasks).forEach(([team,d]) => {
+  <table class="drill-table"><thead><tr><th>الإدارة</th><th>عدد الموظفين</th><th>عدد المهام</th><th>متوسط الإشغال</th><th>HC</th><th>السعة %</th></tr></thead><tbody>`;
+  Object.entries(deptMap).sort((a,b)=>b[1].tasks-a[1].tasks).forEach(([dept,d]) => {
     const avg = (d.totalOcc/d.tasks).toFixed(1);
-    html += `<tr><td style="font-weight:600">${team}</td><td>${d.employees.size}</td><td>${d.tasks}</td>
-      <td><span style="color:${avg>=80?'#ef4444':avg>=50?'#f59e0b':'#10b981'};font-weight:700">${avg}%</span></td></tr>`;
+    const cap = capData[dept];
+    const hc = cap ? cap.totalHeadCount : 0;
+    const totalCap = hc * 100 * activeMonths;
+    const capPct = totalCap > 0 ? (d.totalOcc / totalCap * 100).toFixed(1) : '—';
+    html += `<tr><td style="font-weight:600">${dept}</td><td>${d.employees.size}</td><td>${d.tasks}</td>
+      <td><span style="color:${avg>=80?'#ef4444':avg>=50?'#f59e0b':'#10b981'};font-weight:700">${avg}%</span></td>
+      <td>${hc}</td><td>${capPct}${capPct !== '—' ? '%' : ''}</td></tr>`;
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
-  openDrill('🏢 الفرق المشاركة', 'تحليل أداء الفرق');
+  openDrill('🏢 الإدارات المشاركة', 'تحليل أداء الإدارات');
   setTimeout(() => {
-    const labels = Object.keys(teamMap);
+    const labels = Object.keys(deptMap);
     drillCharts.teams = new Chart(document.getElementById('drillTeams'), {
       type:'bar', data:{labels, datasets:[
-        {label:'موظفون',data:labels.map(l=>teamMap[l].employees.size),backgroundColor:'#10b981',borderRadius:6},
-        {label:'مهام',data:labels.map(l=>teamMap[l].tasks),backgroundColor:'#6366f1',borderRadius:6},
+        {label:'موظفون',data:labels.map(l=>deptMap[l].employees.size),backgroundColor:'#10b981',borderRadius:6},
+        {label:'مهام',data:labels.map(l=>deptMap[l].tasks),backgroundColor:'#6366f1',borderRadius:6},
       ]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
         scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
@@ -1687,7 +1752,7 @@ function showTeamsDrill() {
 
 // ==================== CHARTS (with click handlers) ====================
 function renderCharts() {
-  renderPlatformChart(); renderTaskTypeChart(); renderTeamChart();
+  renderPlatformChart(); renderTaskTypeChart(); renderDepartmentChart();
   renderMonthlyChart(); renderTopEmployeesChart();
 }
 function destroyChart(name) { if (charts[name]) { charts[name].destroy(); charts[name] = null; } }
@@ -1718,29 +1783,29 @@ function renderTaskTypeChart() {
   });
 }
 
-function renderTeamChart() {
-  destroyChart('team');
+function renderDepartmentChart() {
+  destroyChart('department');
   const taskCounts = {}, empSets = {};
   filteredData.forEach(r => {
-    taskCounts[r.team] = (taskCounts[r.team]||0) + 1;
-    if (!empSets[r.team]) empSets[r.team] = new Set();
-    empSets[r.team].add(r.name);
+    taskCounts[r.department] = (taskCounts[r.department]||0) + 1;
+    if (!empSets[r.department]) empSets[r.department] = new Set();
+    empSets[r.department].add(r.name);
   });
   const labels = Object.keys(taskCounts);
-  charts.team = new Chart(document.getElementById('teamChart'), {
+  charts.department = new Chart(document.getElementById('departmentChart'), {
     type:'bar', data:{labels,datasets:[
       {label:'المهام',data:labels.map(l=>taskCounts[l]),backgroundColor:'#6366f1',borderRadius:6},
       {label:'الموظفون',data:labels.map(l=>empSets[l]?.size||0),backgroundColor:'#10b981',borderRadius:6}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      onClick:(e,els)=>{if(els.length){const team=labels[els[0].index];const emps=filteredData.filter(r=>r.team===team);if(emps.length){showTeamMembersDrill(team);}}},
+      onClick:(e,els)=>{if(els.length){const department=labels[els[0].index];const emps=filteredData.filter(r=>r.department===department);if(emps.length){showDepartmentMembersDrill(department);}}},
       plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
       scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
   });
 }
 
-function showTeamMembersDrill(team) {
-  const tData = filteredData.filter(r => r.team === team);
+function showDepartmentMembersDrill(department) {
+  const tData = filteredData.filter(r => r.department === department);
   const empMap = {};
   tData.forEach(r => {
     if (!empMap[r.name]) empMap[r.name] = {count:0, occ:0, months:new Set()};
@@ -1763,7 +1828,7 @@ function showTeamMembersDrill(team) {
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
-  openDrill('🏢 ' + team, 'أعضاء الفريق وإشغالهم');
+  openDrill('🏢 ' + department, 'أعضاء الإدارة وإشغالهم');
   setTimeout(() => {
     const names = Object.keys(empMap);
     drillCharts.teamMembers = new Chart(document.getElementById('drillTeamMembers'), {
@@ -1799,7 +1864,7 @@ function showMonthDrill(month) {
   const mData = filteredData.filter(r => r.month === month);
   const empMap = {};
   mData.forEach(r => {
-    if (!empMap[r.name]) empMap[r.name] = {team:r.team, occ:0, count:0};
+    if (!empMap[r.name]) empMap[r.name] = {department:r.department, occ:0, count:0};
     empMap[r.name].occ += parseFloat(r.occupancy)||0;
     empMap[r.name].count++;
   });
@@ -1810,10 +1875,10 @@ function showMonthDrill(month) {
   </div>
   <div class="drill-chart-container" style="height:350px;"><canvas id="drillMonth"></canvas></div>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
-  <table class="drill-table"><thead><tr><th>الموظف</th><th>الفريق</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
   Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,d]) => {
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${name.replace(/'/g,"\\'")}'),200)">
-      <td style="font-weight:600">${name}</td><td><span class="badge badge-team">${d.team}</span></td><td>${d.count}</td>
+      <td style="font-weight:600">${name}</td><td><span class="badge badge-dept">${d.department}</span></td><td>${d.count}</td>
       <td><span style="color:${d.occ>=100?'#ef4444':'#10b981'};font-weight:700">${d.occ.toFixed(0)}%</span></td></tr>`;
   });
   html += '</tbody></table></div>';
@@ -1846,15 +1911,15 @@ function renderTopEmployeesChart() {
 
 // ==================== HEATMAP (clickable) ====================
 function renderHeatmap() {
-  const teams = [...new Set(filteredData.map(r => r.team))].filter(Boolean);
+  const departments = [...new Set(filteredData.map(r => r.department))].filter(Boolean);
   const months = MONTHS.filter(m => filteredData.some(r => r.month === m));
-  if (!teams.length || !months.length) {
+  if (!departments.length || !months.length) {
     document.getElementById('heatmapContainer').innerHTML = '<div class="no-data"><p>لا توجد بيانات كافية للخريطة الحرارية</p></div>';
     return;
   }
   const grid = {};
   filteredData.forEach(r => {
-    const k = r.team + '|' + r.month;
+    const k = r.department + '|' + r.month;
     if (!grid[k]) grid[k] = { sum:0, count:0 };
     grid[k].sum += parseFloat(r.occupancy)||0;
     grid[k].count++;
@@ -1862,10 +1927,10 @@ function renderHeatmap() {
   let html = `<div class="heatmap-grid" style="grid-template-columns: 120px repeat(${months.length}, 1fr);">`;
   html += '<div class="heatmap-label"></div>';
   months.forEach(m => { html += `<div class="heatmap-label">${m}</div>`; });
-  teams.forEach(team => {
-    html += `<div class="heatmap-label" style="text-align:right;cursor:pointer;" onclick="showTeamMembersDrill('${team.replace(/'/g,"\\'")}')"><u>${team}</u></div>`;
+  departments.forEach(department => {
+    html += `<div class="heatmap-label" style="text-align:right;cursor:pointer;" onclick="showDepartmentMembersDrill('${department.replace(/'/g,"\\'")}')"><u>${department}</u></div>`;
     months.forEach(month => {
-      const k = team + '|' + month;
+      const k = department + '|' + month;
       const d = grid[k];
       const avg = d ? (d.sum / d.count).toFixed(0) : 0;
       const intensity = Math.min(avg / 100, 1);
@@ -1874,7 +1939,7 @@ function renderHeatmap() {
       else if (avg >= 90) { bg = `rgba(239,68,68,${0.2+intensity*0.6})`; fg = '#991b1b'; }
       else if (avg >= 60) { bg = `rgba(245,158,11,${0.15+intensity*0.4})`; fg = '#92400e'; }
       else { bg = `rgba(16,185,129,${0.15+intensity*0.4})`; fg = '#065f46'; }
-      const clickHandler = d ? `onclick="showHeatmapCellDrill('${team.replace(/'/g,"\\'")}','${month}')"` : '';
+      const clickHandler = d ? `onclick="showHeatmapCellDrill('${department.replace(/'/g,"\\'")}','${month}')"` : '';
       html += `<div class="heatmap-cell" style="background:${bg};color:${fg};${d?'cursor:pointer;':''}" ${clickHandler}>${d ? avg+'%' : '—'}</div>`;
     });
   });
@@ -1882,8 +1947,8 @@ function renderHeatmap() {
   document.getElementById('heatmapContainer').innerHTML = html;
 }
 
-function showHeatmapCellDrill(team, month) {
-  const cData = filteredData.filter(r => r.team === team && r.month === month);
+function showHeatmapCellDrill(department, month) {
+  const cData = filteredData.filter(r => r.department === department && r.month === month);
   if (!cData.length) return;
   let html = `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${cData.length}</div><div class="label">مهام</div></div>
@@ -1900,7 +1965,7 @@ function showHeatmapCellDrill(team, month) {
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
-  openDrill(`${team} — ${month}`, 'تفاصيل خلية الخريطة الحرارية');
+  openDrill(`${department} — ${month}`, 'تفاصيل خلية الخريطة الحرارية');
 }
 
 // ==================== DATA TABLE ====================
@@ -1909,7 +1974,7 @@ function renderTable() {
   const search = document.getElementById('tableSearch').value.trim().toLowerCase();
   let data = filteredData;
   if (search) {
-    data = data.filter(r => (r.name||'').includes(search)||(r.team||'').includes(search)||(r.platform||'').includes(search)||(r.taskType||'').includes(search)||(r.description||'').includes(search)||(r.month||'').includes(search));
+    data = data.filter(r => (r.name||'').includes(search)||(r.department||'').includes(search)||(r.section||'').includes(search)||(r.platform||'').includes(search)||(r.taskType||'').includes(search)||(r.description||'').includes(search)||(r.month||'').includes(search));
   }
   document.getElementById('tableCount').textContent = data.length + ' سجل';
   const totalPages = Math.ceil(data.length / PAGE_SIZE) || 1;
@@ -1922,7 +1987,8 @@ function renderTable() {
     return `<tr style="cursor:pointer" onclick="showEmployeeDrill('${(r.name||'').replace(/'/g,"\\'")}')">
       <td style="color:var(--text-light)">${start+i+1}</td>
       <td style="font-weight:600">${r.name||''}</td>
-      <td><span class="badge badge-team">${r.team||''}</span></td>
+      <td><span class="badge badge-dept">${r.department||''}</span></td>
+      <td><span class="badge badge-section">${r.section||''}</span></td>
       <td>${r.month||''}</td><td>${r.quarter||''}</td><td>${r.year||''}</td>
       <td><span class="badge badge-platform">${r.platform||''}</span></td>
       <td><span class="badge badge-task">${r.taskType||''}</span></td>
@@ -1939,9 +2005,9 @@ function filterTable() { currentPage = 1; renderTable(); }
 function exportCSV() {
   if (!filteredData.length) return alert('لا توجد بيانات للتصدير');
   const BOM = '\uFEFF';
-  const headers = ['الاسم','الفريق','الشهر','الربع','السنة','المنصة','نوع المهمة','الإشغال','الوصف','الخدمة','تاريخ الإرسال'];
+  const headers = ['الاسم','الإدارة','القسم','الشهر','الربع','السنة','المنصة','نوع المهمة','الإشغال','الوصف','الخدمة','تاريخ الإرسال'];
   const rows = filteredData.map(r =>
-    [r.name,r.team,r.month,r.quarter,r.year,r.platform,r.taskType,r.occupancy,r.description,r.service,r.timestamp]
+    [r.name,r.department,r.section,r.month,r.quarter,r.year,r.platform,r.taskType,r.occupancy,r.description,r.service,r.timestamp]
       .map(v => '"'+(v||'').toString().replace(/"/g,'""')+'"').join(',')
   );
   const csv = BOM + headers.join(',') + '\n' + rows.join('\n');
@@ -1958,96 +2024,238 @@ const MGMT_STORAGE_PREFIX = 'qplan_mgmt_';
 // Default data lists
 const DEFAULT_MGMT = {
   employees: [],
-  teams: ['البيانات','القنوات الرقمية','المنتجات الرقمية','تجربة المستخدم','الدعم الفني','العمليات'],
+  departments: ['البيانات','القنوات الرقمية','المنتجات الرقمية','تجربة المستخدم','الدعم الفني','العمليات'],
+  sections: {
+    'البيانات': ['تحليل البيانات', 'هندسة البيانات'],
+    'القنوات الرقمية': ['إدارة القنوات', 'التطوير الرقمي'],
+    'المنتجات الرقمية': ['تطوير المنتجات', 'إدارة المنتجات'],
+    'تجربة المستخدم': ['بحث المستخدم', 'تصميم التفاعل'],
+    'الدعم الفني': ['الدعم التقني', 'إدارة الحوادث'],
+    'العمليات': ['إدارة العمليات', 'التحسين المستمر']
+  },
+  sectionCapacity: {},
   platforms: ['نور','مدرستي','سفير','بوابة التعليم','فارس'],
   taskTypes: ['تحليل أعمال','تجربة مستخدم','تطوير حلول','تطوير تكاملات','تطوير واجهات','تطوير موبايل','جودة','إدارة عمليات DevOps','دعم L3','إدارة تسليم تقني','أعمال داخلية','أعمال مشاريع جديدة (لم تعتمد)','دراسات كراسات مشاريع جديدة']
 };
 
 const MGMT_CATEGORIES = [
-  { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...' },
-  { key: 'teams', title: 'الفرق', icon: '🏢', placeholder: 'أضف فريق جديد...' },
+  { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...', custom: true },
+  { key: 'departments', title: 'الإدارات', icon: '🏢', placeholder: 'أضف إدارة جديدة...' },
+  { key: 'sections', title: 'الأقسام', icon: '📂', placeholder: '', custom: true },
   { key: 'platforms', title: 'المنصات / المنتجات', icon: '💻', placeholder: 'أضف منصة جديدة...' },
   { key: 'taskTypes', title: 'أنواع المهام', icon: '📋', placeholder: 'أضف نوع مهمة جديد...' }
 ];
 
 function getMgmtData() {
+  // Migrate old 'teams' to 'departments'
+  const oldTeams = localStorage.getItem(MGMT_STORAGE_PREFIX + 'teams');
+  if (oldTeams && !localStorage.getItem(MGMT_STORAGE_PREFIX + 'departments')) {
+    localStorage.setItem(MGMT_STORAGE_PREFIX + 'departments', oldTeams);
+  }
+
   const data = {};
-  MGMT_CATEGORIES.forEach(cat => {
+  // Simple array categories
+  ['departments', 'platforms', 'taskTypes'].forEach(key => {
     try {
-      const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + cat.key);
-      data[cat.key] = stored ? JSON.parse(stored) : [...DEFAULT_MGMT[cat.key]];
-    } catch(e) {
-      data[cat.key] = [...DEFAULT_MGMT[cat.key]];
-    }
+      const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + key);
+      data[key] = stored ? JSON.parse(stored) : [...(DEFAULT_MGMT[key] || [])];
+    } catch(e) { data[key] = [...(DEFAULT_MGMT[key] || [])]; }
   });
+  // Object categories
+  ['sections', 'sectionCapacity'].forEach(key => {
+    try {
+      const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + key);
+      data[key] = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULT_MGMT[key] || {}));
+    } catch(e) { data[key] = JSON.parse(JSON.stringify(DEFAULT_MGMT[key] || {})); }
+  });
+  // Employees - array of objects with migration from string[]
+  try {
+    const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Migrate string[] to object[]
+      data.employees = parsed.map(e => typeof e === 'string' ? { name: e, department: '', section: '' } : e);
+    } else {
+      data.employees = [];
+    }
+  } catch(e) { data.employees = []; }
   return data;
 }
 
 function saveMgmtList(key, list) {
   localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(list));
-  // Also save employees to the autocomplete cache used by the employee form
   if (key === 'employees') {
-    localStorage.setItem('qplan_employees', JSON.stringify(list));
+    // Save just names for autocomplete in employee form
+    const names = list.map(e => typeof e === 'string' ? e : e.name);
+    localStorage.setItem('qplan_employees', JSON.stringify(names));
+    // Also save full employee data for form auto-fill
+    localStorage.setItem('qplan_employees_full', JSON.stringify(list));
   }
 }
 
 function renderDataManagement() {
   const data = getMgmtData();
   const grid = document.getElementById('mgmtGrid');
-  grid.innerHTML = MGMT_CATEGORIES.map(cat => {
-    const items = data[cat.key];
-    return `<div class="mgmt-card" id="mgmt-card-${cat.key}">
-      <div class="mgmt-card-header">
-        <div class="mgmt-card-title">${cat.icon} ${cat.title}</div>
-        <span class="mgmt-card-count">${items.length} عنصر</span>
-      </div>
-      <div class="mgmt-list" id="mgmt-list-${cat.key}">
-        ${items.map((item, i) => `
-          <div class="mgmt-item" id="mgmt-item-${cat.key}-${i}">
-            <span class="mgmt-item-name" id="mgmt-name-${cat.key}-${i}">${item}</span>
-            <div class="mgmt-item-actions">
-              <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('${cat.key}',${i})">✏️</button>
-              <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('${cat.key}',${i})">🗑️</button>
-            </div>
+  let html = '';
+
+  MGMT_CATEGORIES.forEach(cat => {
+    if (cat.key === 'employees') {
+      // Custom employees card
+      const items = data.employees;
+      const depts = data.departments || [];
+      const secs = data.sections || {};
+      html += `<div class="mgmt-card" id="mgmt-card-employees">
+        <div class="mgmt-card-header">
+          <div class="mgmt-card-title">${cat.icon} ${cat.title}</div>
+          <span class="mgmt-card-count">${items.length} عنصر</span>
+        </div>
+        <div class="mgmt-list" id="mgmt-list-employees">
+          ${items.map((emp, i) => {
+            const name = typeof emp === 'string' ? emp : emp.name;
+            const dept = typeof emp === 'string' ? '' : (emp.department || '');
+            const sec = typeof emp === 'string' ? '' : (emp.section || '');
+            return `<div class="mgmt-item" id="mgmt-item-employees-${i}">
+              <div class="mgmt-emp-info">
+                <span class="mgmt-item-name" id="mgmt-name-employees-${i}">${name}</span>
+                ${dept ? '<span class="badge badge-dept">' + dept + '</span>' : ''}
+                ${sec ? '<span class="badge badge-section">' + sec + '</span>' : ''}
+              </div>
+              <div class="mgmt-item-actions">
+                <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',${i})">✏️</button>
+                <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',${i})">🗑️</button>
+              </div>
+            </div>`;
+          }).join('')}
+          ${items.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px;">لا توجد عناصر</div>' : ''}
+        </div>
+        <div class="mgmt-add-emp-row">
+          <input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="flex:1;" onkeydown="if(event.key==='Enter')addMgmtItem('employees')">
+          <select id="mgmt-emp-dept" onchange="updateEmpSectionDropdown()"><option value="">الإدارة</option>${depts.map(d=>'<option value="'+d+'">'+d+'</option>').join('')}</select>
+          <select id="mgmt-emp-section"><option value="">القسم</option></select>
+          <button class="mgmt-add-btn" onclick="addMgmtItem('employees')">+ إضافة</button>
+        </div>
+        <div class="mgmt-bulk-import">
+          <div class="mgmt-bulk-header">
+            <span>📋 استيراد جماعي</span>
+            <button class="mgmt-template-btn" onclick="downloadEmployeeTemplate()">⬇️ تحميل القالب</button>
           </div>
-        `).join('')}
-        ${items.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px;">لا توجد عناصر</div>' : ''}
-      </div>
-      <div class="mgmt-add-row">
-        <input class="mgmt-add-input" id="mgmt-input-${cat.key}" placeholder="${cat.placeholder}" onkeydown="if(event.key==='Enter')addMgmtItem('${cat.key}')">
-        <button class="mgmt-add-btn" onclick="addMgmtItem('${cat.key}')">+ إضافة</button>
-      </div>
-      ${cat.key === 'employees' ? `
-      <div class="mgmt-bulk-import">
-        <div class="mgmt-bulk-header">
-          <span>📋 استيراد جماعي</span>
-          <button class="mgmt-template-btn" onclick="downloadEmployeeTemplate()">⬇️ تحميل القالب</button>
+          <div class="mgmt-bulk-body">
+            <label class="mgmt-bulk-upload-btn">
+              📄 رفع ملف CSV أو TXT
+              <input type="file" accept=".csv,.txt" style="display:none" onchange="importEmployeesBulk(event)">
+            </label>
+            <span class="mgmt-bulk-or">أو</span>
+            <button class="mgmt-bulk-paste-btn" onclick="showBulkPasteDialog()">📝 لصق قائمة</button>
+          </div>
         </div>
-        <div class="mgmt-bulk-body">
-          <label class="mgmt-bulk-upload-btn">
-            📄 رفع ملف CSV أو TXT
-            <input type="file" accept=".csv,.txt" style="display:none" onchange="importEmployeesBulk(event)">
-          </label>
-          <span class="mgmt-bulk-or">أو</span>
-          <button class="mgmt-bulk-paste-btn" onclick="showBulkPasteDialog()">📝 لصق قائمة</button>
+      </div>`;
+    } else if (cat.key === 'sections') {
+      // Custom sections card grouped by department
+      const depts = data.departments || [];
+      const secs = data.sections || {};
+      const capData = data.sectionCapacity || {};
+      let totalSecs = 0;
+      depts.forEach(d => { totalSecs += (secs[d] || []).length; });
+      html += `<div class="mgmt-card" id="mgmt-card-sections">
+        <div class="mgmt-card-header">
+          <div class="mgmt-card-title">${cat.icon} ${cat.title}</div>
+          <span class="mgmt-card-count">${totalSecs} عنصر</span>
         </div>
-      </div>` : ''}
-    </div>`;
-  }).join('');
+        <div class="mgmt-list" id="mgmt-list-sections" style="max-height:500px;">
+          ${depts.map(dept => {
+            const deptSecs = secs[dept] || [];
+            return `<div class="mgmt-dept-group">
+              <div class="mgmt-dept-header">
+                <span>${dept} (${deptSecs.length})</span>
+              </div>
+              <div>
+                ${deptSecs.map((sec, si) => {
+                  const hc = capData[dept + '|' + sec] || 0;
+                  return `<div class="mgmt-item mgmt-section-item">
+                    <span class="mgmt-item-name">${sec}</span>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <span style="font-size:11px;color:var(--text-light);">HC:</span>
+                      <input type="number" class="section-hc-input" value="${hc}" min="0" onchange="updateSectionCapacity('${dept.replace(/'/g,"\\'")}','${sec.replace(/'/g,"\\'")}',this.value)">
+                      <button class="mgmt-action-btn delete" title="حذف" onclick="deleteSection('${dept.replace(/'/g,"\\'")}',${si})">🗑️</button>
+                    </div>
+                  </div>`;
+                }).join('')}
+                <div class="mgmt-add-row" style="padding:8px 12px 8px 24px;">
+                  <input class="mgmt-add-input" id="mgmt-section-input-${CSS.escape(dept)}" placeholder="أضف قسم جديد..." onkeydown="if(event.key==='Enter')addSection('${dept.replace(/'/g,"\\'")}')">
+                  <button class="mgmt-add-btn" onclick="addSection('${dept.replace(/'/g,"\\'")}')">+ إضافة</button>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    } else {
+      // Simple array categories (departments, platforms, taskTypes)
+      const items = data[cat.key] || [];
+      html += `<div class="mgmt-card" id="mgmt-card-${cat.key}">
+        <div class="mgmt-card-header">
+          <div class="mgmt-card-title">${cat.icon} ${cat.title}</div>
+          <span class="mgmt-card-count">${items.length} عنصر</span>
+        </div>
+        <div class="mgmt-list" id="mgmt-list-${cat.key}">
+          ${items.map((item, i) => `
+            <div class="mgmt-item" id="mgmt-item-${cat.key}-${i}">
+              <span class="mgmt-item-name" id="mgmt-name-${cat.key}-${i}">${item}</span>
+              <div class="mgmt-item-actions">
+                <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('${cat.key}',${i})">✏️</button>
+                <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('${cat.key}',${i})">🗑️</button>
+              </div>
+            </div>
+          `).join('')}
+          ${items.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px;">لا توجد عناصر</div>' : ''}
+        </div>
+        <div class="mgmt-add-row">
+          <input class="mgmt-add-input" id="mgmt-input-${cat.key}" placeholder="${cat.placeholder}" onkeydown="if(event.key==='Enter')addMgmtItem('${cat.key}')">
+          <button class="mgmt-add-btn" onclick="addMgmtItem('${cat.key}')">+ إضافة</button>
+        </div>
+      </div>`;
+    }
+  });
+
+  grid.innerHTML = html;
+}
+
+function updateEmpSectionDropdown() {
+  const deptVal = document.getElementById('mgmt-emp-dept').value;
+  const data = getMgmtData();
+  const secs = (data.sections || {})[deptVal] || [];
+  document.getElementById('mgmt-emp-section').innerHTML = '<option value="">القسم</option>' + secs.map(s => '<option value="' + s + '">' + s + '</option>').join('');
 }
 
 function addMgmtItem(key) {
-  const input = document.getElementById('mgmt-input-' + key);
-  const val = input.value.trim();
-  if (!val) return;
   const data = getMgmtData();
-  if (data[key].includes(val)) {
-    showMgmtToast('هذا العنصر موجود بالفعل', 'error');
-    return;
+  if (key === 'employees') {
+    const nameInput = document.getElementById('mgmt-emp-name');
+    const deptSelect = document.getElementById('mgmt-emp-dept');
+    const secSelect = document.getElementById('mgmt-emp-section');
+    const name = nameInput.value.trim();
+    if (!name) return;
+    if (data.employees.some(e => e.name === name)) {
+      showMgmtToast('هذا الموظف موجود بالفعل', 'error');
+      return;
+    }
+    data.employees.push({ name, department: deptSelect.value, section: secSelect.value });
+    saveMgmtList('employees', data.employees);
+    nameInput.value = '';
+    deptSelect.selectedIndex = 0;
+    secSelect.innerHTML = '<option value="">القسم</option>';
+  } else {
+    const input = document.getElementById('mgmt-input-' + key);
+    const val = input.value.trim();
+    if (!val) return;
+    if (data[key].includes(val)) {
+      showMgmtToast('هذا العنصر موجود بالفعل', 'error');
+      return;
+    }
+    data[key].push(val);
+    saveMgmtList(key, data[key]);
+    input.value = '';
   }
-  data[key].push(val);
-  saveMgmtList(key, data[key]);
-  input.value = '';
   renderDataManagement();
   showMgmtToast('تمت الإضافة بنجاح', 'success');
 }
@@ -2055,7 +2263,8 @@ function addMgmtItem(key) {
 function deleteMgmtItem(key, index) {
   const data = getMgmtData();
   const item = data[key][index];
-  if (!confirm(`هل تريد حذف "${item}"؟`)) return;
+  const displayName = (key === 'employees' && typeof item === 'object') ? item.name : item;
+  if (!confirm('هل تريد حذف "' + displayName + '"؟')) return;
   data[key].splice(index, 1);
   saveMgmtList(key, data[key]);
   renderDataManagement();
@@ -2065,8 +2274,14 @@ function deleteMgmtItem(key, index) {
 function editMgmtItem(key, index) {
   const data = getMgmtData();
   const nameEl = document.getElementById('mgmt-name-' + key + '-' + index);
-  const currentVal = data[key][index];
-  nameEl.innerHTML = `<input class="mgmt-edit-input" value="${currentVal}" id="mgmt-edit-${key}-${index}" onkeydown="if(event.key==='Enter')saveEditMgmt('${key}',${index});if(event.key==='Escape')renderDataManagement();" autofocus>`;
+  if (key === 'employees') {
+    const emp = data.employees[index];
+    const currentName = typeof emp === 'string' ? emp : emp.name;
+    nameEl.innerHTML = '<input class="mgmt-edit-input" value="' + currentName + '" id="mgmt-edit-' + key + '-' + index + '" onkeydown="if(event.key===\'Enter\')saveEditMgmt(\'' + key + '\',' + index + ');if(event.key===\'Escape\')renderDataManagement();" autofocus>';
+  } else {
+    const currentVal = data[key][index];
+    nameEl.innerHTML = '<input class="mgmt-edit-input" value="' + currentVal + '" id="mgmt-edit-' + key + '-' + index + '" onkeydown="if(event.key===\'Enter\')saveEditMgmt(\'' + key + '\',' + index + ');if(event.key===\'Escape\')renderDataManagement();" autofocus>';
+  }
   document.getElementById('mgmt-edit-' + key + '-' + index).focus();
   document.getElementById('mgmt-edit-' + key + '-' + index).select();
 }
@@ -2076,14 +2291,143 @@ function saveEditMgmt(key, index) {
   const val = input.value.trim();
   if (!val) return renderDataManagement();
   const data = getMgmtData();
-  if (data[key].includes(val) && data[key][index] !== val) {
-    showMgmtToast('هذا العنصر موجود بالفعل', 'error');
-    return;
+  if (key === 'employees') {
+    const existing = data.employees.map(e => typeof e === 'string' ? e : e.name);
+    const currentName = typeof data.employees[index] === 'string' ? data.employees[index] : data.employees[index].name;
+    if (existing.includes(val) && currentName !== val) {
+      showMgmtToast('هذا العنصر موجود بالفعل', 'error');
+      return;
+    }
+    if (typeof data.employees[index] === 'string') {
+      data.employees[index] = { name: val, department: '', section: '' };
+    } else {
+      data.employees[index].name = val;
+    }
+  } else {
+    if (data[key].includes(val) && data[key][index] !== val) {
+      showMgmtToast('هذا العنصر موجود بالفعل', 'error');
+      return;
+    }
+    data[key][index] = val;
   }
-  data[key][index] = val;
   saveMgmtList(key, data[key]);
   renderDataManagement();
   showMgmtToast('تم التعديل بنجاح', 'success');
+}
+
+// Section CRUD
+function addSection(dept) {
+  const input = document.getElementById('mgmt-section-input-' + CSS.escape(dept));
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) return;
+  const data = getMgmtData();
+  if (!data.sections[dept]) data.sections[dept] = [];
+  if (data.sections[dept].includes(val)) { showMgmtToast('هذا القسم موجود بالفعل', 'error'); return; }
+  data.sections[dept].push(val);
+  saveMgmtList('sections', data.sections);
+  renderDataManagement();
+  showMgmtToast('تم إضافة القسم', 'success');
+}
+
+function deleteSection(dept, index) {
+  const data = getMgmtData();
+  const sec = data.sections[dept][index];
+  if (!confirm('حذف القسم "' + sec + '"?')) return;
+  data.sections[dept].splice(index, 1);
+  saveMgmtList('sections', data.sections);
+  // Remove capacity entry
+  delete data.sectionCapacity[dept + '|' + sec];
+  saveMgmtList('sectionCapacity', data.sectionCapacity);
+  renderDataManagement();
+  showMgmtToast('تم حذف القسم', 'success');
+}
+
+function updateSectionCapacity(dept, sec, hc) {
+  const data = getMgmtData();
+  data.sectionCapacity[dept + '|' + sec] = parseInt(hc) || 0;
+  saveMgmtList('sectionCapacity', data.sectionCapacity);
+}
+
+// Capacity helper
+function getCapacityData() {
+  const mgmt = getMgmtData();
+  const sectionCap = mgmt.sectionCapacity || {};
+  const result = {};
+  (mgmt.departments || []).forEach(dept => {
+    const secs = (mgmt.sections || {})[dept] || [];
+    result[dept] = { sections: {}, totalHeadCount: 0, monthlyCapacity: 0 };
+    secs.forEach(sec => {
+      const hc = sectionCap[dept + '|' + sec] || 0;
+      result[dept].sections[sec] = { headCount: hc, monthlyCapacity: hc * 100 };
+      result[dept].totalHeadCount += hc;
+    });
+    result[dept].monthlyCapacity = result[dept].totalHeadCount * 100;
+  });
+  return result;
+}
+
+function showCapacityDrill() {
+  const capData = getCapacityData();
+  const activeMonths = [...new Set(filteredData.map(r => r.month))];
+  let html = '<div class="drill-stats-row">';
+  const totalHC = Object.values(capData).reduce((s,d)=>s+d.totalHeadCount,0);
+  const totalCap = totalHC * 100 * (activeMonths.length||1);
+  const totalUsed = filteredData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0);
+  const util = totalCap > 0 ? (totalUsed/totalCap*100).toFixed(1) : 0;
+  html += '<div class="drill-stat-card"><div class="value">' + totalHC + '</div><div class="label">إجمالي الموظفين (HC)</div></div>';
+  html += '<div class="drill-stat-card"><div class="value">' + totalCap + '%</div><div class="label">السعة الإجمالية</div></div>';
+  html += '<div class="drill-stat-card"><div class="value">' + totalUsed.toFixed(0) + '%</div><div class="label">الاستخدام الفعلي</div></div>';
+  html += '<div class="drill-stat-card"><div class="value">' + util + '%</div><div class="label">نسبة الاستغلال</div></div>';
+  html += '</div>';
+
+  html += '<div class="drill-chart-container" style="height:350px;"><canvas id="drillCapacity"></canvas></div>';
+
+  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;"><table class="drill-table"><thead><tr><th>الإدارة</th><th>عدد الموظفين (HC)</th><th>السعة الشهرية</th><th>الاستخدام الفعلي</th><th>نسبة الاستغلال</th></tr></thead><tbody>';
+
+  const deptStats = {};
+  Object.entries(capData).forEach(([dept, d]) => {
+    const used = filteredData.filter(r => r.department === dept).reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0);
+    const cap = d.monthlyCapacity * (activeMonths.length||1);
+    const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
+    const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
+    deptStats[dept] = { used, cap, pct, hc: d.totalHeadCount };
+    html += '<tr><td style="font-weight:600">' + dept + '</td><td>' + d.totalHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
+    html += '<td><span style="color:' + color + ';font-weight:700">' + pct + '%</span><div class="capacity-bar"><div class="capacity-fill" style="width:' + Math.min(pct,100) + '%;background:' + color + '"></div></div></td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Sections detail
+  html += '<h3 style="font-size:15px;font-weight:700;margin:24px 0 12px;">📂 تفاصيل الأقسام</h3>';
+  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);"><table class="drill-table"><thead><tr><th>الإدارة</th><th>القسم</th><th>HC</th><th>السعة الشهرية</th><th>الاستخدام</th><th>الاستغلال</th></tr></thead><tbody>';
+  Object.entries(capData).forEach(([dept, d]) => {
+    Object.entries(d.sections).forEach(([sec, s]) => {
+      const used = filteredData.filter(r => r.department === dept && r.section === sec).reduce((sum,r) => sum + (parseFloat(r.occupancy)||0), 0);
+      const cap = s.monthlyCapacity * (activeMonths.length||1);
+      const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
+      const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
+      html += '<tr><td>' + dept + '</td><td>' + sec + '</td><td>' + s.headCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
+    });
+  });
+  html += '</tbody></table></div>';
+
+  document.getElementById('drillBody').innerHTML = html;
+  openDrill('📊 تحليل السعة', 'مقارنة السعة المتاحة مع الاستخدام الفعلي');
+
+  setTimeout(() => {
+    const depts = Object.keys(deptStats);
+    drillCharts.capacity = new Chart(document.getElementById('drillCapacity'), {
+      type: 'bar',
+      data: {
+        labels: depts,
+        datasets: [
+          { label: 'السعة', data: depts.map(d => deptStats[d].cap), backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
+          { label: 'الاستخدام', data: depts.map(d => deptStats[d].used), backgroundColor: depts.map(d => deptStats[d].pct > 90 ? 'rgba(239,68,68,0.6)' : deptStats[d].pct > 70 ? 'rgba(245,158,11,0.6)' : 'rgba(16,185,129,0.6)'), borderRadius: 6 }
+        ]
+      },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:'Tajawal'}}}}, scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}} }
+    });
+  }, 100);
 }
 
 function exportMgmtData() {
@@ -2104,10 +2448,18 @@ function importMgmtData(event) {
     try {
       const data = JSON.parse(e.target.result);
       MGMT_CATEGORIES.forEach(cat => {
-        if (Array.isArray(data[cat.key])) {
+        if (cat.key === 'sections' || cat.key === 'sectionCapacity') {
+          if (data[cat.key] && typeof data[cat.key] === 'object' && !Array.isArray(data[cat.key])) {
+            saveMgmtList(cat.key, data[cat.key]);
+          }
+        } else if (Array.isArray(data[cat.key])) {
           saveMgmtList(cat.key, data[cat.key]);
         }
       });
+      // Also handle sectionCapacity if present
+      if (data.sectionCapacity && typeof data.sectionCapacity === 'object') {
+        saveMgmtList('sectionCapacity', data.sectionCapacity);
+      }
       renderDataManagement();
       showMgmtToast('تم استيراد الإعدادات بنجاح', 'success');
     } catch(err) {
@@ -2121,10 +2473,10 @@ function importMgmtData(event) {
 // ==================== BULK EMPLOYEE IMPORT ====================
 function downloadEmployeeTemplate() {
   const bom = '\uFEFF';
-  const csv = bom + 'اسم الموظف\n' +
-    'أحمد محمد العلي\n' +
-    'سارة خالد الأحمدي\n' +
-    'محمد عبدالله الغامدي\n';
+  const csv = bom + 'اسم الموظف,الإدارة,القسم\n' +
+    'أحمد محمد العلي,البيانات,تحليل البيانات\n' +
+    'سارة خالد الأحمدي,القنوات الرقمية,إدارة القنوات\n' +
+    'محمد عبدالله الغامدي,المنتجات الرقمية,تطوير المنتجات\n';
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -2133,10 +2485,15 @@ function downloadEmployeeTemplate() {
   showMgmtToast('تم تحميل القالب', 'success');
 }
 
-function parseEmployeeList(text) {
+function parseEmployeeImport(text) {
   return text.split(/[\n\r]+/)
-    .map(line => line.replace(/^[\s,;"]+|[\s,;"]+$/g, '').trim())
-    .filter(name => name.length > 0 && name !== 'اسم الموظف');
+    .map(line => line.replace(/^[\s;"]+|[\s;"]+$/g, '').trim())
+    .filter(line => line.length > 0 && !line.startsWith('اسم الموظف'))
+    .map(line => {
+      const parts = line.split(',').map(p => p.trim());
+      return { name: parts[0] || '', department: parts[1] || '', section: parts[2] || '' };
+    })
+    .filter(e => e.name.length > 0);
 }
 
 function importEmployeesBulk(event) {
@@ -2144,12 +2501,12 @@ function importEmployeesBulk(event) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
-    const names = parseEmployeeList(e.target.result);
-    if (names.length === 0) {
+    const employees = parseEmployeeImport(e.target.result);
+    if (employees.length === 0) {
       showMgmtToast('لم يتم العثور على أسماء في الملف', 'error');
       return;
     }
-    mergeEmployees(names);
+    mergeEmployees(employees);
   };
   reader.readAsText(file, 'UTF-8');
   event.target.value = '';
@@ -2162,8 +2519,8 @@ function showBulkPasteDialog() {
   overlay.innerHTML = `
     <div class="bulk-paste-dialog">
       <h3>📝 لصق قائمة الموظفين</h3>
-      <div class="hint">أدخل اسم كل موظف في سطر منفصل</div>
-      <textarea id="bulkPasteArea" placeholder="أحمد محمد العلي\nسارة خالد الأحمدي\nمحمد عبدالله الغامدي"></textarea>
+      <div class="hint">أدخل كل موظف في سطر: الاسم,الإدارة,القسم (الإدارة والقسم اختياري)</div>
+      <textarea id="bulkPasteArea" placeholder="أحمد محمد العلي,البيانات,تحليل البيانات\nسارة خالد الأحمدي,القنوات الرقمية\nمحمد عبدالله الغامدي"></textarea>
       <div class="bulk-paste-actions">
         <button class="bulk-paste-cancel" onclick="closeBulkPaste()">إلغاء</button>
         <button class="bulk-paste-submit" onclick="submitBulkPaste()">✅ استيراد</button>
@@ -2181,27 +2538,33 @@ function closeBulkPaste() {
 
 function submitBulkPaste() {
   const text = document.getElementById('bulkPasteArea').value;
-  const names = parseEmployeeList(text);
-  if (names.length === 0) {
+  const employees = parseEmployeeImport(text);
+  if (employees.length === 0) {
     showMgmtToast('لم يتم العثور على أسماء', 'error');
     return;
   }
   closeBulkPaste();
-  mergeEmployees(names);
+  mergeEmployees(employees);
 }
 
-function mergeEmployees(newNames) {
+function mergeEmployees(newEmployees) {
   const data = getMgmtData();
-  const existing = new Set(data.employees);
+  const existingNames = new Set(data.employees.map(e => typeof e === 'string' ? e : e.name));
   let added = 0, skipped = 0;
-  newNames.forEach(name => {
-    if (existing.has(name)) { skipped++; }
-    else { data.employees.push(name); existing.add(name); added++; }
+  newEmployees.forEach(emp => {
+    const name = typeof emp === 'string' ? emp : emp.name;
+    if (existingNames.has(name)) { skipped++; }
+    else {
+      const empObj = typeof emp === 'string' ? { name: emp, department: '', section: '' } : emp;
+      data.employees.push(empObj);
+      existingNames.add(name);
+      added++;
+    }
   });
   saveMgmtList('employees', data.employees);
   renderDataManagement();
-  let msg = `تم استيراد ${added} موظف`;
-  if (skipped > 0) msg += ` (تم تخطي ${skipped} مكرر)`;
+  let msg = 'تم استيراد ' + added + ' موظف';
+  if (skipped > 0) msg += ' (تم تخطي ' + skipped + ' مكرر)';
   showMgmtToast(msg, added > 0 ? 'success' : 'error');
 }
 
