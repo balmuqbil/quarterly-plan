@@ -638,6 +638,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
           <option value="الرابع">الربع الرابع</option>
         </select>
         <button class="export-btn" onclick="exportCSV()">📥 تصدير CSV</button>
+        <button class="refresh-btn" onclick="loadSampleData()">🧪 بيانات تجريبية</button>
         <button class="refresh-btn" onclick="loadData()">🔄 تحديث</button>
       </div>
     </div>
@@ -2626,7 +2627,7 @@ function initializeFromCSV() {
 }
 
 // ===== Generate sample tasks =====
-function generateSampleTasks(taskCount, employeeCount) {
+function generateSampleTasks(taskCount, employeeCount, filterQuarter, filterYear) {
   const mgmt = getMgmtData();
   const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
   const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
@@ -2638,7 +2639,13 @@ function generateSampleTasks(taskCount, employeeCount) {
 
   const quarters = { 'يناير':'Q1','فبراير':'Q1','مارس':'Q1','أبريل':'Q2','مايو':'Q2','يونيو':'Q2',
     'يوليو':'Q3','أغسطس':'Q3','سبتمبر':'Q3','أكتوبر':'Q4','نوفمبر':'Q4','ديسمبر':'Q4' };
-  const monthList = Object.keys(quarters);
+  var monthList;
+  if (filterQuarter) {
+    monthList = Object.keys(quarters).filter(function(m) { return quarters[m] === filterQuarter; });
+  } else {
+    monthList = Object.keys(quarters);
+  }
+  var taskYear = filterYear || '2026';
   const occupancies = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
   const descriptions = [
     'تطوير واجهة المستخدم','تحليل متطلبات النظام','اختبار الأداء','تصميم قاعدة البيانات',
@@ -2668,7 +2675,7 @@ function generateSampleTasks(taskCount, employeeCount) {
         taskType: taskTypes[Math.floor(Math.random() * taskTypes.length)],
         month: month,
         quarter: quarters[month],
-        year: '2026',
+        year: taskYear,
         occupancy: occupancies[Math.floor(Math.random() * occupancies.length)],
         description: descriptions[Math.floor(Math.random() * descriptions.length)],
         service: services[Math.floor(Math.random() * services.length)],
@@ -2684,11 +2691,11 @@ function generateSampleTasks(taskCount, employeeCount) {
 
 function loadSampleData() {
   initializeFromCSV();
-  allData = generateSampleTasks(400, 50);
+  allData = generateSampleTasks(500, 50, 'Q2', '2026');
   resolveEmployeeDepartments(allData);
   applyFilters();
-  document.getElementById('lastUpdate').textContent = '🧪 بيانات تجريبية — ' + allData.length + ' مهمة | ' + new Date().toLocaleTimeString('ar-SA');
-  showMgmtToast('تم تحميل ' + allData.length + ' مهمة تجريبية مع 50 موظف', 'success');
+  document.getElementById('lastUpdate').textContent = '🧪 بيانات تجريبية Q2 2026 — ' + allData.length + ' مهمة | ' + new Date().toLocaleTimeString('ar-SA');
+  showMgmtToast('تم تحميل ' + allData.length + ' مهمة تجريبية Q2 2026 مع 50 موظف', 'success');
 }
 
 function renderDataManagement() {
