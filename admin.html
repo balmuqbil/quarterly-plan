@@ -354,6 +354,62 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 /* ========== PLATFORM CARDS ========== */
 .platform-card-icon { font-size:32px; margin-bottom:8px; }
 .platform-card .detail-card-stats { justify-content:space-around; }
+
+/* ========== DATA MANAGEMENT ========== */
+.mgmt-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:20px; margin-bottom:24px; }
+.mgmt-card {
+  background:#fff; border-radius:16px; padding:24px; border:1px solid var(--border);
+}
+.mgmt-card-header {
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;
+  padding-bottom:12px; border-bottom:1px solid var(--border);
+}
+.mgmt-card-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; }
+.mgmt-card-count { font-size:12px; color:var(--text-light); background:var(--bg-card-dark); padding:2px 10px; border-radius:10px; }
+.mgmt-list { max-height:320px; overflow-y:auto; margin-bottom:12px; }
+.mgmt-item {
+  display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
+  border-radius:8px; margin-bottom:4px; transition:background 0.15s; font-size:13px;
+}
+.mgmt-item:hover { background:var(--bg-card-dark); }
+.mgmt-item-name { flex:1; font-weight:500; }
+.mgmt-item-actions { display:flex; gap:4px; opacity:0; transition:opacity 0.15s; }
+.mgmt-item:hover .mgmt-item-actions { opacity:1; }
+.mgmt-action-btn {
+  width:28px; height:28px; border:none; border-radius:6px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:13px;
+  transition:all 0.15s; background:transparent;
+}
+.mgmt-action-btn.edit:hover { background:rgba(99,102,241,0.1); color:var(--accent); }
+.mgmt-action-btn.delete:hover { background:rgba(239,68,68,0.1); color:var(--danger); }
+.mgmt-add-row {
+  display:flex; gap:8px; align-items:center;
+}
+.mgmt-add-input {
+  flex:1; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px;
+  font-family:inherit; font-size:13px; outline:none; transition:border 0.2s;
+}
+.mgmt-add-input:focus { border-color:var(--accent); }
+.mgmt-add-btn {
+  padding:10px 18px; border:none; border-radius:10px; background:var(--accent);
+  color:#fff; font-family:inherit; font-size:13px; font-weight:600;
+  cursor:pointer; transition:all 0.2s; white-space:nowrap;
+}
+.mgmt-add-btn:hover { background:var(--accent-light); transform:translateY(-1px); }
+.mgmt-edit-input {
+  padding:6px 10px; border:1.5px solid var(--accent); border-radius:6px;
+  font-family:inherit; font-size:13px; outline:none; width:100%;
+}
+.mgmt-save-hint { font-size:11px; color:var(--text-light); margin-top:8px; text-align:center; }
+.mgmt-toast {
+  position:fixed; bottom:30px; left:50%; transform:translateX(-50%) translateY(80px);
+  background:var(--accent); color:#fff; padding:12px 24px; border-radius:10px;
+  font-size:13px; font-weight:600; z-index:400; opacity:0; transition:all 0.3s;
+  box-shadow:0 6px 20px rgba(0,0,0,0.15);
+}
+.mgmt-toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+.mgmt-toast.error { background:var(--danger); }
+.mgmt-toast.success { background:var(--success); }
 </style>
 </head>
 <body>
@@ -402,6 +458,9 @@ tr:hover td { background:rgba(99,102,241,0.03); }
     </div>
     <div class="nav-item" data-section="tasks">
       <span class="icon">📋</span> المهام
+    </div>
+    <div class="nav-item" data-section="dataManagement">
+      <span class="icon">🗂️</span> إدارة البيانات
     </div>
     <div class="nav-item" data-section="settings">
       <span class="icon">⚙️</span> الإعدادات
@@ -625,6 +684,23 @@ tr:hover td { background:rgba(99,102,241,0.03); }
     </div>
   </div>
 
+  <!-- ===== DATA MANAGEMENT SECTION ===== -->
+  <div class="section-view" id="section-dataManagement">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>🗂️ إدارة البيانات الأساسية</h1>
+        <div class="subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُحفظ محلياً في المتصفح وتُطبق على نموذج الموظف</div>
+      </div>
+      <div class="top-actions">
+        <button class="export-btn" onclick="exportMgmtData()">📥 تصدير الإعدادات</button>
+        <label class="export-btn" style="cursor:pointer;">📤 استيراد <input type="file" accept=".json" style="display:none" onchange="importMgmtData(event)"></label>
+      </div>
+    </div>
+    <div class="mgmt-grid" id="mgmtGrid"></div>
+    <div class="mgmt-save-hint">💡 التغييرات تُحفظ تلقائياً وتُطبق فوراً على نموذج الموظف</div>
+  </div>
+
 </div>
 
 <!-- ===== DRILL-DOWN MODAL ===== -->
@@ -725,6 +801,7 @@ function navigateTo(section) {
   if (section === 'employees') renderEmployeesSection();
   if (section === 'platforms') renderPlatformsSection();
   if (section === 'tasks') renderTasksSection();
+  if (section === 'dataManagement') renderDataManagement();
   if (section === 'settings') openSettings();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1460,6 +1537,170 @@ function exportCSV() {
   a.href = URL.createObjectURL(blob);
   a.download = 'quarterly_plan_data_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
+}
+
+// ==================== DATA MANAGEMENT (CRUD) ====================
+const MGMT_STORAGE_PREFIX = 'qplan_mgmt_';
+
+// Default data lists
+const DEFAULT_MGMT = {
+  employees: [],
+  teams: ['البيانات','القنوات الرقمية','المنتجات الرقمية','تجربة المستخدم','الدعم الفني','العمليات'],
+  platforms: ['نور','مدرستي','سفير','بوابة التعليم','فارس'],
+  taskTypes: ['تحليل أعمال','تجربة مستخدم','تطوير حلول','تطوير تكاملات','تطوير واجهات','تطوير موبايل','جودة','إدارة عمليات DevOps','دعم L3','إدارة تسليم تقني','أعمال داخلية','أعمال مشاريع جديدة (لم تعتمد)','دراسات كراسات مشاريع جديدة']
+};
+
+const MGMT_CATEGORIES = [
+  { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...' },
+  { key: 'teams', title: 'الفرق', icon: '🏢', placeholder: 'أضف فريق جديد...' },
+  { key: 'platforms', title: 'المنصات / المنتجات', icon: '💻', placeholder: 'أضف منصة جديدة...' },
+  { key: 'taskTypes', title: 'أنواع المهام', icon: '📋', placeholder: 'أضف نوع مهمة جديد...' }
+];
+
+function getMgmtData() {
+  const data = {};
+  MGMT_CATEGORIES.forEach(cat => {
+    try {
+      const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + cat.key);
+      data[cat.key] = stored ? JSON.parse(stored) : [...DEFAULT_MGMT[cat.key]];
+    } catch(e) {
+      data[cat.key] = [...DEFAULT_MGMT[cat.key]];
+    }
+  });
+  return data;
+}
+
+function saveMgmtList(key, list) {
+  localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(list));
+  // Also save employees to the autocomplete cache used by the employee form
+  if (key === 'employees') {
+    localStorage.setItem('qplan_employees', JSON.stringify(list));
+  }
+}
+
+function renderDataManagement() {
+  const data = getMgmtData();
+  const grid = document.getElementById('mgmtGrid');
+  grid.innerHTML = MGMT_CATEGORIES.map(cat => {
+    const items = data[cat.key];
+    return `<div class="mgmt-card" id="mgmt-card-${cat.key}">
+      <div class="mgmt-card-header">
+        <div class="mgmt-card-title">${cat.icon} ${cat.title}</div>
+        <span class="mgmt-card-count">${items.length} عنصر</span>
+      </div>
+      <div class="mgmt-list" id="mgmt-list-${cat.key}">
+        ${items.map((item, i) => `
+          <div class="mgmt-item" id="mgmt-item-${cat.key}-${i}">
+            <span class="mgmt-item-name" id="mgmt-name-${cat.key}-${i}">${item}</span>
+            <div class="mgmt-item-actions">
+              <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('${cat.key}',${i})">✏️</button>
+              <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('${cat.key}',${i})">🗑️</button>
+            </div>
+          </div>
+        `).join('')}
+        ${items.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px;">لا توجد عناصر</div>' : ''}
+      </div>
+      <div class="mgmt-add-row">
+        <input class="mgmt-add-input" id="mgmt-input-${cat.key}" placeholder="${cat.placeholder}" onkeydown="if(event.key==='Enter')addMgmtItem('${cat.key}')">
+        <button class="mgmt-add-btn" onclick="addMgmtItem('${cat.key}')">+ إضافة</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addMgmtItem(key) {
+  const input = document.getElementById('mgmt-input-' + key);
+  const val = input.value.trim();
+  if (!val) return;
+  const data = getMgmtData();
+  if (data[key].includes(val)) {
+    showMgmtToast('هذا العنصر موجود بالفعل', 'error');
+    return;
+  }
+  data[key].push(val);
+  saveMgmtList(key, data[key]);
+  input.value = '';
+  renderDataManagement();
+  showMgmtToast('تمت الإضافة بنجاح', 'success');
+}
+
+function deleteMgmtItem(key, index) {
+  const data = getMgmtData();
+  const item = data[key][index];
+  if (!confirm(`هل تريد حذف "${item}"؟`)) return;
+  data[key].splice(index, 1);
+  saveMgmtList(key, data[key]);
+  renderDataManagement();
+  showMgmtToast('تم الحذف', 'success');
+}
+
+function editMgmtItem(key, index) {
+  const data = getMgmtData();
+  const nameEl = document.getElementById('mgmt-name-' + key + '-' + index);
+  const currentVal = data[key][index];
+  nameEl.innerHTML = `<input class="mgmt-edit-input" value="${currentVal}" id="mgmt-edit-${key}-${index}" onkeydown="if(event.key==='Enter')saveEditMgmt('${key}',${index});if(event.key==='Escape')renderDataManagement();" autofocus>`;
+  document.getElementById('mgmt-edit-' + key + '-' + index).focus();
+  document.getElementById('mgmt-edit-' + key + '-' + index).select();
+}
+
+function saveEditMgmt(key, index) {
+  const input = document.getElementById('mgmt-edit-' + key + '-' + index);
+  const val = input.value.trim();
+  if (!val) return renderDataManagement();
+  const data = getMgmtData();
+  if (data[key].includes(val) && data[key][index] !== val) {
+    showMgmtToast('هذا العنصر موجود بالفعل', 'error');
+    return;
+  }
+  data[key][index] = val;
+  saveMgmtList(key, data[key]);
+  renderDataManagement();
+  showMgmtToast('تم التعديل بنجاح', 'success');
+}
+
+function exportMgmtData() {
+  const data = getMgmtData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'qplan_settings_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  showMgmtToast('تم تصدير الإعدادات', 'success');
+}
+
+function importMgmtData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      MGMT_CATEGORIES.forEach(cat => {
+        if (Array.isArray(data[cat.key])) {
+          saveMgmtList(cat.key, data[cat.key]);
+        }
+      });
+      renderDataManagement();
+      showMgmtToast('تم استيراد الإعدادات بنجاح', 'success');
+    } catch(err) {
+      showMgmtToast('ملف غير صالح', 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function showMgmtToast(msg, type) {
+  let toast = document.getElementById('mgmtToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'mgmtToast';
+    toast.className = 'mgmt-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.className = 'mgmt-toast show ' + (type || '');
+  setTimeout(() => toast.className = 'mgmt-toast', 2500);
 }
 
 </script>

@@ -597,15 +597,7 @@
       </div>
       <div class="field">
         <label>الفريق</label>
-        <select id="empTeam">
-          <option value="">— اختر الفريق —</option>
-          <option>البيانات</option>
-          <option>القنوات الرقمية</option>
-          <option>المنتجات الرقمية</option>
-          <option>تجربة المستخدم</option>
-          <option>الدعم الفني</option>
-          <option>العمليات</option>
-        </select>
+        <select id="empTeam"></select>
       </div>
       <div class="field">
         <label>السنة</label>
@@ -828,13 +820,22 @@ const QUARTERS = {
   'الثالث': ['يوليو', 'أغسطس', 'سبتمبر'],
   'الرابع': ['أكتوبر', 'نوفمبر', 'ديسمبر']
 };
-const PLATFORMS = ['نور', 'مدرستي', 'سفير', 'بوابة التعليم', 'فارس'];
-const TASK_TYPES = [
+// Load from admin management (localStorage) with fallback defaults
+const DEFAULT_PLATFORMS = ['نور', 'مدرستي', 'سفير', 'بوابة التعليم', 'فارس'];
+const DEFAULT_TASK_TYPES = [
   'تحليل أعمال', 'تجربة مستخدم', 'تطوير حلول', 'تطوير تكاملات',
   'تطوير واجهات', 'تطوير موبايل', 'جودة', 'إدارة عمليات DevOps',
   'دعم L3', 'إدارة تسليم تقني', 'أعمال داخلية',
   'أعمال مشاريع جديدة (لم تعتمد)', 'دراسات كراسات مشاريع جديدة'
 ];
+const DEFAULT_TEAMS = ['البيانات','القنوات الرقمية','المنتجات الرقمية','تجربة المستخدم','الدعم الفني','العمليات'];
+
+function loadMgmtList(key, fallback) {
+  try { const s = localStorage.getItem('qplan_mgmt_' + key); return s ? JSON.parse(s) : fallback; } catch(e) { return fallback; }
+}
+const PLATFORMS = loadMgmtList('platforms', DEFAULT_PLATFORMS);
+const TASK_TYPES = loadMgmtList('taskTypes', DEFAULT_TASK_TYPES);
+const TEAMS = loadMgmtList('teams', DEFAULT_TEAMS);
 const MIN_OCCUPANCY = 25;
 
 let taskCounter = 0;
@@ -944,6 +945,11 @@ document.addEventListener('click', e => {
 });
 
 // ===== INIT =====
+// Populate teams dropdown dynamically
+(function(){
+  const sel = document.getElementById('empTeam');
+  sel.innerHTML = '<option value="">— اختر الفريق —</option>' + TEAMS.map(t => `<option>${t}</option>`).join('');
+})();
 updateConnectionStatus();
 addTask();
 loadEmployeeList();
