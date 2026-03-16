@@ -1200,6 +1200,8 @@ function loadData() {
 }
 
 function applyFilters() {
+  // Always resolve departments from employee mapping before rendering
+  if (allData.length > 0) resolveEmployeeDepartments(allData);
   const quarter = document.getElementById('quarterFilter').value;
   const year = document.getElementById('yearFilter').value;
   filteredData = [...allData];
