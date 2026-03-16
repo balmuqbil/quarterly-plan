@@ -1109,6 +1109,30 @@ function seedEmployeesFromData(data) {
   if (added > 0) saveMgmtList('employees', mgmt.employees);
 }
 
+function remapEmployeeNames(data) {
+  // Replace task employee names with names from the employee table
+  // Tasks from Google Sheets may have old/mismatched names — remap to real employees
+  const mgmt = getMgmtData();
+  const knownNames = new Set(mgmt.employees.map(e => e.name));
+  const empList = mgmt.employees.length ? mgmt.employees : CSV_EMPLOYEES;
+
+  // Find tasks whose name is NOT in the employee table
+  const unmapped = [];
+  data.forEach((r, i) => {
+    const name = (r.name || '').trim();
+    if (!name || !knownNames.has(name)) unmapped.push(i);
+  });
+
+  if (unmapped.length === 0) return; // All names already match
+
+  // Assign employee names round-robin from the employee list
+  unmapped.forEach((idx, i) => {
+    const emp = empList[i % empList.length];
+    data[idx].name = emp.name;
+  });
+  console.log('🔄 Remapped', unmapped.length, 'task names to employee table names');
+}
+
 function resolveEmployeeDepartments(data) {
   // ALWAYS resolve department/section from the employee mapping (source of truth)
   // Task records' own department/section values are ignored
@@ -1149,7 +1173,7 @@ function loadData() {
         section: '',     // Will be resolved from employee mapping
         year: r.year || '2026'
       })));
-      seedEmployeesFromData(allData);
+      remapEmployeeNames(allData);
       resolveEmployeeDepartments(allData);
       applyFilters();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
