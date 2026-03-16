@@ -523,6 +523,25 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .task-modal-actions {
   display:flex; gap:10px; justify-content:flex-end; margin-top:20px;
 }
+/* Task autocomplete */
+.task-autocomplete-wrapper { position:relative; }
+.task-autocomplete-list {
+  position:absolute; top:100%; right:0; left:0; background:#fff;
+  border:1.5px solid var(--border); border-top:none; border-radius:0 0 10px 10px;
+  max-height:180px; overflow-y:auto; z-index:200; box-shadow:0 6px 16px rgba(0,0,0,0.12);
+  display:none;
+}
+.task-autocomplete-list.show { display:block; }
+.task-autocomplete-item {
+  padding:9px 14px; cursor:pointer; font-size:13px; transition:background 0.15s;
+  border-bottom:1px solid #f0f2f5; direction:rtl;
+}
+.task-autocomplete-item:last-child { border-bottom:none; }
+.task-autocomplete-item:hover, .task-autocomplete-item.highlighted { background:#eef2ff; color:var(--accent); }
+.task-autocomplete-item .match { font-weight:700; color:var(--accent); }
+.task-modal-field select:disabled, .task-modal-field input:disabled {
+  background:#f1f5f9; color:var(--text-secondary); cursor:not-allowed;
+}
 </style>
 </head>
 <body>
@@ -837,15 +856,18 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="task-modal-grid">
         <div class="task-modal-field">
           <label>الموظف</label>
-          <select id="taskField_name"></select>
+          <div class="task-autocomplete-wrapper">
+            <input type="text" id="taskField_name" placeholder="ابدأ بكتابة اسم الموظف..." autocomplete="off" oninput="filterTaskEmployees()" onfocus="filterTaskEmployees()" onkeydown="handleTaskAutocompleteKey(event)">
+            <div class="task-autocomplete-list" id="taskEmpAutoList"></div>
+          </div>
         </div>
         <div class="task-modal-field">
-          <label>الإدارة</label>
-          <select id="taskField_department"></select>
+          <label>الإدارة (تلقائي)</label>
+          <select id="taskField_department" disabled></select>
         </div>
         <div class="task-modal-field">
-          <label>القسم</label>
-          <select id="taskField_section"><option value="">— اختر —</option></select>
+          <label>القسم (تلقائي)</label>
+          <select id="taskField_section" disabled><option value="">— يتم تعبئته تلقائياً —</option></select>
         </div>
         <div class="task-modal-field">
           <label>المنصة / المنتج</label>
@@ -1557,26 +1579,141 @@ function renderTasksSection() {
 }
 
 // ==================== TASK CRUD ====================
+var taskEmployeeList = [];
+
 function populateTaskModalDropdowns() {
   const mgmt = getMgmtData();
-  const empNames = mgmt.employees.length ? mgmt.employees.map(e => typeof e === 'string' ? e : e.name) : [...new Set(allData.map(r => r.name).filter(Boolean))];
+  // Build employee list for autocomplete
+  taskEmployeeList = mgmt.employees.length ? mgmt.employees.map(function(e) { return typeof e === 'string' ? e : e.name; }) : [...new Set(allData.map(function(r) { return r.name; }).filter(Boolean))];
+
   const departments = mgmt.departments.length ? mgmt.departments : DEFAULT_MGMT.departments;
   const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
   const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
 
-  document.getElementById('taskField_name').innerHTML = '<option value="">— اختر الموظف —</option>' + empNames.map(e => `<option value="${escapeAttr(e)}">${escapeHtml(e)}</option>`).join('');
-  document.getElementById('taskField_department').innerHTML = '<option value="">— اختر الإدارة —</option>' + departments.map(d => `<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
-  document.getElementById('taskField_platform').innerHTML = '<option value="">— اختر المنصة —</option>' + platforms.map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
-  document.getElementById('taskField_taskType').innerHTML = '<option value="">— اختر نوع المهمة —</option>' + taskTypes.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
-  document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الشهر —</option>' + MONTHS.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join('');
-  // Section cascading
-  const secData = mgmt.sections || {};
-  document.getElementById('taskField_department').onchange = function() {
-    const secs = secData[this.value] || [];
-    document.getElementById('taskField_section').innerHTML = '<option value="">— اختر القسم —</option>' + secs.map(s => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join('');
-  };
-  document.getElementById('taskField_section').innerHTML = '<option value="">— اختر القسم —</option>';
+  // Department select (disabled, auto-filled)
+  document.getElementById('taskField_department').innerHTML = '<option value="">— تلقائي —</option>' + departments.map(function(d) { return '<option value="' + escapeAttr(d) + '">' + escapeHtml(d) + '</option>'; }).join('');
+  // Section select (disabled, auto-filled)
+  document.getElementById('taskField_section').innerHTML = '<option value="">— يتم تعبئته تلقائياً —</option>';
+  // Other dropdowns
+  document.getElementById('taskField_platform').innerHTML = '<option value="">— اختر المنصة —</option>' + platforms.map(function(p) { return '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>'; }).join('');
+  document.getElementById('taskField_taskType').innerHTML = '<option value="">— اختر نوع المهمة —</option>' + taskTypes.map(function(t) { return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>'; }).join('');
+  document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الشهر —</option>' + MONTHS.map(function(m) { return '<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>'; }).join('');
+  // Clear autocomplete
+  document.getElementById('taskField_name').value = '';
+  document.getElementById('taskEmpAutoList').innerHTML = '';
+  document.getElementById('taskEmpAutoList').classList.remove('show');
 }
+
+var taskAutoHighlight = -1;
+
+function filterTaskEmployees() {
+  var input = document.getElementById('taskField_name');
+  var list = document.getElementById('taskEmpAutoList');
+  var val = input.value.trim().toLowerCase();
+  taskAutoHighlight = -1;
+
+  if (!val) {
+    // Show all employees (max 10)
+    var items = taskEmployeeList.slice(0, 10);
+    if (items.length === 0) { list.classList.remove('show'); return; }
+    list.innerHTML = items.map(function(name) {
+      return '<div class="task-autocomplete-item" onmousedown="selectTaskEmployee(\'' + escapeJS(name) + '\')">' + escapeHtml(name) + '</div>';
+    }).join('');
+    list.classList.add('show');
+    return;
+  }
+
+  var matches = taskEmployeeList.filter(function(name) {
+    return name.toLowerCase().indexOf(val) !== -1;
+  }).slice(0, 10);
+
+  if (matches.length === 0) {
+    list.innerHTML = '<div class="task-autocomplete-item" style="color:#999;cursor:default;">لا توجد نتائج</div>';
+    list.classList.add('show');
+    return;
+  }
+
+  list.innerHTML = matches.map(function(name) {
+    var idx = name.toLowerCase().indexOf(val);
+    var highlighted = escapeHtml(name.substring(0, idx)) + '<span class="match">' + escapeHtml(name.substring(idx, idx + val.length)) + '</span>' + escapeHtml(name.substring(idx + val.length));
+    return '<div class="task-autocomplete-item" onmousedown="selectTaskEmployee(\'' + escapeJS(name) + '\')">' + highlighted + '</div>';
+  }).join('');
+  list.classList.add('show');
+}
+
+function selectTaskEmployee(name) {
+  document.getElementById('taskField_name').value = name;
+  document.getElementById('taskEmpAutoList').classList.remove('show');
+
+  // Look up employee's department and section
+  var mgmt = getMgmtData();
+  var emp = null;
+  for (var i = 0; i < mgmt.employees.length; i++) {
+    var e = mgmt.employees[i];
+    var eName = typeof e === 'string' ? e : e.name;
+    if (eName === name) {
+      emp = typeof e === 'object' ? e : null;
+      break;
+    }
+  }
+
+  var deptSelect = document.getElementById('taskField_department');
+  var secSelect = document.getElementById('taskField_section');
+
+  if (emp && emp.department) {
+    deptSelect.value = emp.department;
+    // Populate sections for this department then set section
+    var secData = mgmt.sections || {};
+    var secs = secData[emp.department] || [];
+    secSelect.innerHTML = '<option value="">— يتم تعبئته تلقائياً —</option>' + secs.map(function(s) { return '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
+    if (emp.section) {
+      secSelect.value = emp.section;
+    }
+  } else {
+    deptSelect.selectedIndex = 0;
+    secSelect.innerHTML = '<option value="">— يتم تعبئته تلقائياً —</option>';
+  }
+}
+
+function handleTaskAutocompleteKey(event) {
+  var list = document.getElementById('taskEmpAutoList');
+  var items = list.querySelectorAll('.task-autocomplete-item[onmousedown]');
+  if (!items.length || !list.classList.contains('show')) return;
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    taskAutoHighlight = Math.min(taskAutoHighlight + 1, items.length - 1);
+    updateTaskAutoHighlight(items);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    taskAutoHighlight = Math.max(taskAutoHighlight - 1, 0);
+    updateTaskAutoHighlight(items);
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    if (taskAutoHighlight >= 0 && taskAutoHighlight < items.length) {
+      items[taskAutoHighlight].onmousedown();
+    }
+  } else if (event.key === 'Escape') {
+    list.classList.remove('show');
+  }
+}
+
+function updateTaskAutoHighlight(items) {
+  for (var i = 0; i < items.length; i++) {
+    items[i].classList.toggle('highlighted', i === taskAutoHighlight);
+  }
+  if (taskAutoHighlight >= 0 && items[taskAutoHighlight]) {
+    items[taskAutoHighlight].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// Close task autocomplete on outside click
+document.addEventListener('click', function(e) {
+  var wrapper = document.querySelector('.task-autocomplete-wrapper');
+  if (wrapper && !wrapper.contains(e.target)) {
+    document.getElementById('taskEmpAutoList').classList.remove('show');
+  }
+});
 
 function openTaskModal(editIdx) {
   populateTaskModalDropdowns();
@@ -1586,13 +1723,19 @@ function openTaskModal(editIdx) {
 
   if (isEdit) {
     const r = allData[editIdx];
-    document.getElementById('taskField_name').value = r.name || '';
-    document.getElementById('taskField_department').value = r.department || '';
-    // Trigger onchange to populate sections
-    const deptEl = document.getElementById('taskField_department');
-    if (deptEl.onchange) deptEl.onchange.call(deptEl);
-    // Set section after populating
-    setTimeout(() => { document.getElementById('taskField_section').value = r.section || ''; }, 0);
+    // Use autocomplete selection to auto-fill dept/section
+    if (r.name) {
+      selectTaskEmployee(r.name);
+    }
+    // If dept/section wasn't found via employee lookup, set manually
+    if (!document.getElementById('taskField_department').value && r.department) {
+      document.getElementById('taskField_department').value = r.department;
+      var mgmt = getMgmtData();
+      var secData = mgmt.sections || {};
+      var secs = secData[r.department] || [];
+      document.getElementById('taskField_section').innerHTML = '<option value="">— يتم تعبئته تلقائياً —</option>' + secs.map(function(s) { return '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
+      if (r.section) document.getElementById('taskField_section').value = r.section;
+    }
     document.getElementById('taskField_platform').value = r.platform || '';
     document.getElementById('taskField_taskType').value = r.taskType || '';
     document.getElementById('taskField_month').value = r.month || '';
@@ -1602,8 +1745,11 @@ function openTaskModal(editIdx) {
     document.getElementById('taskField_description').value = r.description || '';
     document.getElementById('taskField_service').value = r.service || '';
   } else {
-    ['name','department','section','platform','taskType','month','quarter','year','occupancy','description','service'].forEach(f => {
-      const el = document.getElementById('taskField_' + f);
+    document.getElementById('taskField_name').value = '';
+    document.getElementById('taskField_department').selectedIndex = 0;
+    document.getElementById('taskField_section').innerHTML = '<option value="">— يتم تعبئته تلقائياً —</option>';
+    ['platform','taskType','month','quarter','year','occupancy','description','service'].forEach(function(f) {
+      var el = document.getElementById('taskField_' + f);
       if (el) { if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = ''; }
     });
     document.getElementById('taskField_year').value = '2026';
