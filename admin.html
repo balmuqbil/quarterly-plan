@@ -939,6 +939,27 @@ function cleanOccupancyData(data) {
   return cleaned;
 }
 
+function seedEmployeesFromData(data) {
+  // Extract unique employee names from task data
+  const namesFromData = [...new Set(data.map(r => (r.name || '').trim()).filter(Boolean))];
+  if (namesFromData.length === 0) return;
+
+  // Merge with existing management list (don't overwrite manual edits)
+  const mgmt = getMgmtData();
+  const existing = new Set(mgmt.employees);
+  let added = 0;
+  namesFromData.forEach(name => {
+    if (!existing.has(name)) {
+      mgmt.employees.push(name);
+      existing.add(name);
+      added++;
+    }
+  });
+  if (added > 0) {
+    saveMgmtList('employees', mgmt.employees);
+  }
+}
+
 // ==================== DATA LOADING ====================
 function loadData() {
   const loading = document.getElementById('loadingOverlay');
@@ -950,6 +971,7 @@ function loadData() {
     if (scriptEl) scriptEl.remove();
     if (json && json.status === 'success' && json.data) {
       allData = cleanOccupancyData(json.data.map(r => ({ ...r, year: r.year || '2026' })));
+      seedEmployeesFromData(allData);
       applyFilters();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
     } else {
