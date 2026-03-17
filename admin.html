@@ -1146,7 +1146,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.10';
+const ADMIN_VERSION = 'v20260317.11';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -3235,8 +3235,16 @@ function getMgmtData() {
     const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees');
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Migrate string[] to object[]
-      data.employees = parsed.map(e => typeof e === 'string' ? { name: e, department: '', section: '' } : e);
+      // Migrate string[] to object[] and ensure startDate
+      var needsSave = false;
+      data.employees = parsed.map(function(e) {
+        if (typeof e === 'string') { needsSave = true; return { name: e, department: '', section: '', startDate: 'يناير 2026', endDate: '', absences: [] }; }
+        if (!e.startDate) { needsSave = true; e.startDate = 'يناير 2026'; }
+        if (!e.absences) e.absences = [];
+        if (e.endDate === undefined) e.endDate = '';
+        return e;
+      });
+      if (needsSave) saveMgmtList('employees', data.employees);
     } else {
       data.employees = [];
     }
@@ -3790,7 +3798,7 @@ function addMgmtItem(key) {
       showMgmtToast('هذا الموظف موجود بالفعل', 'error');
       return;
     }
-    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value) });
+    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: 'يناير 2026', endDate: '', absences: [] });
     saveMgmtList('employees', data.employees);
     nameInput.value = '';
     deptSelect.selectedIndex = 0;
