@@ -2733,8 +2733,10 @@ function initializeFromCSV() {
   saveMgmtList('departments', DEFAULT_MGMT.departments);
   // Save sections
   localStorage.setItem(MGMT_STORAGE_PREFIX + 'sections', JSON.stringify(DEFAULT_MGMT.sections));
-  // Save sectionCapacity (reset)
-  localStorage.setItem(MGMT_STORAGE_PREFIX + 'sectionCapacity', JSON.stringify({}));
+  // Preserve existing sectionCapacity (head count) — only initialize if not set
+  if (!localStorage.getItem(MGMT_STORAGE_PREFIX + 'sectionCapacity')) {
+    localStorage.setItem(MGMT_STORAGE_PREFIX + 'sectionCapacity', JSON.stringify({}));
+  }
   // Save employees from CSV
   saveMgmtList('employees', CSV_EMPLOYEES);
   console.log('✅ Initialized from CSV:', CSV_EMPLOYEES.length, 'employees,', DEFAULT_MGMT.departments.length, 'departments');
