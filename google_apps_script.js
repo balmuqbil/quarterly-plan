@@ -64,7 +64,15 @@ function doGet(e) {
 // ============ POST: Add, Update, Delete ============
 function doPost(e) {
   try {
-    var body = e.postData.contents;
+    // Support both raw JSON body and form-encoded 'payload' parameter
+    var body;
+    if (e.parameter && e.parameter.payload) {
+      body = e.parameter.payload;
+    } else if (e.postData && e.postData.contents) {
+      body = e.postData.contents;
+    } else {
+      return jsonResponse({ status: 'error', message: 'No data received' });
+    }
     var payload = JSON.parse(body);
     var action = payload.action;
 

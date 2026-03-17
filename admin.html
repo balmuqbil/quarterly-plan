@@ -1098,7 +1098,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 <script>
 // ==================== CONFIG ====================
 const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbzadKc3RXC9_vof_Hz4vd-WEMa8B8jTOgrKqHF11_Rq0UwzvoDJpf8WbV_RbxQLXrLZzQ/exec';
-const ADMIN_VERSION = 'v20260317.3';
+const ADMIN_VERSION = 'v20260317.4';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
@@ -2129,19 +2129,39 @@ function deleteTask(idx) {
   syncDeleteToSheet(r);
 }
 
-function postToSheet(payload) {
-  if (!SHEET_URL) return Promise.resolve();
-  return fetch(SHEET_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(payload)
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(res) {
-    console.log('📡 Sheet response:', res);
-    if (res && res.status === 'success') return res;
-    throw new Error(res && res.message ? res.message : 'Unknown error');
-  });
+function postToSheet(payload, onDone) {
+  if (!SHEET_URL) { if (onDone) onDone(false); return; }
+  var bodyStr = JSON.stringify(payload);
+  console.log('📡 Sending to Sheet:', payload.action, bodyStr.substring(0, 200));
+
+  // Google Apps Script redirects POST (302), which breaks fetch CORS.
+  // Solution: use a hidden form submission via iframe — guaranteed to work.
+  var iframeId = '_sheetPost_' + Date.now();
+  var iframe = document.createElement('iframe');
+  iframe.name = iframeId;
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = SHEET_URL;
+  form.target = iframeId;
+  form.style.display = 'none';
+
+  var input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'payload';
+  input.value = bodyStr;
+  form.appendChild(input);
+
+  document.body.appendChild(form);
+  form.submit();
+
+  // Clean up after a delay and reload data
+  setTimeout(function() {
+    try { form.remove(); iframe.remove(); } catch(e) {}
+    if (onDone) onDone(true);
+  }, 2000);
 }
 
 function syncTaskToSheet(task, editIdx, originalTask) {
@@ -2158,31 +2178,22 @@ function syncTaskToSheet(task, editIdx, originalTask) {
   } else {
     return;
   }
-  postToSheet(payload)
-    .then(function() {
-      console.log('✅ Sheet sync success');
-      // Reload from sheet to confirm
-      setTimeout(function() { loadData(); }, 1000);
-    })
-    .catch(function(err) {
-      console.error('❌ Sheet sync failed:', err);
-      showMgmtToast('⚠️ فشل المزامنة مع Google Sheets', 'error');
-    });
+  showMgmtToast('⏳ جاري المزامنة مع Google Sheets...', 'info');
+  postToSheet(payload, function() {
+    console.log('✅ Sheet sync sent, reloading data...');
+    loadData();
+  });
 }
 
 function syncDeleteToSheet(task) {
   if (!SHEET_URL) return;
+  showMgmtToast('⏳ جاري حذف المهمة من Google Sheets...', 'info');
   postToSheet({
     action: 'delete',
     match: { name: task.name, month: task.month, year: task.year, platform: task.platform, taskType: task.taskType }
-  })
-  .then(function() {
-    console.log('✅ Delete sync success');
-    setTimeout(function() { loadData(); }, 1000);
-  })
-  .catch(function(err) {
-    console.error('❌ Delete sync failed:', err);
-    showMgmtToast('⚠️ فشل حذف المهمة من Google Sheets', 'error');
+  }, function() {
+    console.log('✅ Delete sent, reloading data...');
+    loadData();
   });
 }
 
@@ -2729,16 +2740,12 @@ function clearAllTasks() {
   allData = [];
   applyFilters();
   syncTestData();
+  showMgmtToast('⏳ جاري حذف جميع المهام من Google Sheets...', 'info');
 
-  postToSheet({ action: 'deleteAll' })
-    .then(function() {
-      showMgmtToast('تم حذف جميع المهام (' + count + ' مهمة) من Google Sheets', 'success');
-      setTimeout(function() { loadData(); }, 1000);
-    })
-    .catch(function(err) {
-      console.error('❌ deleteAll failed:', err);
-      showMgmtToast('⚠️ فشل حذف المهام من Google Sheets — ' + err.message, 'error');
-    });
+  postToSheet({ action: 'deleteAll' }, function() {
+    showMgmtToast('تم حذف جميع المهام (' + count + ' مهمة) من Google Sheets', 'success');
+    loadData();
+  });
 }
 
 // ==================== DATA MANAGEMENT (CRUD) ====================
