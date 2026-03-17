@@ -30,12 +30,12 @@
   --font: 'IBM Plex Sans Arabic', sans-serif;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:var(--font); background:#F7FDF9; color:var(--text-primary); min-height:100vh; }
+body { font-family:var(--font); background:#F5F7FA; color:var(--text-primary); min-height:100vh; }
 
 /* ========== LOGIN ========== */
 .login-overlay {
   position:fixed; inset:0; z-index:9999;
-  background:linear-gradient(135deg, #14532d 0%, #166534 50%, #1B8354 100%);
+  background:linear-gradient(135deg, #1a3a4a 0%, #2d6a7a 50%, #5BA4C9 100%);
   display:flex; align-items:center; justify-content:center;
   transition:opacity 0.5s, transform 0.5s;
 }
@@ -60,7 +60,7 @@ body { font-family:var(--font); background:#F7FDF9; color:var(--text-primary); m
 .login-field input::placeholder { color:rgba(255,255,255,0.3); }
 .login-btn {
   width:100%; padding:14px; border:none; border-radius:12px; margin-top:8px;
-  background:linear-gradient(135deg, var(--accent), #166a45); color:#fff;
+  background:linear-gradient(135deg, #5BA4C9, #3d8ab0); color:#fff;
   font-family:var(--font); font-size:16px; font-weight:700; cursor:pointer;
   transition:all 0.3s; position:relative; overflow:hidden;
 }
@@ -70,37 +70,38 @@ body { font-family:var(--font); background:#F7FDF9; color:var(--text-primary); m
 /* ========== SIDEBAR ========== */
 .sidebar {
   position:fixed; right:0; top:0; bottom:0; width:var(--sidebar-width);
-  background:linear-gradient(180deg, #074D31 0%, #166A45 100%);
+  background:#ffffff;
   padding:24px 0; z-index:100; display:flex; flex-direction:column;
-  box-shadow:-4px 0 20px rgba(0,0,0,0.1);
+  box-shadow:-2px 0 12px rgba(0,0,0,0.06);
+  border-left:1px solid #E5E7EB;
 }
-.sidebar-header { padding:0 24px 24px; border-bottom:1px solid rgba(255,255,255,0.08); text-align:center; }
+.sidebar-header { padding:0 24px 24px; border-bottom:1px solid #E5E7EB; text-align:center; }
 .sidebar-header .logo { font-size:36px; }
-.sidebar-header h2 { color:#fff; font-size:16px; font-weight:700; margin-top:4px; }
-.sidebar-header span { color:var(--accent-light); font-size:12px; }
+.sidebar-header h2 { color:#1a3a4a; font-size:16px; font-weight:700; margin-top:4px; }
+.sidebar-header span { color:#5BA4C9; font-size:12px; }
 .sidebar-nav { flex:1; padding:16px 12px; overflow-y:auto; }
 .nav-item {
   display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px;
-  color:rgba(255,255,255,0.6); font-size:14px; cursor:pointer; transition:all 0.2s;
+  color:#6C737F; font-size:14px; cursor:pointer; transition:all 0.2s;
   margin-bottom:4px;
 }
-.nav-item:hover { background:rgba(255,255,255,0.05); color:#fff; }
-.nav-item.active { background:rgba(27,131,84,0.2); color:#fff; }
-.nav-item .icon { font-size:20px; width:28px; text-align:center; }
-.sidebar-footer { padding:16px 24px; border-top:1px solid rgba(255,255,255,0.08); }
+.nav-item:hover { background:#F0F7FA; color:#1a3a4a; }
+.nav-item.active { background:#E8F4F8; color:#1a3a4a; border-right:3px solid #5BA4C9; }
+.nav-item .icon { font-size:20px; width:28px; text-align:center; color:#5BA4C9; }
+.sidebar-footer { padding:16px 24px; border-top:1px solid #E5E7EB; }
 .sidebar-footer .user-info { display:flex; align-items:center; gap:10px; }
 .sidebar-footer .avatar {
-  width:36px; height:36px; border-radius:10px; background:var(--accent);
+  width:36px; height:36px; border-radius:10px; background:#5BA4C9;
   display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:14px;
 }
-.sidebar-footer .user-name { color:#fff; font-size:13px; font-weight:600; }
-.sidebar-footer .user-role { color:var(--text-light); font-size:11px; }
+.sidebar-footer .user-name { color:#1a3a4a; font-size:13px; font-weight:600; }
+.sidebar-footer .user-role { color:#6C737F; font-size:11px; }
 .logout-btn {
-  margin-top:12px; width:100%; padding:8px; border:1px solid rgba(255,255,255,0.15);
-  background:transparent; color:rgba(255,255,255,0.6); border-radius:8px;
+  margin-top:12px; width:100%; padding:8px; border:1px solid #E5E7EB;
+  background:transparent; color:#6C737F; border-radius:8px;
   font-family:var(--font); font-size:12px; cursor:pointer; transition:all 0.2s;
 }
-.logout-btn:hover { background:rgba(239,68,68,0.15); color:#f87171; border-color:rgba(239,68,68,0.3); }
+.logout-btn:hover { background:rgba(239,68,68,0.08); color:#ef4444; border-color:rgba(239,68,68,0.3); }
 
 /* ========== MAIN CONTENT ========== */
 .main { margin-right:var(--sidebar-width); padding:24px 32px; min-height:100vh; }
