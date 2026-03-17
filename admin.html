@@ -1146,7 +1146,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.9';
+const ADMIN_VERSION = 'v20260317.10';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -3502,6 +3502,24 @@ function renderDataManagement() {
             <span class="mgmt-card-count">${items.length} إجمالي</span>
           </div>
         </div>
+        <div class="emp-filter-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+          <input type="text" class="search-box" id="empSearchFilter" placeholder="🔍 بحث بالاسم..." oninput="filterEmployeeCards()" style="flex:1;min-width:180px;max-width:300px;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;">
+          <select id="empDeptFilter" class="quarter-filter" onchange="updateEmpFilterSections();filterEmployeeCards()" style="min-width:130px;">
+            <option value="all">جميع الإدارات</option>
+            ${depts.map(d => '<option value="' + escapeAttr(d) + '">' + escapeHtml(d) + '</option>').join('')}
+          </select>
+          <select id="empSecFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">
+            <option value="all">جميع الأقسام</option>
+          </select>
+          <select id="empStatusFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:110px;">
+            <option value="all">الكل</option>
+            <option value="active">نشط</option>
+            <option value="inactive">غير نشط</option>
+            <option value="has-absence">لديه غياب</option>
+            <option value="no-dept">بدون إدارة</option>
+          </select>
+          <span id="empFilterCount" style="font-size:12px;color:var(--text-light);margin-right:4px;"></span>
+        </div>
         <div class="emp-grid" id="mgmt-list-employees">
           ${items.map((emp, i) => {
             const name = typeof emp === 'string' ? emp : emp.name;
@@ -3511,7 +3529,7 @@ function renderDataManagement() {
             const endDate = (typeof emp === 'object' ? emp.endDate : '') || '';
             const absences = (typeof emp === 'object' && Array.isArray(emp.absences)) ? emp.absences : [];
             const isActive = !endDate;
-            return `<div class="emp-card" id="mgmt-item-employees-${i}">
+            return `<div class="emp-card" id="mgmt-item-employees-${i}" data-emp-name="${escapeAttr(name)}" data-emp-dept="${escapeAttr(dept)}" data-emp-sec="${escapeAttr(sec)}" data-emp-active="${isActive ? '1' : '0'}" data-emp-absences="${absences.length}">
               <div class="emp-card-top">
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span class="emp-card-name" id="mgmt-name-employees-${i}">${escapeHtml(name)}</span>
@@ -3700,6 +3718,64 @@ function updateEmpSectionDropdown() {
   const data = getMgmtData();
   const secs = (data.sections || {})[deptVal] || [];
   document.getElementById('mgmt-emp-section').innerHTML = '<option value="">القسم</option>' + secs.map(s => '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>').join('');
+}
+
+// Employee filter bar functions
+function filterEmployeeCards() {
+  var search = (document.getElementById('empSearchFilter')?.value || '').trim().toLowerCase();
+  var deptVal = (document.getElementById('empDeptFilter')?.value) || 'all';
+  var secVal = (document.getElementById('empSecFilter')?.value) || 'all';
+  var statusVal = (document.getElementById('empStatusFilter')?.value) || 'all';
+  var grid = document.getElementById('mgmt-list-employees');
+  if (!grid) return;
+  var cards = grid.querySelectorAll('.emp-card');
+  var shown = 0;
+  cards.forEach(function(card) {
+    var name = (card.getAttribute('data-emp-name') || '').toLowerCase();
+    var dept = card.getAttribute('data-emp-dept') || '';
+    var sec = card.getAttribute('data-emp-sec') || '';
+    var isActive = card.getAttribute('data-emp-active') === '1';
+    var absCount = parseInt(card.getAttribute('data-emp-absences')) || 0;
+    var show = true;
+    if (search && name.indexOf(search) === -1) show = false;
+    if (deptVal !== 'all' && dept !== deptVal) show = false;
+    if (secVal !== 'all' && sec !== secVal) show = false;
+    if (statusVal === 'active' && !isActive) show = false;
+    if (statusVal === 'inactive' && isActive) show = false;
+    if (statusVal === 'has-absence' && absCount === 0) show = false;
+    if (statusVal === 'no-dept' && dept !== '') show = false;
+    card.style.display = show ? '' : 'none';
+    if (show) shown++;
+  });
+  var countEl = document.getElementById('empFilterCount');
+  if (countEl) {
+    if (shown < cards.length) {
+      countEl.textContent = shown + ' من ' + cards.length;
+    } else {
+      countEl.textContent = '';
+    }
+  }
+}
+
+function updateEmpFilterSections() {
+  var deptVal = (document.getElementById('empDeptFilter')?.value) || 'all';
+  var secFilter = document.getElementById('empSecFilter');
+  if (!secFilter) return;
+  var data = getMgmtData();
+  var secs = [];
+  if (deptVal === 'all') {
+    // Collect all sections across departments
+    (data.departments || []).forEach(function(d) {
+      (data.sections[d] || []).forEach(function(s) {
+        if (secs.indexOf(s) === -1) secs.push(s);
+      });
+    });
+  } else {
+    secs = (data.sections || {})[deptVal] || [];
+  }
+  secFilter.innerHTML = '<option value="all">جميع الأقسام</option>' + secs.map(function(s) {
+    return '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>';
+  }).join('');
 }
 
 function addMgmtItem(key) {
