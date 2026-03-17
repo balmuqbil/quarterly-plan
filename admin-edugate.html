@@ -2740,6 +2740,64 @@ function updateTaskStatus(idx, newStatus) {
   showMgmtToast(label + ' مهمة "' + (task.taskType || '') + '" للموظف "' + (task.name || '') + '"', 'success');
 }
 
+// Update task status from employee drill-down and refresh the drill
+function updateTaskStatusFromDrill(idx, newStatus, empName) {
+  var task = allData[idx];
+  if (!task) return;
+  if ((task.status || 'pending') === newStatus) return;
+  task.status = newStatus;
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey + '/status').set(newStatus)
+      .catch(function(err) { console.error('Firebase status update failed:', err); });
+  }
+  syncTestData();
+  updateKPIs();
+  showEmployeeDrill(empName);
+  var label = newStatus === 'approved' ? 'تم اعتماد' : 'تم رفض';
+  showMgmtToast(label + ' المهمة', 'success');
+}
+
+// Delete task from employee drill-down and refresh
+function deleteTaskFromDrill(idx, empName) {
+  var task = allData[idx];
+  if (!task) return;
+  if (!confirm('هل تريد حذف مهمة "' + (task.taskType || '') + '" — ' + (task.month || '') + '؟')) return;
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey).remove()
+      .catch(function(err) { console.error('Firebase delete failed:', err); });
+  }
+  allData.splice(idx, 1);
+  syncTestData();
+  applyFilters();
+  showEmployeeDrill(empName);
+  showMgmtToast('تم حذف المهمة', 'success');
+}
+
+// Bulk update status for all tasks of an employee from drill-down
+function bulkUpdateEmpDrillStatus(empName, newStatus) {
+  var empTasks = filteredData.filter(function(r) { return r.name === empName; });
+  var actionable = empTasks.filter(function(r) { return (r.status || 'pending') !== newStatus; });
+  if (!actionable.length) {
+    showMgmtToast('جميع مهام الموظف في هذه الحالة بالفعل', 'info');
+    return;
+  }
+  var label = newStatus === 'approved' ? 'اعتماد' : 'رفض';
+  if (!confirm('هل تريد ' + label + ' ' + actionable.length + ' مهمة لـ "' + empName + '"؟')) return;
+  var updates = {};
+  actionable.forEach(function(task) {
+    task.status = newStatus;
+    if (task._firebaseKey) updates['tasks/' + task._firebaseKey + '/status'] = newStatus;
+  });
+  if (firebaseReady && Object.keys(updates).length > 0) {
+    firebaseDb.ref().update(updates)
+      .catch(function(err) { console.error('Firebase bulk update failed:', err); });
+  }
+  syncTestData();
+  updateKPIs();
+  showEmployeeDrill(empName);
+  showMgmtToast('تم ' + label + ' ' + actionable.length + ' مهمة', 'success');
+}
+
 function bulkUpdateStatus(newStatus) {
   var data = getTaskFilteredData();
   if (!data.length) return;
@@ -2871,14 +2929,39 @@ function showEmployeeDrill(name) {
   <div class="drill-chart-container"><canvas id="drillEmpMonthly"></canvas></div>
   <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📊 توزيع المنصات</h3>
   <div class="drill-chart-container" style="height:220px;"><canvas id="drillEmpPlatforms"></canvas></div>
-  <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📋 تفاصيل المهام</h3>
-  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-  <table class="drill-table"><thead><tr><th>الشهر</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th></tr></thead><tbody>`;
+  // Status counts for bulk bar
+  const statusCounts = {pending:0, approved:0, rejected:0};
+  empData.forEach(r => { statusCounts[r.status||'pending']++; });
+  const actionable = empData.filter(r => (r.status||'pending') !== 'approved').length;
+
+  html += `<h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📋 تفاصيل المهام</h3>`;
+  // Bulk actions bar for this employee
+  html += `<div class="bulk-actions-bar" style="margin-bottom:12px;">
+    <button class="bulk-btn bulk-approve" onclick="bulkUpdateEmpDrillStatus('${escapeJS(name)}','approved')">✅ اعتماد الكل</button>
+    <button class="bulk-btn bulk-reject" onclick="bulkUpdateEmpDrillStatus('${escapeJS(name)}','rejected')">❌ رفض الكل</button>
+    <span class="bulk-info">⏳ ${statusCounts.pending} بانتظار · ✅ ${statusCounts.approved} معتمدة · ❌ ${statusCounts.rejected} مرفوضة</span>
+  </div>`;
+  html += `<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
+  <table class="drill-table"><thead><tr><th>الشهر</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>`;
   empData.forEach(r => {
     const occ = parseFloat(r.occupancy)||0;
     const c = getOccColor(occ);
+    const idx = allData.indexOf(r);
+    const status = r.status || 'pending';
+    const statusBadge = status === 'approved' ? '<span class="badge badge-status-approved">✅ معتمدة</span>' :
+                        status === 'rejected' ? '<span class="badge badge-status-rejected">❌ مرفوضة</span>' :
+                        '<span class="badge badge-status-pending">⏳ بانتظار</span>';
+    const approveDisabled = status === 'approved' ? ' disabled style="opacity:0.3"' : '';
+    const rejectDisabled = status === 'rejected' ? ' disabled style="opacity:0.3"' : '';
     html += `<tr><td>${escapeHtml(r.month)}</td><td><span class="badge badge-platform">${escapeHtml(r.platform)}</span></td><td><span class="badge badge-task">${escapeHtml(r.taskType)}</span></td>
-    <td><span style="color:${c};font-weight:700;">${occ}%</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td></tr>`;
+    <td><span style="color:${c};font-weight:700;">${occ}%</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
+    <td>${statusBadge}</td>
+    <td><div class="task-crud-actions">
+      <button class="task-crud-btn approve-btn" title="اعتماد" onclick="updateTaskStatusFromDrill(${idx},'approved','${escapeJS(name)}')"${approveDisabled}>✅</button>
+      <button class="task-crud-btn reject-btn" title="رفض" onclick="updateTaskStatusFromDrill(${idx},'rejected','${escapeJS(name)}')"${rejectDisabled}>❌</button>
+      <button class="task-crud-btn edit-btn" title="تعديل" onclick="closeDrill();openTaskModal(${idx})">✏️</button>
+      <button class="task-crud-btn delete-btn" title="حذف" onclick="deleteTaskFromDrill(${idx},'${escapeJS(name)}')">🗑️</button>
+    </div></td></tr>`;
   });
   html += '</tbody></table></div>';
 
