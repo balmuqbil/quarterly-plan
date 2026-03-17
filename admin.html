@@ -938,6 +938,22 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <h1>💻 المنصات</h1>
         <div class="subtitle">عرض تفصيلي لجميع المنصات — اضغط على أي بطاقة للتفاصيل</div>
       </div>
+      <div class="top-actions">
+        <select class="quarter-filter" id="platYearFilter" onchange="renderPlatformsSection()">
+          <option value="all">جميع السنوات</option>
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+        </select>
+        <select class="quarter-filter" id="platQuarterFilter" onchange="renderPlatformsSection()">
+          <option value="all">جميع الأرباع</option>
+          <option value="الأول">الربع الأول</option>
+          <option value="الثاني">الربع الثاني</option>
+          <option value="الثالث">الربع الثالث</option>
+          <option value="الرابع">الربع الرابع</option>
+        </select>
+        <span id="platCount" style="font-size:12px;color:var(--text-light);"></span>
+      </div>
     </div>
     <div class="detail-grid" id="platformsGrid"></div>
   </div>
@@ -1306,6 +1322,26 @@ function setDefaultFilters() {
   var deptQuarterFilter = document.getElementById('deptQuarterFilter');
   if (deptQuarterFilter) {
     deptQuarterFilter.value = currentQuarter;
+  }
+
+  // Also set platform page filters
+  var platYearFilter = document.getElementById('platYearFilter');
+  if (platYearFilter) {
+    var hasPlatYear = false;
+    for (var p = 0; p < platYearFilter.options.length; p++) {
+      if (platYearFilter.options[p].value === currentYear) { hasPlatYear = true; break; }
+    }
+    if (!hasPlatYear) {
+      var opt3 = document.createElement('option');
+      opt3.value = currentYear;
+      opt3.textContent = currentYear;
+      platYearFilter.appendChild(opt3);
+    }
+    platYearFilter.value = currentYear;
+  }
+  var platQuarterFilter = document.getElementById('platQuarterFilter');
+  if (platQuarterFilter) {
+    platQuarterFilter.value = currentQuarter;
   }
 }
 const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
@@ -2024,18 +2060,39 @@ function renderEmployeesSection() {
 
 // ==================== PLATFORMS SECTION ====================
 function renderPlatformsSection() {
+  // Apply local year/quarter filters
+  var yearVal = (document.getElementById('platYearFilter')?.value) || 'all';
+  var qtrVal = (document.getElementById('platQuarterFilter')?.value) || 'all';
+  var data = filteredData;
+  if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
+  if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
+
+  // Count distinct months in filtered data for FTE calculation
+  var activeMonths = new Set();
+  data.forEach(function(r) { activeMonths.add((r.month||'') + '|' + (r.year||'')); });
+  var monthCount = activeMonths.size || 1;
+
   const platMap = {};
-  filteredData.forEach(r => {
-    if (!platMap[r.platform]) platMap[r.platform] = { name: r.platform, tasks: 0, employees: new Set(), departments: new Set(), totalOcc: 0 };
+  data.forEach(r => {
+    if (!platMap[r.platform]) platMap[r.platform] = { name: r.platform, tasks: 0, employees: new Set(), departments: new Set(), totalOcc: 0, _tasks: [] };
     platMap[r.platform].tasks++;
     platMap[r.platform].employees.add(r.name);
     platMap[r.platform].departments.add(r.department);
     platMap[r.platform].totalOcc += parseFloat(r.occupancy) || 0;
+    platMap[r.platform]._tasks.push(r);
   });
   const platforms = Object.values(platMap).sort((a,b) => b.tasks - a.tasks);
+
+  // Update count
+  var countEl = document.getElementById('platCount');
+  if (countEl) countEl.textContent = platforms.length + ' منصة';
+
   const grid = document.getElementById('platformsGrid');
   grid.innerHTML = platforms.map((p,i) => {
     const icon = Object.entries(PLATFORM_ICONS).find(([k]) => p.name.includes(k));
+    // FTE = total occupancy / (100 * number of months)
+    var fte = (p.totalOcc / (100 * monthCount)).toFixed(1);
+    var avgOcc = calcAvgOccPerMonth(p._tasks).toFixed(0);
     return `<div class="detail-card platform-card" onclick="showPlatformDrill('` + escapeJS(p.name) + `')">
       <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
       <div class="detail-card-header">
@@ -2044,8 +2101,9 @@ function renderPlatformsSection() {
       </div>
       <div class="detail-card-stats">
         <div class="detail-stat"><div class="detail-stat-value">${p.employees.size}</div><div class="detail-stat-label">موظف</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${fte}</div><div class="detail-stat-label">FTEs</div></div>
         <div class="detail-stat"><div class="detail-stat-value">${p.departments.size}</div><div class="detail-stat-label">إدارات</div></div>
-        <div class="detail-stat"><div class="detail-stat-value">${(p.totalOcc/p.tasks).toFixed(0)}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${avgOcc}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
       </div>
     </div>`;
   }).join('');
