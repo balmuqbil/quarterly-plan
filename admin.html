@@ -1154,7 +1154,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.13';
+const ADMIN_VERSION = 'v20260317.14';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -3753,11 +3753,41 @@ function renderDataManagement() {
           }).join('')}
           ${items.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--text-light);font-size:13px;grid-column:1/-1;">لا يوجد موظفون — أضف موظف جديد أدناه</div>' : ''}
         </div>
-        <div class="mgmt-add-emp-row">
-          <input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="flex:1;" onkeydown="if(event.key==='Enter')addMgmtItem('employees')">
-          <select id="mgmt-emp-dept" onchange="updateEmpSectionDropdown()"><option value="">الإدارة</option>${depts.map(d=>'<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>').join('')}</select>
-          <select id="mgmt-emp-section"><option value="">القسم</option></select>
-          <button class="mgmt-add-btn" onclick="addMgmtItem('employees')">+ إضافة</button>
+        <div style="border-top:1.5px dashed var(--border);margin-top:12px;padding-top:14px;">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--accent);">➕ إضافة موظف جديد</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px;margin-bottom:10px;">
+            <div>
+              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">الاسم *</label>
+              <input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="width:100%;" onkeydown="if(event.key==='Enter')addMgmtItem('employees')">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">الإدارة *</label>
+              <select id="mgmt-emp-dept" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;" onchange="updateEmpSectionDropdown()"><option value="">— اختر الإدارة —</option>${depts.map(d=>'<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>').join('')}</select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">القسم *</label>
+              <select id="mgmt-emp-section" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;"><option value="">— اختر القسم —</option></select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">📅 تاريخ البدء</label>
+              <select id="mgmt-emp-start" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;">
+                ${(function() {
+                  var opts = '';
+                  ['2025','2026','2027','2028','2029','2030'].forEach(function(y) {
+                    MONTHS.forEach(function(m) {
+                      var v = m + ' ' + y;
+                      var sel = (v === 'يناير 2026') ? ' selected' : '';
+                      opts += '<option value="' + v + '"' + sel + '>' + v + '</option>';
+                    });
+                  });
+                  return opts;
+                })()}
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="mgmt-add-btn" onclick="addMgmtItem('employees')">+ إضافة الموظف</button>
+          </div>
         </div>
         <div class="mgmt-bulk-import">
           <div class="mgmt-bulk-header">
@@ -3974,17 +4004,21 @@ function addMgmtItem(key) {
     const nameInput = document.getElementById('mgmt-emp-name');
     const deptSelect = document.getElementById('mgmt-emp-dept');
     const secSelect = document.getElementById('mgmt-emp-section');
+    const startSelect = document.getElementById('mgmt-emp-start');
     const name = sanitizeInput(nameInput.value);
-    if (!name) return;
-    if (data.employees.some(e => e.name === name)) {
+    if (!name) { showMgmtToast('يرجى إدخال اسم الموظف', 'error'); return; }
+    if (!deptSelect.value) { showMgmtToast('يرجى اختيار الإدارة', 'error'); return; }
+    if (!secSelect.value) { showMgmtToast('يرجى اختيار القسم', 'error'); return; }
+    if (data.employees.some(function(e) { return (typeof e === 'string' ? e : e.name) === name; })) {
       showMgmtToast('هذا الموظف موجود بالفعل', 'error');
       return;
     }
-    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: 'يناير 2026', endDate: '', absences: [] });
+    var startDate = startSelect ? startSelect.value : 'يناير 2026';
+    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [] });
     saveMgmtList('employees', data.employees);
     nameInput.value = '';
     deptSelect.selectedIndex = 0;
-    secSelect.innerHTML = '<option value="">القسم</option>';
+    secSelect.innerHTML = '<option value="">— اختر القسم —</option>';
   } else {
     const input = document.getElementById('mgmt-input-' + key);
     const val = sanitizeInput(input.value);
