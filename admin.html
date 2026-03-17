@@ -542,6 +542,11 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .task-modal-field select:disabled, .task-modal-field input:disabled {
   background:#f1f5f9; color:var(--text-secondary); cursor:not-allowed;
 }
+.sortable-th { cursor:pointer; user-select:none; white-space:nowrap; }
+.sortable-th:hover { background:var(--bg-alt); color:var(--accent); }
+.sortable-th span { font-size:11px; margin-right:2px; }
+.occupancy-warning { background:#fef2f2; }
+.occupancy-warning td { color:#dc2626; }
 </style>
 </head>
 <body>
@@ -841,7 +846,17 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="chart-header"><div><div class="chart-title">جدول المهام التفصيلي</div></div></div>
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>#</th><th>الموظف</th><th>الإدارة</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الشهر</th><th>الوصف</th><th>إجراءات</th></tr></thead>
+          <thead><tr>
+            <th>#</th>
+            <th class="sortable-th" onclick="sortTasksBy('name')">الموظف <span id="sortIcon_name"></span></th>
+            <th class="sortable-th" onclick="sortTasksBy('department')">الإدارة <span id="sortIcon_department"></span></th>
+            <th class="sortable-th" onclick="sortTasksBy('platform')">المنصة <span id="sortIcon_platform"></span></th>
+            <th class="sortable-th" onclick="sortTasksBy('taskType')">نوع المهمة <span id="sortIcon_taskType"></span></th>
+            <th class="sortable-th" onclick="sortTasksBy('occupancy')">الإشغال <span id="sortIcon_occupancy"></span></th>
+            <th class="sortable-th" onclick="sortTasksBy('month')">الشهر <span id="sortIcon_month"></span></th>
+            <th>الوصف</th>
+            <th>إجراءات</th>
+          </tr></thead>
           <tbody id="tasksTableBody"></tbody>
         </table>
       </div>
@@ -879,16 +894,16 @@ tr:hover td { background:rgba(99,102,241,0.03); }
           <select id="taskField_taskType"></select>
         </div>
         <div class="task-modal-field">
-          <label>الشهر</label>
-          <select id="taskField_month">
+          <label>الربع</label>
+          <select id="taskField_quarter" onchange="filterTaskMonthsByQuarter()">
             <option value="">— اختر —</option>
+            <option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option>
           </select>
         </div>
         <div class="task-modal-field">
-          <label>الربع</label>
-          <select id="taskField_quarter">
-            <option value="">— اختر —</option>
-            <option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option>
+          <label>الشهر</label>
+          <select id="taskField_month">
+            <option value="">— اختر الربع أولاً —</option>
           </select>
         </div>
         <div class="task-modal-field">
@@ -1523,6 +1538,58 @@ function renderPlatformsSection() {
 }
 
 // ==================== TASKS SECTION ====================
+var taskSortField = '';
+var taskSortDir = 1; // 1=asc, -1=desc
+var MONTH_ORDER = {'يناير':1,'فبراير':2,'مارس':3,'أبريل':4,'مايو':5,'يونيو':6,'يوليو':7,'أغسطس':8,'سبتمبر':9,'أكتوبر':10,'نوفمبر':11,'ديسمبر':12};
+
+function sortTasksBy(field) {
+  if (taskSortField === field) {
+    taskSortDir *= -1;
+  } else {
+    taskSortField = field;
+    taskSortDir = 1;
+  }
+  tasksPage = 1;
+  renderTasksSection();
+}
+
+function getTaskSortedData(data) {
+  if (!taskSortField) return data;
+  var sorted = data.slice();
+  var field = taskSortField;
+  var dir = taskSortDir;
+  sorted.sort(function(a, b) {
+    var va, vb;
+    if (field === 'occupancy') {
+      va = parseFloat(a.occupancy) || 0;
+      vb = parseFloat(b.occupancy) || 0;
+    } else if (field === 'month') {
+      va = MONTH_ORDER[a.month] || 0;
+      vb = MONTH_ORDER[b.month] || 0;
+    } else {
+      va = (a[field] || '').toString().toLowerCase();
+      vb = (b[field] || '').toString().toLowerCase();
+    }
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+  return sorted;
+}
+
+function updateSortIcons() {
+  ['name','department','platform','taskType','occupancy','month'].forEach(function(f) {
+    var el = document.getElementById('sortIcon_' + f);
+    if (el) {
+      if (taskSortField === f) {
+        el.textContent = taskSortDir === 1 ? '▲' : '▼';
+      } else {
+        el.textContent = '⇅';
+      }
+    }
+  });
+}
+
 function renderTasksSection() {
   const search = (document.getElementById('taskSearch')?.value || '').trim().toLowerCase();
   // Task type cards
@@ -1548,24 +1615,38 @@ function renderTasksSection() {
     </div>
   </div>`).join('');
 
-  // Tasks table
+  // Tasks table (with sorting)
+  updateSortIcons();
   let data = filteredData;
   if (search) data = data.filter(r => (r.name||'').includes(search) || (r.taskType||'').includes(search) || (r.platform||'').includes(search) || (r.description||'').includes(search));
+  data = getTaskSortedData(data);
   const totalPages = Math.ceil(data.length / PAGE_SIZE) || 1;
   if (tasksPage > totalPages) tasksPage = totalPages;
   const start = (tasksPage - 1) * PAGE_SIZE;
   const pageData = data.slice(start, start + PAGE_SIZE);
+  // Pre-compute employee/month/year total occupancy for warning highlights
+  var empMonthTotals = {};
+  allData.forEach(function(r) {
+    var key = (r.name||'') + '|' + (r.month||'') + '|' + (r.year||'');
+    empMonthTotals[key] = (empMonthTotals[key] || 0) + (parseFloat(r.occupancy) || 0);
+  });
+
   document.getElementById('tasksTableBody').innerHTML = pageData.map((r,i) => {
     const occ = parseFloat(r.occupancy)||0;
     const occColor = occ >= 80 ? '#ef4444' : occ >= 50 ? '#f59e0b' : '#10b981';
     const idx = allData.indexOf(r);
-    return `<tr>
+    var empMonthKey = (r.name||'') + '|' + (r.month||'') + '|' + (r.year||'');
+    var totalOcc = empMonthTotals[empMonthKey] || 0;
+    var isOverloaded = totalOcc > 120;
+    var rowClass = isOverloaded ? ' class="occupancy-warning"' : '';
+    var occTitle = isOverloaded ? 'title="⚠️ إجمالي إشغال الموظف في هذا الشهر: ' + totalOcc + '% (يتجاوز 120%)"' : '';
+    return `<tr${rowClass} ${occTitle}>
       <td>${start+i+1}</td>
       <td style="font-weight:600;cursor:pointer" onclick="showEmployeeDrill('` + escapeJS(r.name||'') + `')"><u>${escapeHtml(r.name||'')}</u></td>
       <td><span class="badge badge-dept">${escapeHtml(r.department||'')}</span></td>
       <td><span class="badge badge-platform">${escapeHtml(r.platform||'')}</span></td>
       <td><span class="badge badge-task">${escapeHtml(r.taskType||'')}</span></td>
-      <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
+      <td>${occ}%${isOverloaded ? ' ⚠️' : ''} <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
       <td>${escapeHtml(r.month||'')}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
       <td>
@@ -1598,11 +1679,29 @@ function populateTaskModalDropdowns() {
   // Other dropdowns
   document.getElementById('taskField_platform').innerHTML = '<option value="">— اختر المنصة —</option>' + platforms.map(function(p) { return '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>'; }).join('');
   document.getElementById('taskField_taskType').innerHTML = '<option value="">— اختر نوع المهمة —</option>' + taskTypes.map(function(t) { return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>'; }).join('');
-  document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الشهر —</option>' + MONTHS.map(function(m) { return '<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>'; }).join('');
+  document.getElementById('taskField_month').innerHTML = '<option value="">— اختر الربع أولاً —</option>';
   // Clear autocomplete
   document.getElementById('taskField_name').value = '';
   document.getElementById('taskEmpAutoList').innerHTML = '';
   document.getElementById('taskEmpAutoList').classList.remove('show');
+}
+
+var QUARTER_MONTHS = {
+  'Q1': ['يناير','فبراير','مارس'],
+  'Q2': ['أبريل','مايو','يونيو'],
+  'Q3': ['يوليو','أغسطس','سبتمبر'],
+  'Q4': ['أكتوبر','نوفمبر','ديسمبر']
+};
+
+function filterTaskMonthsByQuarter() {
+  var q = document.getElementById('taskField_quarter').value;
+  var monthSelect = document.getElementById('taskField_month');
+  if (!q) {
+    monthSelect.innerHTML = '<option value="">— اختر الربع أولاً —</option>';
+    return;
+  }
+  var months = QUARTER_MONTHS[q] || [];
+  monthSelect.innerHTML = '<option value="">— اختر الشهر —</option>' + months.map(function(m) { return '<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>'; }).join('');
 }
 
 var taskAutoHighlight = -1;
@@ -1739,8 +1838,9 @@ function openTaskModal(editIdx) {
     }
     document.getElementById('taskField_platform').value = r.platform || '';
     document.getElementById('taskField_taskType').value = r.taskType || '';
-    document.getElementById('taskField_month').value = r.month || '';
     document.getElementById('taskField_quarter').value = r.quarter || '';
+    filterTaskMonthsByQuarter();
+    document.getElementById('taskField_month').value = r.month || '';
     document.getElementById('taskField_year').value = r.year || '2026';
     document.getElementById('taskField_occupancy').value = r.occupancy || '';
     document.getElementById('taskField_description').value = r.description || '';
@@ -1782,6 +1882,20 @@ function saveTask() {
   if (fields.occupancy > 120) { showMgmtToast('الحد الأقصى للإشغال 120%', 'error'); return; }
 
   const editIdx = parseInt(document.getElementById('taskEditIdx').value);
+
+  // Business rule: total occupancy per employee per month per year must not exceed 120%
+  var existingTotal = 0;
+  for (var i = 0; i < allData.length; i++) {
+    if (i === editIdx) continue; // Skip the task being edited
+    if (allData[i].name === fields.name && allData[i].month === fields.month && allData[i].year === fields.year) {
+      existingTotal += parseFloat(allData[i].occupancy) || 0;
+    }
+  }
+  if (existingTotal + fields.occupancy > 120) {
+    showMgmtToast('⚠️ إجمالي الإشغال للموظف "' + fields.name + '" في شهر ' + fields.month + ' سيتجاوز 120% (الحالي: ' + existingTotal + '% + ' + fields.occupancy + '% = ' + (existingTotal + fields.occupancy) + '%)', 'error');
+    return;
+  }
+
   fields.timestamp = new Date().toLocaleString('ar-SA');
 
   let originalTask = null;
@@ -2658,33 +2772,58 @@ function generateSampleTasks(taskCount, employeeCount, filterQuarter, filterYear
   const services = ['خدمة التسجيل','خدمة المحتوى','خدمة الإشعارات','خدمة التقييم','خدمة التكامل','خدمة البوابة','خدمة الدفع',''];
 
   const tasks = [];
-  // Ensure each selected employee gets at least a few tasks
-  const minTasksPerEmp = Math.floor(taskCount / selectedEmps.length);
-  const extraTasks = taskCount - (minTasksPerEmp * selectedEmps.length);
+  // Track occupancy per employee per month: key = "empName|month"
+  var empMonthOcc = {};
 
-  let taskIdx = 0;
-  selectedEmps.forEach((emp, empIdx) => {
-    const count = minTasksPerEmp + (empIdx < extraTasks ? 1 : 0);
-    for (let i = 0; i < count; i++) {
-      const month = monthList[Math.floor(Math.random() * monthList.length)];
-      const task = {
-        name: emp.name,
-        department: emp.department,
-        section: emp.section,
-        platform: platforms[Math.floor(Math.random() * platforms.length)],
-        taskType: taskTypes[Math.floor(Math.random() * taskTypes.length)],
-        month: month,
-        quarter: quarters[month],
-        year: taskYear,
-        occupancy: occupancies[Math.floor(Math.random() * occupancies.length)],
-        description: descriptions[Math.floor(Math.random() * descriptions.length)],
-        service: services[Math.floor(Math.random() * services.length)],
-        timestamp: new Date().toLocaleString('ar-SA')
-      };
-      tasks.push(task);
-      taskIdx++;
-    }
-  });
+  function getKey(name, month) { return name + '|' + month; }
+  function getRemainingCapacity(name, month) {
+    var key = getKey(name, month);
+    return 120 - (empMonthOcc[key] || 0);
+  }
+  function addOcc(name, month, occ) {
+    var key = getKey(name, month);
+    empMonthOcc[key] = (empMonthOcc[key] || 0) + occ;
+  }
+
+  var attempts = 0;
+  var maxAttempts = taskCount * 10; // safety valve
+
+  while (tasks.length < taskCount && attempts < maxAttempts) {
+    attempts++;
+    var emp = selectedEmps[Math.floor(Math.random() * selectedEmps.length)];
+    var month = monthList[Math.floor(Math.random() * monthList.length)];
+    var remaining = getRemainingCapacity(emp.name, month);
+
+    if (remaining < 25) continue; // No room for a task (min 25%)
+
+    // Pick occupancy: random valid value between 25 and min(remaining, 100)
+    var maxOcc = Math.min(remaining, 100);
+    var possibleOccs = occupancies.filter(function(o) { return o >= 25 && o <= maxOcc; });
+    if (possibleOccs.length === 0) continue;
+
+    var occ = possibleOccs[Math.floor(Math.random() * possibleOccs.length)];
+
+    var task = {
+      name: emp.name,
+      department: emp.department,
+      section: emp.section,
+      platform: platforms[Math.floor(Math.random() * platforms.length)],
+      taskType: taskTypes[Math.floor(Math.random() * taskTypes.length)],
+      month: month,
+      quarter: quarters[month],
+      year: taskYear,
+      occupancy: occ,
+      description: descriptions[Math.floor(Math.random() * descriptions.length)],
+      service: services[Math.floor(Math.random() * services.length)],
+      timestamp: new Date().toLocaleString('ar-SA')
+    };
+    addOcc(emp.name, month, occ);
+    tasks.push(task);
+  }
+
+  if (tasks.length < taskCount) {
+    console.warn('⚠️ Generated only ' + tasks.length + '/' + taskCount + ' tasks due to 120% capacity constraints');
+  }
 
   return tasks;
 }
