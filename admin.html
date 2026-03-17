@@ -927,6 +927,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
             <th class="sortable-th" onclick="sortTasksBy('occupancy')">الإشغال <span id="sortIcon_occupancy"></span></th>
             <th class="sortable-th" onclick="sortTasksBy('month')">الشهر <span id="sortIcon_month"></span></th>
             <th>الوصف</th>
+            <th class="sortable-th" onclick="sortTasksBy('timestamp')">تاريخ الإرسال <span id="sortIcon_timestamp"></span></th>
             <th>إجراءات</th>
           </tr></thead>
           <tbody id="tasksTableBody"></tbody>
@@ -1125,7 +1126,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.7';
+const ADMIN_VERSION = 'v20260317.8';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -1168,6 +1169,39 @@ function initFirebase() {
   }
 }
 const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+
+// Set default year/quarter filters to current period
+function setDefaultFilters() {
+  var now = new Date();
+  var currentYear = String(now.getFullYear());
+  var currentMonth = now.getMonth(); // 0-based
+  var currentQuarter;
+  if (currentMonth < 3) currentQuarter = 'الأول';
+  else if (currentMonth < 6) currentQuarter = 'الثاني';
+  else if (currentMonth < 9) currentQuarter = 'الثالث';
+  else currentQuarter = 'الرابع';
+
+  var yearFilter = document.getElementById('yearFilter');
+  if (yearFilter) {
+    // Add current year option if not present
+    var hasYear = false;
+    for (var i = 0; i < yearFilter.options.length; i++) {
+      if (yearFilter.options[i].value === currentYear) { hasYear = true; break; }
+    }
+    if (!hasYear) {
+      var opt = document.createElement('option');
+      opt.value = currentYear;
+      opt.textContent = currentYear;
+      yearFilter.appendChild(opt);
+    }
+    yearFilter.value = currentYear;
+  }
+
+  var quarterFilter = document.getElementById('quarterFilter');
+  if (quarterFilter) {
+    quarterFilter.value = currentQuarter;
+  }
+}
 const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
 const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','Other':'💻'};
 
@@ -1202,6 +1236,19 @@ function escapeHtml(str) {
 function escapeAttr(str) {
   // For use inside HTML attribute values (double-quoted)
   return escapeHtml(str);
+}
+function formatTimestamp(ts) {
+  if (!ts) return '—';
+  try {
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return escapeHtml(ts);
+    var day = String(d.getDate()).padStart(2, '0');
+    var mon = String(d.getMonth() + 1).padStart(2, '0');
+    var yr = d.getFullYear();
+    var hr = String(d.getHours()).padStart(2, '0');
+    var min = String(d.getMinutes()).padStart(2, '0');
+    return day + '/' + mon + '/' + yr + ' ' + hr + ':' + min;
+  } catch(e) { return escapeHtml(ts); }
 }
 function escapeJS(str) {
   // For use inside JS string literals in onclick handlers
@@ -1243,7 +1290,7 @@ async function attemptLogin() {
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('mainContent').style.display = 'block';
     sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
-    setTimeout(function() { initializeFromCSV(); loadData(); }, 0);
+    setTimeout(function() { setDefaultFilters(); initializeFromCSV(); loadData(); }, 0);
   } else {
     document.getElementById('loginError').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
     document.getElementById('loginPass').value = '';
@@ -1263,7 +1310,7 @@ function logout() {
 if (sessionStorage.getItem(STORAGE_PREFIX + 'auth') === 'true') {
   document.getElementById('loginOverlay').classList.add('hidden');
   document.getElementById('mainContent').style.display = 'block';
-  setTimeout(function() { initializeFromCSV(); loadData(); }, 0);
+  setTimeout(function() { setDefaultFilters(); initializeFromCSV(); loadData(); }, 0);
 }
 
 // ==================== NAVIGATION ====================
@@ -1831,8 +1878,8 @@ function renderPlatformsSection() {
 }
 
 // ==================== TASKS SECTION ====================
-var taskSortField = '';
-var taskSortDir = 1; // 1=asc, -1=desc
+var taskSortField = 'timestamp';
+var taskSortDir = -1; // 1=asc, -1=desc (default: newest first)
 var MONTH_ORDER = {'يناير':1,'فبراير':2,'مارس':3,'أبريل':4,'مايو':5,'يونيو':6,'يوليو':7,'أغسطس':8,'سبتمبر':9,'أكتوبر':10,'نوفمبر':11,'ديسمبر':12};
 
 function sortTasksBy(field) {
@@ -1859,6 +1906,13 @@ function getTaskSortedData(data) {
     } else if (field === 'month') {
       va = MONTH_ORDER[a.month] || 0;
       vb = MONTH_ORDER[b.month] || 0;
+    } else if (field === 'timestamp') {
+      // Parse Arabic locale timestamp for sorting
+      va = a.timestamp ? new Date(a.timestamp).getTime() || 0 : 0;
+      vb = b.timestamp ? new Date(b.timestamp).getTime() || 0 : 0;
+      // If Date parsing fails, fall back to string comparison
+      if (va === 0 && a.timestamp) va = a.timestamp;
+      if (vb === 0 && b.timestamp) vb = b.timestamp;
     } else {
       va = (a[field] || '').toString().toLowerCase();
       vb = (b[field] || '').toString().toLowerCase();
@@ -1871,7 +1925,7 @@ function getTaskSortedData(data) {
 }
 
 function updateSortIcons() {
-  ['name','department','platform','taskType','occupancy','month'].forEach(function(f) {
+  ['name','department','platform','taskType','occupancy','month','timestamp'].forEach(function(f) {
     var el = document.getElementById('sortIcon_' + f);
     if (el) {
       if (taskSortField === f) {
@@ -2013,8 +2067,9 @@ function renderTasksSection() {
       <td><span class="badge badge-platform">${escapeHtml(r.platform||'')}</span></td>
       <td><span class="badge badge-task">${escapeHtml(r.taskType||'')}</span></td>
       <td>${occ}%${isOverloaded ? ' ⚠️' : ''} <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occClr};"></div></div></td>
-      <td>${escapeHtml(r.month||'')}</td>
+      <td>${escapeHtml((r.month||'') + (r.year ? ' ' + r.year : ''))}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
+      <td style="font-size:11px;color:var(--text-light);white-space:nowrap;direction:ltr;text-align:center;">${formatTimestamp(r.timestamp)}</td>
       <td>
         <div class="task-crud-actions">
           <button class="task-crud-btn edit-btn" title="تعديل" onclick="openTaskModal(${idx})">✏️</button>
@@ -2292,7 +2347,7 @@ function saveTask() {
     return;
   }
 
-  fields.timestamp = new Date().toLocaleString('ar-SA');
+  fields.timestamp = new Date().toISOString();
 
   let originalTask = null;
   if (editIdx >= 0) {
@@ -2867,7 +2922,7 @@ function renderTable() {
       <td><span class="badge badge-task">${escapeHtml(r.taskType||'')}</span></td>
       <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occClr};"></div></div></td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
-      <td style="font-size:11px;color:var(--text-light);direction:ltr;text-align:left;">${escapeHtml(r.timestamp||'')}</td>
+      <td style="font-size:11px;color:var(--text-light);direction:ltr;text-align:left;">${formatTimestamp(r.timestamp)}</td>
     </tr>`;
   }).join('');
   renderPaginationFor('pagination', totalPages, currentPage, p => { currentPage = p; renderTable(); });
@@ -3279,7 +3334,7 @@ function generateSampleTasks() {
           occupancy: occ,
           description: pick(descriptions),
           service: pick(services),
-          timestamp: new Date().toLocaleString('ar-SA')
+          timestamp: new Date().toISOString()
         });
       }
     });
