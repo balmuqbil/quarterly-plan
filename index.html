@@ -681,7 +681,7 @@
   <div class="success-box">
     <div class="success-icon">&#9989;</div>
     <div class="success-title">تم إرسال الخطة بنجاح!</div>
-    <div class="success-msg" id="successMsg">تم حفظ <strong id="successCount">0</strong> مهمة بنجاح.<br>يمكنك إغلاق الصفحة أو إضافة خطة أخرى.</div>
+    <div class="success-msg" id="successMsg">تم حفظ <strong id="successCount">0</strong> مهمة بنجاح وهي بانتظار الموافقة.<br>يمكنك إغلاق الصفحة أو إضافة خطة أخرى.</div>
     <button class="success-btn" onclick="closeSuccess()">حسناً</button>
   </div>
 </div>
@@ -1267,6 +1267,7 @@ async function submitToSheets() {
   try {
     const promises = rows.map(row => {
       row.timestamp = timestamp;
+      row.status = 'pending';
       return firebaseDb.ref('tasks').push(row);
     });
     await Promise.all(promises);

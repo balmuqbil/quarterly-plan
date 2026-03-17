@@ -198,6 +198,28 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .badge-task { background:rgba(16,185,129,0.1); color:var(--success); }
 .badge-dept { background:rgba(245,158,11,0.1); color:#b45309; }
 .badge-section { background:rgba(139,92,246,0.1); color:#7c3aed; }
+.badge-status-pending { background:#fff3e0; color:#e65100; }
+.badge-status-approved { background:#e8f5e9; color:#2e7d32; }
+.badge-status-rejected { background:#ffebee; color:#c62828; }
+.task-crud-btn.approve-btn { color:#2e7d32; }
+.task-crud-btn.approve-btn:hover { background:rgba(46,125,50,0.1); }
+.task-crud-btn.reject-btn { color:#c62828; }
+.task-crud-btn.reject-btn:hover { background:rgba(198,40,40,0.1); }
+.bulk-actions-bar {
+  display:flex; align-items:center; gap:10px; padding:12px 18px;
+  background:linear-gradient(135deg,#f0f4ff,#e8f0fe); border:1.5px solid #c5cae9;
+  border-radius:12px; margin-bottom:14px; flex-wrap:wrap;
+}
+.bulk-actions-bar .bulk-info { font-size:13px; color:var(--text-light); margin-left:auto; font-weight:500; }
+.bulk-btn {
+  padding:7px 16px; border:none; border-radius:8px; font-family:inherit;
+  font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s;
+}
+.bulk-btn.bulk-approve { background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; }
+.bulk-btn.bulk-approve:hover { background:#c8e6c9; }
+.bulk-btn.bulk-reject { background:#ffebee; color:#c62828; border:1px solid #ef9a9a; }
+.bulk-btn.bulk-reject:hover { background:#ffcdd2; }
+.bulk-btn:disabled { opacity:0.4; cursor:not-allowed; }
 .occupancy-bar {
   width:80px; height:8px; background:#e2e8f0; border-radius:4px; display:inline-block; vertical-align:middle; margin-left:8px;
 }
@@ -931,8 +953,19 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <option value="يوليو">يوليو</option><option value="أغسطس">أغسطس</option><option value="سبتمبر">سبتمبر</option>
         <option value="أكتوبر">أكتوبر</option><option value="نوفمبر">نوفمبر</option><option value="ديسمبر">ديسمبر</option>
       </select>
+      <select class="quarter-filter" id="taskFilterStatus" onchange="tasksPage=1;renderTasksSection()">
+        <option value="all">جميع الحالات</option>
+        <option value="pending">⏳ بانتظار الموافقة</option>
+        <option value="approved">✅ معتمدة</option>
+        <option value="rejected">❌ مرفوضة</option>
+      </select>
       <button class="export-btn" style="font-size:12px;padding:6px 12px;" onclick="resetTaskFilters()">↻ إعادة تعيين</button>
       <span id="taskFilterCount" style="font-size:12px;color:var(--text-light);margin-right:auto;"></span>
+    </div>
+    <div class="bulk-actions-bar" id="bulkActionsBar" style="display:none;">
+      <button class="bulk-btn bulk-approve" onclick="bulkUpdateStatus('approved')">✅ اعتماد الكل</button>
+      <button class="bulk-btn bulk-reject" onclick="bulkUpdateStatus('rejected')">❌ رفض الكل</button>
+      <span class="bulk-info" id="bulkInfo"></span>
     </div>
     <div class="detail-grid" id="tasksGrid"></div>
     <div class="table-card" style="margin-top:20px;">
@@ -949,6 +982,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
             <th class="sortable-th" onclick="sortTasksBy('month')">الشهر <span id="sortIcon_month"></span></th>
             <th>الوصف</th>
             <th class="sortable-th" onclick="sortTasksBy('timestamp')">تاريخ الإرسال <span id="sortIcon_timestamp"></span></th>
+            <th class="sortable-th" onclick="sortTasksBy('status')">الحالة <span id="sortIcon_status"></span></th>
             <th>إجراءات</th>
           </tr></thead>
           <tbody id="tasksTableBody"></tbody>
@@ -1985,7 +2019,7 @@ function getTaskSortedData(data) {
 }
 
 function updateSortIcons() {
-  ['name','department','platform','taskType','occupancy','month','timestamp'].forEach(function(f) {
+  ['name','department','platform','taskType','occupancy','month','timestamp','status'].forEach(function(f) {
     var el = document.getElementById('sortIcon_' + f);
     if (el) {
       if (taskSortField === f) {
@@ -2013,6 +2047,7 @@ function resetTaskFilters() {
   document.getElementById('taskFilterType').value = 'all';
   document.getElementById('taskFilterOcc').value = 'all';
   document.getElementById('taskFilterMonth').value = 'all';
+  document.getElementById('taskFilterStatus').value = 'all';
   tasksPage = 1;
   renderTasksSection();
 }
@@ -2055,6 +2090,12 @@ function getTaskFilteredData() {
   // Month filter
   if (monthVal !== 'all') {
     data = data.filter(function(r) { return r.month === monthVal; });
+  }
+
+  // Status filter
+  var statusVal = (document.getElementById('taskFilterStatus')?.value) || 'all';
+  if (statusVal !== 'all') {
+    data = data.filter(function(r) { return (r.status || 'pending') === statusVal; });
   }
 
   return data;
@@ -2111,6 +2152,24 @@ function renderTasksSection() {
     empMonthTotals[key] = (empMonthTotals[key] || 0) + (parseFloat(r.occupancy) || 0);
   });
 
+  // Update bulk actions bar
+  var bulkBar = document.getElementById('bulkActionsBar');
+  var bulkInfo = document.getElementById('bulkInfo');
+  if (bulkBar) {
+    var pendingInFiltered = data.filter(function(r) { return (r.status || 'pending') === 'pending'; }).length;
+    if (data.length > 0) {
+      bulkBar.style.display = 'flex';
+      var statusCounts = { pending: 0, approved: 0, rejected: 0 };
+      data.forEach(function(r) { statusCounts[r.status || 'pending']++; });
+      bulkInfo.innerHTML = '📊 ' + data.length + ' مهمة في النتائج — ' +
+        '<span style="color:#e65100">⏳ ' + statusCounts.pending + '</span> · ' +
+        '<span style="color:#2e7d32">✅ ' + statusCounts.approved + '</span> · ' +
+        '<span style="color:#c62828">❌ ' + statusCounts.rejected + '</span>';
+    } else {
+      bulkBar.style.display = 'none';
+    }
+  }
+
   document.getElementById('tasksTableBody').innerHTML = pageData.map((r,i) => {
     const occ = parseFloat(r.occupancy)||0;
     const occClr = getOccColor(occ);
@@ -2120,6 +2179,12 @@ function renderTasksSection() {
     var isOverloaded = totalOcc > 120;
     var rowClass = isOverloaded ? ' class="occupancy-warning"' : '';
     var occTitle = isOverloaded ? 'title="⚠️ إجمالي إشغال الموظف في هذا الشهر: ' + totalOcc + '% (يتجاوز 120%)"' : '';
+    var status = r.status || 'pending';
+    var statusBadge = status === 'approved' ? '<span class="badge badge-status-approved">✅ معتمدة</span>' :
+                      status === 'rejected' ? '<span class="badge badge-status-rejected">❌ مرفوضة</span>' :
+                      '<span class="badge badge-status-pending">⏳ بانتظار</span>';
+    var approveDisabled = status === 'approved' ? ' disabled style="opacity:0.3"' : '';
+    var rejectDisabled = status === 'rejected' ? ' disabled style="opacity:0.3"' : '';
     return `<tr${rowClass} ${occTitle}>
       <td>${start+i+1}</td>
       <td style="font-weight:600;cursor:pointer" onclick="showEmployeeDrill('` + escapeJS(r.name||'') + `')"><u>${escapeHtml(r.name||'')}</u></td>
@@ -2130,8 +2195,11 @@ function renderTasksSection() {
       <td>${escapeHtml((r.month||'') + (r.year ? ' ' + r.year : ''))}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
       <td style="font-size:11px;color:var(--text-light);white-space:nowrap;direction:ltr;text-align:center;">${formatTimestamp(r.timestamp)}</td>
+      <td>${statusBadge}</td>
       <td>
         <div class="task-crud-actions">
+          <button class="task-crud-btn approve-btn" title="اعتماد" onclick="updateTaskStatus(${idx},'approved')"${approveDisabled}>✅</button>
+          <button class="task-crud-btn reject-btn" title="رفض" onclick="updateTaskStatus(${idx},'rejected')"${rejectDisabled}>❌</button>
           <button class="task-crud-btn edit-btn" title="تعديل" onclick="openTaskModal(${idx})">✏️</button>
           <button class="task-crud-btn delete-btn" title="حذف" onclick="deleteTask(${idx})">🗑️</button>
         </div>
@@ -2574,12 +2642,15 @@ function saveTask() {
 
   let originalTask = null;
   if (editIdx >= 0) {
-    // Update existing record
+    // Update existing record — preserve status and firebaseKey
     originalTask = { ...allData[editIdx] };
+    fields.status = originalTask.status || 'approved';
+    if (originalTask._firebaseKey) fields._firebaseKey = originalTask._firebaseKey;
     allData[editIdx] = fields;
     showMgmtToast('تم تعديل المهمة بنجاح', 'success');
   } else {
-    // Add new record
+    // Add new record — admin-created tasks are auto-approved
+    fields.status = 'approved';
     allData.push(fields);
     showMgmtToast('تم إضافة المهمة بنجاح', 'success');
   }
@@ -2601,6 +2672,61 @@ function deleteTask(idx) {
   showMgmtToast('تم حذف المهمة', 'success');
   // Sync deletion to Firebase
   syncDeleteFromFirebase(r);
+}
+
+// ==================== Task Status (Approve / Reject) ====================
+
+function updateTaskStatus(idx, newStatus) {
+  var task = allData[idx];
+  if (!task) return;
+  var oldStatus = task.status || 'pending';
+  if (oldStatus === newStatus) return;
+
+  task.status = newStatus;
+
+  // Sync to Firebase
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey + '/status').set(newStatus)
+      .catch(function(err) { console.error('Firebase status update failed:', err); });
+  }
+
+  syncTestData();
+  renderTasksSection();
+  var label = newStatus === 'approved' ? 'تم اعتماد' : 'تم رفض';
+  showMgmtToast(label + ' مهمة "' + (task.taskType || '') + '" للموظف "' + (task.name || '') + '"', 'success');
+}
+
+function bulkUpdateStatus(newStatus) {
+  var data = getTaskFilteredData();
+  if (!data.length) return;
+
+  var label = newStatus === 'approved' ? 'اعتماد' : 'رفض';
+  var actionable = data.filter(function(r) { return (r.status || 'pending') !== newStatus; });
+  if (!actionable.length) {
+    showMgmtToast('جميع المهام في النتائج لديها هذه الحالة بالفعل', 'info');
+    return;
+  }
+
+  if (!confirm('هل تريد ' + label + ' ' + actionable.length + ' مهمة من أصل ' + data.length + ' في النتائج الحالية؟')) return;
+
+  var updates = {};
+  actionable.forEach(function(task) {
+    task.status = newStatus;
+    if (task._firebaseKey) {
+      updates['tasks/' + task._firebaseKey + '/status'] = newStatus;
+    }
+  });
+
+  // Bulk Firebase update
+  if (firebaseReady && Object.keys(updates).length > 0) {
+    firebaseDb.ref().update(updates)
+      .then(function() { console.log('✅ Bulk status update synced to Firebase'); })
+      .catch(function(err) { console.error('❌ Bulk Firebase update failed:', err); });
+  }
+
+  syncTestData();
+  renderTasksSection();
+  showMgmtToast('تم ' + label + ' ' + actionable.length + ' مهمة بنجاح', 'success');
 }
 
 // ==================== Firebase CRUD Operations ====================
@@ -3583,6 +3709,10 @@ function generateSampleTasks(onProgress) {
       occ = Math.max(20, Math.min(Math.min(occ, remaining), 100));
       remaining -= occ;
 
+      // Random status: 70% approved, 15% pending, 15% rejected
+      var rnd = Math.random();
+      var taskStatus = rnd < 0.70 ? 'approved' : rnd < 0.85 ? 'pending' : 'rejected';
+
       var task = {
         name: emp.name,
         department: emp.department,
@@ -3595,7 +3725,8 @@ function generateSampleTasks(onProgress) {
         occupancy: occ,
         description: pick(descriptions),
         service: pick(services),
-        timestamp: new Date(Date.now() - Math.random() * 86400000 * 180).toISOString()
+        timestamp: new Date(Date.now() - Math.random() * 86400000 * 180).toISOString(),
+        status: taskStatus
       };
       monthTasks.push(task);
       quarterTaskCounts[qKey]++;
@@ -3651,6 +3782,7 @@ function generateSampleTasks(onProgress) {
       var emp = pick(alwaysActive);
       var empTypes = getTypesForEmp(emp);
       var monthName = pick(qd.months);
+      var rnd2 = Math.random();
       quarterTasks.push({
         name: emp.name,
         department: emp.department,
@@ -3663,7 +3795,8 @@ function generateSampleTasks(onProgress) {
         occupancy: round5(randBetween(20, 40)),
         description: pick(descriptions),
         service: pick(services),
-        timestamp: new Date(Date.now() - Math.random() * 86400000 * 180).toISOString()
+        timestamp: new Date(Date.now() - Math.random() * 86400000 * 180).toISOString(),
+        status: rnd2 < 0.70 ? 'approved' : rnd2 < 0.85 ? 'pending' : 'rejected'
       });
     }
 
