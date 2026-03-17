@@ -668,6 +668,15 @@ tr:hover td { background:rgba(99,102,241,0.03); }
     <button onclick="clearTestData()">🗑️ حذف البيانات التجريبية</button>
   </div>
 
+  <!-- Local Changes Banner (hidden by default) -->
+  <div class="test-data-banner" id="localChangesBanner" style="display:none; background: linear-gradient(135deg, #1e40af, #3b82f6);">
+    <div class="banner-text">
+      📝 لديك تعديلات محلية غير متزامنة
+      <small id="localChangesInfo">التعديلات محفوظة محلياً وستُطبق تلقائياً عند تحميل البيانات</small>
+    </div>
+    <button onclick="refreshFromSource()" style="background:rgba(255,255,255,0.2); color:white; border:1px solid rgba(255,255,255,0.3);">🔄 تحديث من المصدر</button>
+  </div>
+
   <!-- ===== DASHBOARD SECTION ===== -->
   <div class="section-view active" id="section-dashboard">
     <div class="top-bar">
@@ -690,6 +699,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
           <option value="الرابع">الربع الرابع</option>
         </select>
         <button class="export-btn" onclick="exportCSV()">📥 تصدير CSV</button>
+        <button class="export-btn" onclick="downloadBackup()" style="background:#3b82f6;">💾 نسخة احتياطية</button>
         <button class="refresh-btn" onclick="loadSampleData()">🧪 بيانات تجريبية</button>
         <button class="refresh-btn" onclick="loadData()">🔄 تحديث</button>
       </div>
@@ -1046,6 +1056,15 @@ tr:hover td { background:rgba(99,102,241,0.03); }
     </div>
     <div class="mgmt-grid" id="mgmtGrid"></div>
     <div class="mgmt-save-hint">💡 التغييرات تُحفظ تلقائياً وتُطبق فوراً على نموذج الموظف</div>
+
+    <div style="margin-top:24px; padding:20px; background:#fef2f2; border:1px solid #fca5a5; border-radius:12px;">
+      <h3 style="color:#dc2626; margin:0 0 8px;">🗑️ منطقة الخطر</h3>
+      <p style="color:#7f1d1d; margin:0 0 12px; font-size:14px;">حذف جميع المهام نهائياً — تأكد من تحميل نسخة احتياطية أولاً</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button onclick="downloadBackup()" style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:8px; cursor:pointer; font-size:14px;">💾 تحميل نسخة احتياطية</button>
+        <button onclick="clearAllTasks()" style="padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:8px; cursor:pointer; font-size:14px;">🗑️ حذف جميع المهام</button>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1089,7 +1108,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 <script>
 // ==================== CONFIG ====================
 const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbzadKc3RXC9_vof_Hz4vd-WEMa8B8jTOgrKqHF11_Rq0UwzvoDJpf8WbV_RbxQLXrLZzQ/exec';
-const ADMIN_VERSION = 'v20260317.1';
+const ADMIN_VERSION = 'v20260317.2';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
@@ -1403,6 +1422,18 @@ function loadData() {
   }
   hideTestDataBanner();
 
+  // Check for locally modified Google Sheets data (deletions/edits saved locally)
+  if (hasLocalSheetData()) {
+    if (loadLocalSheetData()) {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      return;
+    }
+  }
+
+  fetchFromGoogleSheets();
+}
+
+function fetchFromGoogleSheets() {
   const loading = document.getElementById('loadingOverlay');
   loading.classList.remove('hidden');
   var callbackName = '_qplanCallback_' + Date.now();
@@ -1420,6 +1451,7 @@ function loadData() {
       remapEmployeeNames(allData);
       resolveEmployeeDepartments(allData);
       applyFilters();
+      hideLocalSheetBanner();
       document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-SA');
     } else {
       allData = []; applyFilters();
@@ -2104,6 +2136,8 @@ function saveTask() {
   closeTaskModal();
   applyFilters();
   syncTestData(); // Persist changes if test data is active
+  // Save full snapshot for Google Sheets data persistence
+  saveLocalSheetData();
   // Sync to Google Sheets if configured
   syncTaskToSheet(fields, editIdx, originalTask);
 }
@@ -2115,6 +2149,7 @@ function deleteTask(idx) {
   allData.splice(idx, 1);
   applyFilters();
   syncTestData(); // Persist changes if test data is active
+  saveLocalSheetData(); // Save full snapshot for Google Sheets data
   showMgmtToast('تم حذف المهمة', 'success');
   // Sync deletion to Google Sheets
   syncDeleteToSheet(r);
@@ -2153,6 +2188,84 @@ function syncDeleteToSheet(task) {
       match: { name: task.name, month: task.month, year: task.year, platform: task.platform, taskType: task.taskType }
     })
   }).catch(() => {});
+}
+
+// ==================== Local Change Tracking ====================
+// Since Google Sheets sync uses no-cors (fire-and-forget), deletions/edits
+// may not actually persist on the server. We track them locally so they
+// survive page refreshes.
+
+// ==================== Local Sheet Data Persistence ====================
+// When user modifies Google Sheets data (delete/edit/add), save the full
+// allData snapshot to localStorage. On next load, use the local snapshot
+// instead of re-fetching from Google Sheets (which would lose changes).
+// User can click "refresh from source" to discard local changes.
+
+function hasLocalSheetData() {
+  return !!localStorage.getItem(STORAGE_PREFIX + 'localSheetData');
+}
+
+function saveLocalSheetData() {
+  if (hasTestData()) return; // Test data has its own persistence
+  try {
+    var jsonStr = JSON.stringify(allData);
+    localStorage.setItem(STORAGE_PREFIX + 'localSheetData', jsonStr);
+    localStorage.setItem(STORAGE_PREFIX + 'localSheetTime', new Date().toLocaleString('ar-SA'));
+    console.log('💾 Saved ' + allData.length + ' tasks to local sheet data (' + Math.round(jsonStr.length/1024) + ' KB)');
+  } catch (e) {
+    console.error('❌ saveLocalSheetData failed:', e);
+    showMgmtToast('⚠️ فشل حفظ التغييرات محلياً — مساحة التخزين ممتلئة', 'error');
+  }
+}
+
+function loadLocalSheetData() {
+  try {
+    var stored = localStorage.getItem(STORAGE_PREFIX + 'localSheetData');
+    if (!stored) return false;
+    var parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.removeItem(STORAGE_PREFIX + 'localSheetData');
+      return false;
+    }
+    allData = parsed;
+    applyFilters();
+    showLocalSheetBanner();
+    var savedTime = localStorage.getItem(STORAGE_PREFIX + 'localSheetTime') || '';
+    document.getElementById('lastUpdate').textContent = 'آخر تحديث محلي: ' + savedTime;
+    console.log('📂 Loaded ' + allData.length + ' tasks from local sheet data');
+    return true;
+  } catch (e) {
+    console.error('❌ loadLocalSheetData failed:', e);
+    localStorage.removeItem(STORAGE_PREFIX + 'localSheetData');
+    return false;
+  }
+}
+
+function showLocalSheetBanner() {
+  var banner = document.getElementById('localChangesBanner');
+  if (!banner) return;
+  var savedTime = localStorage.getItem(STORAGE_PREFIX + 'localSheetTime') || '';
+  document.getElementById('localChangesInfo').textContent =
+    'تم تعديل البيانات محلياً (' + savedTime + ') — اضغط "تحديث من المصدر" لإعادة تحميل البيانات الأصلية';
+  banner.style.display = 'flex';
+}
+
+function hideLocalSheetBanner() {
+  var banner = document.getElementById('localChangesBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+function clearLocalSheetData() {
+  localStorage.removeItem(STORAGE_PREFIX + 'localSheetData');
+  localStorage.removeItem(STORAGE_PREFIX + 'localSheetTime');
+  hideLocalSheetBanner();
+  console.log('🧹 Cleared local sheet data');
+}
+
+function refreshFromSource() {
+  if (!confirm('سيتم تحديث البيانات من Google Sheets وحذف التعديلات المحلية. هل تريد المتابعة؟')) return;
+  clearLocalSheetData();
+  fetchFromGoogleSheets();
 }
 
 function renderPaginationFor(id, totalPages, curPage, onPage) {
@@ -2671,6 +2784,44 @@ function exportCSV() {
   a.href = URL.createObjectURL(blob);
   a.download = 'quarterly_plan_data_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
+}
+
+function downloadBackup() {
+  if (!allData.length) return alert('لا توجد بيانات للنسخ الاحتياطي');
+  var backup = {
+    exportDate: new Date().toISOString(),
+    totalTasks: allData.length,
+    tasks: allData
+  };
+  var jsonStr = JSON.stringify(backup, null, 2);
+  var blob = new Blob([jsonStr], {type: 'application/json;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'quarterly_plan_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  showMgmtToast('تم تحميل النسخة الاحتياطية (' + allData.length + ' مهمة)', 'success');
+}
+
+function clearAllTasks() {
+  if (!allData.length) return alert('لا توجد مهام لحذفها');
+  var count = allData.length;
+  if (!confirm('⚠️ هل أنت متأكد من حذف جميع المهام (' + count + ' مهمة)؟\n\nتأكد من تحميل نسخة احتياطية أولاً!')) return;
+  if (!confirm('⚠️ تأكيد نهائي: سيتم حذف ' + count + ' مهمة نهائياً. هل تريد المتابعة؟')) return;
+
+  // Try to clear on Google Sheets too
+  if (SHEET_URL) {
+    fetch(SHEET_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteAll' })
+    }).catch(function() {});
+  }
+
+  allData = [];
+  applyFilters();
+  syncTestData();
+  saveLocalSheetData(); // Save empty state locally
+  showMgmtToast('تم حذف جميع المهام (' + count + ' مهمة)', 'success');
 }
 
 // ==================== DATA MANAGEMENT (CRUD) ====================
