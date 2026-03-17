@@ -547,6 +547,44 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .sortable-th span { font-size:11px; margin-right:2px; }
 .occupancy-warning { background:#fef2f2; }
 .occupancy-warning td { color:#dc2626; }
+.test-data-banner {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(245,158,11,0.15);
+}
+.test-data-banner .banner-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+}
+.test-data-banner .banner-text small {
+  font-weight: 400;
+  font-size: 12px;
+  color: #a16207;
+  display: block;
+  margin-top: 2px;
+}
+.test-data-banner button {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: 'Tajawal', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.test-data-banner button:hover { background: #dc2626; }
 </style>
 </head>
 <body>
@@ -620,6 +658,15 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <!-- MAIN CONTENT -->
 <div class="main" id="mainContent" style="display:none;">
+
+  <!-- Test Data Banner (hidden by default) -->
+  <div class="test-data-banner" id="testDataBanner" style="display:none;">
+    <div class="banner-text">
+      🧪 أنت تعرض بيانات تجريبية
+      <small id="testDataInfo">البيانات محفوظة محلياً — اضغط "حذف البيانات التجريبية" للعودة إلى البيانات الحقيقية</small>
+    </div>
+    <button onclick="clearTestData()">🗑️ حذف البيانات التجريبية</button>
+  </div>
 
   <!-- ===== DASHBOARD SECTION ===== -->
   <div class="section-view active" id="section-dashboard">
@@ -1345,6 +1392,15 @@ function resolveEmployeeDepartments(data) {
 
 // ==================== DATA LOADING ====================
 function loadData() {
+  // Check for persisted test data first
+  if (hasTestData()) {
+    if (loadTestDataFromStorage()) {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      return;
+    }
+  }
+  hideTestDataBanner();
+
   const loading = document.getElementById('loadingOverlay');
   loading.classList.remove('hidden');
   var callbackName = '_qplanCallback_' + Date.now();
@@ -2985,13 +3041,68 @@ function generateSampleTasks() {
 }
 
 function loadSampleData() {
+  if (!confirm('سيتم إنشاء بيانات تجريبية وحفظها محلياً. هل تريد المتابعة؟')) return;
   initializeFromCSV();
   allData = generateSampleTasks();
   resolveEmployeeDepartments(allData);
+
+  // Persist to localStorage
+  localStorage.setItem(STORAGE_PREFIX + 'testData', JSON.stringify(allData));
+  localStorage.setItem(STORAGE_PREFIX + 'testDataTime', new Date().toLocaleString('ar-SA'));
+
   applyFilters();
+  showTestDataBanner();
   var empCount = [...new Set(allData.map(function(r) { return r.name; }))].length;
   document.getElementById('lastUpdate').textContent = '🧪 بيانات تجريبية Q2 2026 — ' + allData.length + ' مهمة · ' + empCount + ' موظف | ' + new Date().toLocaleTimeString('ar-SA');
-  showMgmtToast('تم تحميل ' + allData.length + ' مهمة تجريبية Q2 2026 لجميع الموظفين (' + empCount + ')', 'success');
+  showMgmtToast('تم تحميل وحفظ ' + allData.length + ' مهمة تجريبية Q2 2026 لجميع الموظفين (' + empCount + ')', 'success');
+}
+
+function clearTestData() {
+  if (!confirm('سيتم حذف البيانات التجريبية والعودة إلى البيانات الحقيقية من Google Sheets. هل تريد المتابعة؟')) return;
+  localStorage.removeItem(STORAGE_PREFIX + 'testData');
+  localStorage.removeItem(STORAGE_PREFIX + 'testDataTime');
+  hideTestDataBanner();
+  loadData();
+  showMgmtToast('تم حذف البيانات التجريبية — جاري تحميل البيانات الحقيقية', 'success');
+}
+
+function hasTestData() {
+  return !!localStorage.getItem(STORAGE_PREFIX + 'testData');
+}
+
+function loadTestDataFromStorage() {
+  try {
+    var stored = localStorage.getItem(STORAGE_PREFIX + 'testData');
+    if (!stored) return false;
+    allData = JSON.parse(stored);
+    applyFilters();
+    showTestDataBanner();
+    var empCount = [...new Set(allData.map(function(r) { return r.name; }))].length;
+    var savedTime = localStorage.getItem(STORAGE_PREFIX + 'testDataTime') || '';
+    document.getElementById('lastUpdate').textContent = '🧪 بيانات تجريبية — ' + allData.length + ' مهمة · ' + empCount + ' موظف | تم الإنشاء: ' + savedTime;
+    return true;
+  } catch (e) {
+    console.error('Failed to load test data:', e);
+    localStorage.removeItem(STORAGE_PREFIX + 'testData');
+    return false;
+  }
+}
+
+function showTestDataBanner() {
+  var banner = document.getElementById('testDataBanner');
+  if (banner) {
+    banner.style.display = 'flex';
+    var savedTime = localStorage.getItem(STORAGE_PREFIX + 'testDataTime') || '';
+    var info = document.getElementById('testDataInfo');
+    if (info && savedTime) {
+      info.textContent = 'تم الإنشاء: ' + savedTime + ' — اضغط "حذف البيانات التجريبية" للعودة إلى البيانات الحقيقية';
+    }
+  }
+}
+
+function hideTestDataBanner() {
+  var banner = document.getElementById('testDataBanner');
+  if (banner) banner.style.display = 'none';
 }
 
 function renderDataManagement() {
