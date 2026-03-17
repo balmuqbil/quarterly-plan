@@ -2876,30 +2876,17 @@ function initializeFromCSV() {
 }
 
 // ===== Generate sample tasks =====
-function generateSampleTasks(taskCount, employeeCount, filterQuarter, filterYear) {
-  const mgmt = getMgmtData();
-  const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
-  const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
-  const employees = mgmt.employees.length ? mgmt.employees : CSV_EMPLOYEES;
+function generateSampleTasks() {
+  var mgmt = getMgmtData();
+  var platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  var taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
+  var allEmps = mgmt.employees.length ? mgmt.employees : CSV_EMPLOYEES;
 
-  // Pick random subset of employees
-  const shuffled = [...employees].sort(() => Math.random() - 0.5);
-  const selectedEmps = shuffled.slice(0, Math.min(employeeCount, employees.length));
+  var monthList = ['أبريل', 'مايو', 'يونيو']; // Q2
+  var taskYear = '2026';
+  var quarterName = 'الثاني';
 
-  const quarters = { 'يناير':'الأول','فبراير':'الأول','مارس':'الأول','أبريل':'الثاني','مايو':'الثاني','يونيو':'الثاني',
-    'يوليو':'الثالث','أغسطس':'الثالث','سبتمبر':'الثالث','أكتوبر':'الرابع','نوفمبر':'الرابع','ديسمبر':'الرابع' };
-  // Map filterQuarter from Q-notation to Arabic if needed
-  var qMap = { 'Q1':'الأول', 'Q2':'الثاني', 'Q3':'الثالث', 'Q4':'الرابع' };
-  var filterQ = filterQuarter ? (qMap[filterQuarter] || filterQuarter) : null;
-  var monthList;
-  if (filterQ) {
-    monthList = Object.keys(quarters).filter(function(m) { return quarters[m] === filterQ; });
-  } else {
-    monthList = Object.keys(quarters);
-  }
-  var taskYear = filterYear || '2026';
-  const occupancies = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
-  const descriptions = [
+  var descriptions = [
     'تطوير واجهة المستخدم','تحليل متطلبات النظام','اختبار الأداء','تصميم قاعدة البيانات',
     'تكامل الخدمات','مراجعة الكود','إصلاح الأخطاء','تحسين الأداء','توثيق النظام',
     'تصميم واجهة المستخدم','تطوير API','اختبار التكامل','نشر التحديثات','دعم فني',
@@ -2907,72 +2894,104 @@ function generateSampleTasks(taskCount, employeeCount, filterQuarter, filterYear
     'تدريب الفريق','إدارة المشروع','تصميم الحلول التقنية','تطوير التقارير',
     'صيانة النظام','ترحيل البيانات','تطوير لوحة التحكم','اختبار القبول'
   ];
-  const services = ['خدمة التسجيل','خدمة المحتوى','خدمة الإشعارات','خدمة التقييم','خدمة التكامل','خدمة البوابة','خدمة الدفع',''];
+  var services = ['خدمة التسجيل','خدمة المحتوى','خدمة الإشعارات','خدمة التقييم','خدمة التكامل','خدمة البوابة','خدمة الدفع',''];
 
-  const tasks = [];
-  // Track occupancy per employee per month: key = "empName|month"
-  var empMonthOcc = {};
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function randBetween(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+  // Round to nearest 5
+  function round5(v) { return Math.round(v / 5) * 5; }
 
-  function getKey(name, month) { return name + '|' + month; }
-  function getRemainingCapacity(name, month) {
-    var key = getKey(name, month);
-    return 120 - (empMonthOcc[key] || 0);
+  var tasks = [];
+
+  // Shuffle employees and assign categories:
+  // 50% → high occupancy (~80% target per month)
+  // 20% → underutilized (≤50% per month)
+  // 30% → moderate (55-75% per month)
+  var shuffled = [...allEmps].sort(function() { return Math.random() - 0.5; });
+  var total = shuffled.length;
+  var highCount = Math.ceil(total * 0.50);   // 50% high
+  var lowCount = Math.ceil(total * 0.20);    // 20% low
+  // rest = moderate
+
+  var highEmps = shuffled.slice(0, highCount);
+  var lowEmps = shuffled.slice(highCount, highCount + lowCount);
+  var modEmps = shuffled.slice(highCount + lowCount);
+
+  function createTasksForEmp(emp, targetOccPerMonth) {
+    monthList.forEach(function(month) {
+      var remaining = targetOccPerMonth;
+      var taskCount = 0;
+      // Split into 1-4 tasks per month
+      var numTasks = Math.max(1, Math.min(4, Math.floor(remaining / 20)));
+      // Add some randomness to number of tasks
+      numTasks = Math.max(1, numTasks + (Math.random() > 0.5 ? 1 : 0));
+      if (remaining < 20) numTasks = 1;
+
+      for (var t = 0; t < numTasks && remaining >= 20; t++) {
+        var occ;
+        if (t === numTasks - 1) {
+          // Last task gets the remainder
+          occ = round5(remaining);
+        } else {
+          // Distribute roughly evenly with some variance
+          var avg = remaining / (numTasks - t);
+          occ = round5(Math.max(20, Math.min(100, avg + randBetween(-10, 10))));
+        }
+        occ = Math.max(20, Math.min(Math.min(occ, remaining), 100));
+        remaining -= occ;
+
+        tasks.push({
+          name: emp.name,
+          department: emp.department,
+          section: emp.section,
+          platform: pick(platforms),
+          taskType: pick(taskTypes),
+          month: month,
+          quarter: quarterName,
+          year: taskYear,
+          occupancy: occ,
+          description: pick(descriptions),
+          service: pick(services),
+          timestamp: new Date().toLocaleString('ar-SA')
+        });
+      }
+    });
   }
-  function addOcc(name, month, occ) {
-    var key = getKey(name, month);
-    empMonthOcc[key] = (empMonthOcc[key] || 0) + occ;
-  }
 
-  var attempts = 0;
-  var maxAttempts = taskCount * 10; // safety valve
+  // High occupancy employees: 70-90% per month (target ~80%)
+  highEmps.forEach(function(emp) {
+    var target = round5(randBetween(70, 95));
+    createTasksForEmp(emp, target);
+  });
 
-  while (tasks.length < taskCount && attempts < maxAttempts) {
-    attempts++;
-    var emp = selectedEmps[Math.floor(Math.random() * selectedEmps.length)];
-    var month = monthList[Math.floor(Math.random() * monthList.length)];
-    var remaining = getRemainingCapacity(emp.name, month);
+  // Low occupancy employees: 20-50% per month
+  lowEmps.forEach(function(emp) {
+    var target = round5(randBetween(20, 50));
+    createTasksForEmp(emp, target);
+  });
 
-    if (remaining < 20) continue; // No room for a task (min 20%)
+  // Moderate employees: 55-70% per month
+  modEmps.forEach(function(emp) {
+    var target = round5(randBetween(55, 70));
+    createTasksForEmp(emp, target);
+  });
 
-    // Pick occupancy: random valid value between 25 and min(remaining, 100)
-    var maxOcc = Math.min(remaining, 100);
-    var possibleOccs = occupancies.filter(function(o) { return o >= 20 && o <= maxOcc; });
-    if (possibleOccs.length === 0) continue;
-
-    var occ = possibleOccs[Math.floor(Math.random() * possibleOccs.length)];
-
-    var task = {
-      name: emp.name,
-      department: emp.department,
-      section: emp.section,
-      platform: platforms[Math.floor(Math.random() * platforms.length)],
-      taskType: taskTypes[Math.floor(Math.random() * taskTypes.length)],
-      month: month,
-      quarter: quarters[month],
-      year: taskYear,
-      occupancy: occ,
-      description: descriptions[Math.floor(Math.random() * descriptions.length)],
-      service: services[Math.floor(Math.random() * services.length)],
-      timestamp: new Date().toLocaleString('ar-SA')
-    };
-    addOcc(emp.name, month, occ);
-    tasks.push(task);
-  }
-
-  if (tasks.length < taskCount) {
-    console.warn('⚠️ Generated only ' + tasks.length + '/' + taskCount + ' tasks due to 120% capacity constraints');
-  }
+  console.log('📊 Test data stats: ' + total + ' employees, ' + tasks.length + ' tasks');
+  console.log('   High (≥70%): ' + highEmps.length + ' (' + (highEmps.length/total*100).toFixed(0) + '%)');
+  console.log('   Low (≤50%): ' + lowEmps.length + ' (' + (lowEmps.length/total*100).toFixed(0) + '%)');
+  console.log('   Moderate: ' + modEmps.length + ' (' + (modEmps.length/total*100).toFixed(0) + '%)');
 
   return tasks;
 }
 
 function loadSampleData() {
   initializeFromCSV();
-  allData = generateSampleTasks(500, 50, 'Q2', '2026');
+  allData = generateSampleTasks();
   resolveEmployeeDepartments(allData);
   applyFilters();
-  document.getElementById('lastUpdate').textContent = '🧪 بيانات تجريبية Q2 2026 — ' + allData.length + ' مهمة | ' + new Date().toLocaleTimeString('ar-SA');
-  showMgmtToast('تم تحميل ' + allData.length + ' مهمة تجريبية Q2 2026 مع 50 موظف', 'success');
+  var empCount = [...new Set(allData.map(function(r) { return r.name; }))].length;
+  document.getElementById('lastUpdate').textContent = '🧪 بيانات تجريبية Q2 2026 — ' + allData.length + ' مهمة · ' + empCount + ' موظف | ' + new Date().toLocaleTimeString('ar-SA');
+  showMgmtToast('تم تحميل ' + allData.length + ' مهمة تجريبية Q2 2026 لجميع الموظفين (' + empCount + ')', 'success');
 }
 
 function renderDataManagement() {
