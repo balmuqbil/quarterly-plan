@@ -1826,7 +1826,7 @@ function updateKPIs() {
   document.getElementById('kpiHighChange').className = 'kpi-change ' + highClass;
   document.getElementById('kpiHighChange').textContent = highOccEmployees.size > 0 ? '⚠ اضغط للمراجعة' : '✓ ضمن الحدود';
 
-  // Capacity — use filtered months from current quarter/year filters
+  // Capacity — use filtered months from current quarter/year filters (only approved tasks)
   var kpiQuarter = document.getElementById('quarterFilter').value;
   var kpiYear = document.getElementById('yearFilter').value;
   var kpiMonths = (kpiQuarter !== 'all') ? (QUARTER_MONTHS[kpiQuarter] || MONTHS.slice()) : MONTHS.slice();
@@ -1834,7 +1834,8 @@ function updateKPIs() {
   var capData = getCapacityDataForMonths(kpiMonths, kpiFilterYear);
   var totalActive = Object.values(capData).reduce(function(s, dept) { return s + dept.totalActiveEmployees; }, 0);
   var totalCapacity = Object.values(capData).reduce(function(s, dept) { return s + dept.totalCapacity; }, 0);
-  var totalUsed = d.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
+  var approvedForCap = d.filter(function(r) { return (r.status || 'pending') === 'approved'; });
+  var totalUsed = approvedForCap.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
   var capUtil = totalCapacity > 0 ? ((totalUsed / totalCapacity) * 100).toFixed(1) : '—';
   document.getElementById('kpiCapacity').textContent = totalCapacity > 0 ? capUtil + '%' : '—';
   var capEl = document.getElementById('kpiCapChange');
@@ -4731,8 +4732,8 @@ function renderDeptsAndSections() {
   // Get dynamic capacity based on employee data for the selected months
   var capData = getCapacityDataForMonths(filterMonths, filterYear);
 
-  // Filter data locally based on this page's filters
-  var localData = allData;
+  // Filter data locally based on this page's filters — only approved tasks
+  var localData = allData.filter(function(r) { return (r.status || 'pending') === 'approved'; });
   if (deptYearVal !== 'all') localData = localData.filter(function(r) { return String(r.year) === deptYearVal; });
   if (deptQtrVal !== 'all') localData = localData.filter(function(r) { return r.quarter === deptQtrVal; });
 
@@ -4924,9 +4925,12 @@ function showCapacityDrill() {
   // Get dynamic capacity
   var capData = getCapacityDataForMonths(filterMonths, filterYear);
 
+  // Only count approved tasks for capacity calculations
+  var approvedData = filteredData.filter(function(r) { return (r.status || 'pending') === 'approved'; });
+
   var totalActive = Object.values(capData).reduce(function(s,d){return s+d.totalActiveEmployees;},0);
   var totalCap = Object.values(capData).reduce(function(s,d){return s+d.totalCapacity;},0);
-  var totalUsed = filteredData.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+  var totalUsed = approvedData.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
   var util = totalCap > 0 ? (totalUsed/totalCap*100).toFixed(1) : 0;
 
   var html = '<div class="drill-stats-row">';
@@ -4943,7 +4947,7 @@ function showCapacityDrill() {
   var deptStats = {};
   Object.entries(capData).forEach(function(entry) {
     var dept = entry[0], d = entry[1];
-    var used = filteredData.filter(function(r){return r.department === dept;}).reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+    var used = approvedData.filter(function(r){return r.department === dept;}).reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
     var cap = d.totalCapacity;
     var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
     var color = getOccColor(pct);
@@ -4961,7 +4965,7 @@ function showCapacityDrill() {
     var dept = entry[0], d = entry[1];
     Object.entries(d.sections).forEach(function(secEntry) {
       var sec = secEntry[0], s = secEntry[1];
-      var used = filteredData.filter(function(r){return r.department === dept && r.section === sec;}).reduce(function(sum,r){return sum+(parseFloat(r.occupancy)||0);},0);
+      var used = approvedData.filter(function(r){return r.department === dept && r.section === sec;}).reduce(function(sum,r){return sum+(parseFloat(r.occupancy)||0);},0);
       var cap = s.totalCapacity;
       var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
       var color = getOccColor(pct);
