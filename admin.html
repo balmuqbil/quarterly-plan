@@ -1047,6 +1047,27 @@ const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','
 const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
 const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','Other':'💻'};
 
+// ==================== OCCUPANCY COLOR (consistent everywhere) ====================
+// ≤90% green, 90-100% orange, >100% red
+function getOccColor(val) {
+  var v = parseFloat(val) || 0;
+  if (v > 100) return '#ef4444';
+  if (v > 90) return '#f59e0b';
+  return '#10b981';
+}
+function getOccColorRgba(val) {
+  var v = parseFloat(val) || 0;
+  if (v > 100) return 'rgba(239,68,68,0.6)';
+  if (v > 90) return 'rgba(245,158,11,0.6)';
+  return 'rgba(16,185,129,0.6)';
+}
+function getOccColorVar(val) {
+  var v = parseFloat(val) || 0;
+  if (v > 100) return 'var(--danger)';
+  if (v > 90) return 'var(--warning)';
+  return 'var(--success)';
+}
+
 // ==================== SECURITY UTILITIES ====================
 function escapeHtml(str) {
   if (str == null) return '';
@@ -1417,7 +1438,7 @@ function updateKPIs() {
   const capEl = document.getElementById('kpiCapChange');
   if (totalCapacity > 0) {
     capEl.textContent = totalHC + ' موظف × ' + activeMonths + ' شهر';
-    capEl.className = 'kpi-change ' + (capUtil > 90 ? 'down' : capUtil > 70 ? 'neutral' : 'up');
+    capEl.className = 'kpi-change ' + (capUtil > 100 ? 'down' : capUtil > 90 ? 'neutral' : 'up');
   } else {
     capEl.textContent = 'لم يتم تحديد السعة';
     capEl.className = 'kpi-change neutral';
@@ -1527,7 +1548,7 @@ function renderEmployeesSection() {
   var grid = document.getElementById('employeesGrid');
   grid.innerHTML = employees.map(function(e) {
     var avgOcc = (e.totalOcc / e.tasks.length).toFixed(0);
-    var barColor = avgOcc >= 80 ? '#ef4444' : avgOcc >= 50 ? '#f59e0b' : '#10b981';
+    var barColor = getOccColor(avgOcc);
     return '<div class="detail-card" onclick="showEmployeeDrill(\'' + escapeJS(e.name) + '\')">' +
       '<div class="detail-card-header">' +
         '<div class="detail-card-name">' + escapeHtml(e.name) + '</div>' +
@@ -1745,7 +1766,7 @@ function renderTasksSection() {
 
   document.getElementById('tasksTableBody').innerHTML = pageData.map((r,i) => {
     const occ = parseFloat(r.occupancy)||0;
-    const occColor = occ >= 80 ? '#ef4444' : occ >= 50 ? '#f59e0b' : '#10b981';
+    const occClr = getOccColor(occ);
     const idx = allData.indexOf(r);
     var empMonthKey = (r.name||'') + '|' + (r.month||'') + '|' + (r.year||'');
     var totalOcc = empMonthTotals[empMonthKey] || 0;
@@ -1758,7 +1779,7 @@ function renderTasksSection() {
       <td><span class="badge badge-dept">${escapeHtml(r.department||'')}</span></td>
       <td><span class="badge badge-platform">${escapeHtml(r.platform||'')}</span></td>
       <td><span class="badge badge-task">${escapeHtml(r.taskType||'')}</span></td>
-      <td>${occ}%${isOverloaded ? ' ⚠️' : ''} <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
+      <td>${occ}%${isOverloaded ? ' ⚠️' : ''} <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occClr};"></div></div></td>
       <td>${escapeHtml(r.month||'')}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
       <td>
@@ -2129,7 +2150,7 @@ function showEmployeeDrill(name) {
   <table class="drill-table"><thead><tr><th>الشهر</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th></tr></thead><tbody>`;
   empData.forEach(r => {
     const occ = parseFloat(r.occupancy)||0;
-    const c = occ>=80?'#ef4444':occ>=50?'#f59e0b':'#10b981';
+    const c = getOccColor(occ);
     html += `<tr><td>${escapeHtml(r.month)}</td><td><span class="badge badge-platform">${escapeHtml(r.platform)}</span></td><td><span class="badge badge-task">${escapeHtml(r.taskType)}</span></td>
     <td><span style="color:${c};font-weight:700;">${occ}%</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td></tr>`;
   });
@@ -2193,7 +2214,7 @@ function showPlatformDrill(platform) {
   Object.entries(empStats).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,s]) => {
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
       <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(s.department)}</span></td><td>${s.count}</td>
-      <td><span style="color:${s.occ>=100?'#ef4444':'#10b981'};font-weight:700">${s.occ.toFixed(0)}%</span></td></tr>`;
+      <td><span style="color:${getOccColor(s.occ)};font-weight:700">${s.occ.toFixed(0)}%</span></td></tr>`;
   });
   html += '</tbody></table></div>';
 
@@ -2245,9 +2266,9 @@ function showOccupancyDrill() {
     empOcc[r.name].count++;
   });
   let html = `<div class="drill-stats-row">
-    <div class="drill-stat-card"><div class="value" style="color:#10b981">${Object.values(empOcc).filter(e=>(e.sum/e.count)<50).length}</div><div class="label">إشغال منخفض (&lt;50%)</div></div>
-    <div class="drill-stat-card"><div class="value" style="color:#f59e0b">${Object.values(empOcc).filter(e=>{const a=e.sum/e.count;return a>=50&&a<80;}).length}</div><div class="label">إشغال متوسط (50-80%)</div></div>
-    <div class="drill-stat-card"><div class="value" style="color:#ef4444">${Object.values(empOcc).filter(e=>(e.sum/e.count)>=80).length}</div><div class="label">إشغال مرتفع (≥80%)</div></div>
+    <div class="drill-stat-card"><div class="value" style="color:#10b981">${Object.values(empOcc).filter(e=>(e.sum/e.count)<=90).length}</div><div class="label">إشغال طبيعي (≤90%)</div></div>
+    <div class="drill-stat-card"><div class="value" style="color:#f59e0b">${Object.values(empOcc).filter(e=>{const a=e.sum/e.count;return a>90&&a<=100;}).length}</div><div class="label">إشغال مرتفع (90-100%)</div></div>
+    <div class="drill-stat-card"><div class="value" style="color:#ef4444">${Object.values(empOcc).filter(e=>(e.sum/e.count)>100).length}</div><div class="label">إشغال مفرط (&gt;100%)</div></div>
   </div>
   <div class="drill-chart-container" style="height:350px;"><canvas id="drillOccDist"></canvas></div>`;
   document.getElementById('drillBody').innerHTML = html;
@@ -2255,7 +2276,7 @@ function showOccupancyDrill() {
   setTimeout(() => {
     const sorted = Object.entries(empOcc).map(([n,d])=>({name:n,avg:(d.sum/d.count).toFixed(1)})).sort((a,b)=>b.avg-a.avg).slice(0,20);
     drillCharts.occDist = new Chart(document.getElementById('drillOccDist'), {
-      type:'bar', data:{labels:sorted.map(s=>s.name), datasets:[{data:sorted.map(s=>s.avg),backgroundColor:sorted.map(s=>s.avg>=80?'#ef4444':s.avg>=50?'#f59e0b':'#10b981'),borderRadius:6}]},
+      type:'bar', data:{labels:sorted.map(s=>s.name), datasets:[{data:sorted.map(s=>s.avg),backgroundColor:sorted.map(s=>getOccColor(s.avg)),borderRadius:6}]},
       options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
         scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}}}}
     });
@@ -2277,7 +2298,7 @@ function showHighOccDrill() {
     Object.entries(d.months).filter(([_,v])=>v>=100).sort((a,b)=>b[1]-a[1]).forEach(([month,occ]) => {
       html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
         <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(d.department)}</span></td>
-        <td>${escapeHtml(month)}</td><td style="color:#ef4444;font-weight:700">${occ.toFixed(0)}%</td></tr>`;
+        <td>${escapeHtml(month)}</td><td style="color:${getOccColor(occ)};font-weight:700">${occ.toFixed(0)}%</td></tr>`;
     });
   });
   html += '</tbody></table></div>';
@@ -2305,7 +2326,7 @@ function showDepartmentsDrill() {
     const totalCap = hc * 100 * activeMonths;
     const capPct = totalCap > 0 ? (d.totalOcc / totalCap * 100).toFixed(1) : '—';
     html += `<tr><td style="font-weight:600">${escapeHtml(dept)}</td><td>${d.employees.size}</td><td>${d.tasks}</td>
-      <td><span style="color:${avg>=80?'#ef4444':avg>=50?'#f59e0b':'#10b981'};font-weight:700">${avg}%</span></td>
+      <td><span style="color:${getOccColor(avg)};font-weight:700">${avg}%</span></td>
       <td>${hc}</td><td>${capPct}${capPct !== '—' ? '%' : ''}</td></tr>`;
   });
   html += '</tbody></table></div>';
@@ -2398,7 +2419,7 @@ function showDepartmentMembersDrill(department) {
   Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,d]) => {
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
       <td style="font-weight:600">${escapeHtml(name)}</td><td>${d.count}</td>
-      <td><span style="color:${d.occ>=200?'#ef4444':'#10b981'};font-weight:700">${d.occ.toFixed(0)}%</span></td><td>${d.months.size}</td></tr>`;
+      <td><span style="color:${getOccColor(d.occ)};font-weight:700">${d.occ.toFixed(0)}%</span></td><td>${d.months.size}</td></tr>`;
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
@@ -2406,7 +2427,7 @@ function showDepartmentMembersDrill(department) {
   setTimeout(() => {
     const names = Object.keys(empMap);
     drillCharts.teamMembers = new Chart(document.getElementById('drillTeamMembers'), {
-      type:'bar',data:{labels:names,datasets:[{data:names.map(n=>empMap[n].occ),backgroundColor:names.map(n=>empMap[n].occ>=200?'#ef4444':empMap[n].occ>=100?'#f59e0b':'#10b981'),borderRadius:6}]},
+      type:'bar',data:{labels:names,datasets:[{data:names.map(n=>empMap[n].occ),backgroundColor:names.map(n=>getOccColor(empMap[n].occ)),borderRadius:6}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
         scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
     });
@@ -2453,7 +2474,7 @@ function showMonthDrill(month) {
   Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,d]) => {
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
       <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(d.department)}</span></td><td>${d.count}</td>
-      <td><span style="color:${d.occ>=100?'#ef4444':'#10b981'};font-weight:700">${d.occ.toFixed(0)}%</span></td></tr>`;
+      <td><span style="color:${getOccColor(d.occ)};font-weight:700">${d.occ.toFixed(0)}%</span></td></tr>`;
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
@@ -2461,7 +2482,7 @@ function showMonthDrill(month) {
   setTimeout(() => {
     const sorted = Object.entries(empMap).sort((a,b)=>b[1].occ-a[1].occ).slice(0,15);
     drillCharts.month = new Chart(document.getElementById('drillMonth'), {
-      type:'bar',data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1].occ),backgroundColor:sorted.map(s=>s[1].occ>=100?'#ef4444':s[1].occ>=70?'#f59e0b':'#10b981'),borderRadius:6}]},
+      type:'bar',data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1].occ),backgroundColor:sorted.map(s=>getOccColor(s[1].occ)),borderRadius:6}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
         scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
     });
@@ -2557,7 +2578,7 @@ function renderTable() {
   const pageData = data.slice(start, start + PAGE_SIZE);
   tbody.innerHTML = pageData.map((r, i) => {
     const occ = parseFloat(r.occupancy)||0;
-    const occColor = occ>=80?'#ef4444':occ>=50?'#f59e0b':'#10b981';
+    const occClr = getOccColor(occ);
     return `<tr style="cursor:pointer" onclick="showEmployeeDrill('` + escapeJS(r.name||'') + `')">
       <td style="color:var(--text-light)">${start+i+1}</td>
       <td style="font-weight:600">${escapeHtml(r.name||'')}</td>
@@ -2566,7 +2587,7 @@ function renderTable() {
       <td>${escapeHtml(r.month||'')}</td><td>${escapeHtml(r.quarter||'')}</td><td>${escapeHtml(r.year||'')}</td>
       <td><span class="badge badge-platform">${escapeHtml(r.platform||'')}</span></td>
       <td><span class="badge badge-task">${escapeHtml(r.taskType||'')}</span></td>
-      <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occColor};"></div></div></td>
+      <td>${occ}% <div class="occupancy-bar"><div class="occupancy-fill" style="width:${Math.min(occ,120)/120*100}%;background:${occClr};"></div></div></td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
       <td style="font-size:11px;color:var(--text-light);direction:ltr;text-align:left;">${escapeHtml(r.timestamp||'')}</td>
     </tr>`;
@@ -3321,7 +3342,7 @@ function renderDeptsAndSections() {
   html += '<div class="kpi-card animate-in delay-2"><div class="kpi-icon">👥</div><div class="kpi-value">' + totalHC + '</div><div class="kpi-label">إجمالي HC</div></div>';
   html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📦</div><div class="kpi-value">' + totalCap + '%</div><div class="kpi-label">السعة (' + filterLabel + ')</div></div>';
   html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📈</div><div class="kpi-value">' + totalUsed.toFixed(0) + '%</div><div class="kpi-label">الإشغال الفعلي</div></div>';
-  var utilColor = totalUtil > 90 ? 'var(--danger)' : totalUtil > 70 ? 'var(--warning)' : 'var(--success)';
+  var utilColor = getOccColorVar(totalUtil);
   html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📊</div><div class="kpi-value" style="color:' + utilColor + '">' + totalUtil + '%</div><div class="kpi-label">نسبة الاستغلال</div></div>';
   html += '</div>';
 
@@ -3331,7 +3352,7 @@ function renderDeptsAndSections() {
     var deptUsed = usageByDept[dept] || 0;
     var deptCapTotal = deptCap.monthlyCapacity * numMonths;
     var deptUtil = deptCapTotal > 0 ? (deptUsed / deptCapTotal * 100).toFixed(1) : 0;
-    var deptUtilColor = deptUtil > 90 ? '#ef4444' : deptUtil > 70 ? '#f59e0b' : '#10b981';
+    var deptUtilColor = getOccColor(deptUtil);
     var deptEmpCount = empCountByDept[dept] ? empCountByDept[dept].size : 0;
     var deptSecs = sections[dept] || [];
 
@@ -3364,7 +3385,7 @@ function renderDeptsAndSections() {
         var secUsed = usageByDeptSec[secKey] || 0;
         var secCapTotal = secCap.monthlyCapacity * numMonths;
         var secUtil = secCapTotal > 0 ? (secUsed / secCapTotal * 100).toFixed(1) : 0;
-        var secColor = secUtil > 90 ? '#ef4444' : secUtil > 70 ? '#f59e0b' : '#10b981';
+        var secColor = getOccColor(secUtil);
         var secEmpCount = empCountByDeptSec[secKey] ? empCountByDeptSec[secKey].size : 0;
 
         html += '<tr>';
@@ -3409,7 +3430,7 @@ function renderDeptsAndSections() {
           { label: 'السعة', data: capValues, backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
           { label: 'الإشغال الفعلي', data: usedValues, backgroundColor: usedValues.map(function(u, i) {
             var pct = capValues[i] > 0 ? u / capValues[i] * 100 : 0;
-            return pct > 90 ? 'rgba(239,68,68,0.6)' : pct > 70 ? 'rgba(245,158,11,0.6)' : 'rgba(16,185,129,0.6)';
+            return getOccColorRgba(pct);
           }), borderRadius: 6 }
         ]
       },
@@ -3464,7 +3485,7 @@ function showCapacityDrill() {
     const used = filteredData.filter(r => r.department === dept).reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0);
     const cap = d.monthlyCapacity * numMonths;
     const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
-    const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
+    const color = getOccColor(pct);
     deptStats[dept] = { used, cap, pct, hc: d.totalHeadCount };
     html += '<tr><td style="font-weight:600">' + escapeHtml(dept) + '</td><td>' + d.totalHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
     html += '<td><span style="color:' + color + ';font-weight:700">' + pct + '%</span><div class="capacity-bar"><div class="capacity-fill" style="width:' + Math.min(pct,100) + '%;background:' + color + '"></div></div></td></tr>';
@@ -3479,7 +3500,7 @@ function showCapacityDrill() {
       const used = filteredData.filter(r => r.department === dept && r.section === sec).reduce((sum,r) => sum + (parseFloat(r.occupancy)||0), 0);
       const cap = s.monthlyCapacity * numMonths;
       const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
-      const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
+      const color = getOccColor(pct);
       html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.headCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
     });
   });
@@ -3496,7 +3517,7 @@ function showCapacityDrill() {
         labels: depts,
         datasets: [
           { label: 'السعة', data: depts.map(d => deptStats[d].cap), backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
-          { label: 'الاستخدام', data: depts.map(d => deptStats[d].used), backgroundColor: depts.map(d => deptStats[d].pct > 90 ? 'rgba(239,68,68,0.6)' : deptStats[d].pct > 70 ? 'rgba(245,158,11,0.6)' : 'rgba(16,185,129,0.6)'), borderRadius: 6 }
+          { label: 'الاستخدام', data: depts.map(d => deptStats[d].used), backgroundColor: depts.map(d => getOccColorRgba(deptStats[d].pct)), borderRadius: 6 }
         ]
       },
       options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:'Tajawal'}}}}, scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}} }
