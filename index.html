@@ -700,15 +700,16 @@
 <script>
 // ===== CONFIG =====
 const STORAGE_PREFIX = 'qplan_';
+const ADMIN_PREFIX = 'qplan_admin_';
 // Firebase config (loaded from admin settings in localStorage)
 var FIREBASE_CONFIG = {
-  apiKey: localStorage.getItem(STORAGE_PREFIX + 'fb_apiKey') || '',
-  authDomain: localStorage.getItem(STORAGE_PREFIX + 'fb_authDomain') || '',
-  databaseURL: localStorage.getItem(STORAGE_PREFIX + 'fb_databaseURL') || '',
-  projectId: localStorage.getItem(STORAGE_PREFIX + 'fb_projectId') || '',
-  storageBucket: localStorage.getItem(STORAGE_PREFIX + 'fb_storageBucket') || '',
-  messagingSenderId: localStorage.getItem(STORAGE_PREFIX + 'fb_messagingSenderId') || '',
-  appId: localStorage.getItem(STORAGE_PREFIX + 'fb_appId') || ''
+  apiKey: localStorage.getItem(ADMIN_PREFIX + 'fb_apiKey') || '',
+  authDomain: localStorage.getItem(ADMIN_PREFIX + 'fb_authDomain') || '',
+  databaseURL: localStorage.getItem(ADMIN_PREFIX + 'fb_databaseURL') || '',
+  projectId: localStorage.getItem(ADMIN_PREFIX + 'fb_projectId') || '',
+  storageBucket: localStorage.getItem(ADMIN_PREFIX + 'fb_storageBucket') || '',
+  messagingSenderId: localStorage.getItem(ADMIN_PREFIX + 'fb_messagingSenderId') || '',
+  appId: localStorage.getItem(ADMIN_PREFIX + 'fb_appId') || ''
 };
 var firebaseApp = null;
 var firebaseDb = null;
