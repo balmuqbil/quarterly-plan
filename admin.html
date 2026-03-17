@@ -1125,7 +1125,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.6';
+const ADMIN_VERSION = 'v20260317.7';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -3426,15 +3426,30 @@ function renderDataManagement() {
             const name = typeof emp === 'string' ? emp : emp.name;
             const dept = typeof emp === 'string' ? '' : (emp.department || '');
             const sec = typeof emp === 'string' ? '' : (emp.section || '');
-            return `<div class="mgmt-item" id="mgmt-item-employees-${i}">
-              <div class="mgmt-emp-info">
+            const startDate = (typeof emp === 'object' ? emp.startDate : '') || '';
+            const endDate = (typeof emp === 'object' ? emp.endDate : '') || '';
+            const absences = (typeof emp === 'object' && Array.isArray(emp.absences)) ? emp.absences : [];
+            const isActive = !endDate;
+            const statusBadge = isActive
+              ? '<span class="badge" style="background:#dcfce7;color:#166534;font-size:10px;">نشط</span>'
+              : '<span class="badge" style="background:#fef2f2;color:#991b1b;font-size:10px;">غير نشط</span>';
+            const dateInfo = startDate ? '<span style="font-size:11px;color:var(--text-light);">📅 ' + escapeHtml(startDate) + (endDate ? ' → ' + escapeHtml(endDate) : ' → الآن') + '</span>' : '';
+            const absInfo = absences.length > 0 ? '<span style="font-size:11px;color:#f59e0b;" title="' + absences.map(a => escapeAttr(a.from + ' → ' + a.to + (a.reason ? ' (' + a.reason + ')' : ''))).join('&#10;') + '">🔴 ' + absences.length + ' فترة غياب</span>' : '';
+            return `<div class="mgmt-item" id="mgmt-item-employees-${i}" style="flex-wrap:wrap;">
+              <div class="mgmt-emp-info" style="flex:1;min-width:200px;">
                 <span class="mgmt-item-name" id="mgmt-name-employees-${i}">${escapeHtml(name)}</span>
+                ${statusBadge}
                 ${dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : ''}
                 ${sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : ''}
               </div>
-              <div class="mgmt-item-actions">
-                <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',${i})">✏️</button>
-                <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',${i})">🗑️</button>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                ${dateInfo}
+                ${absInfo}
+                <div class="mgmt-item-actions">
+                  <button class="mgmt-action-btn" title="غياب" onclick="manageAbsences(${i})" style="font-size:14px;">🔴</button>
+                  <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',${i})">✏️</button>
+                  <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',${i})">🗑️</button>
+                </div>
               </div>
             </div>`;
           }).join('')}
@@ -3651,11 +3666,23 @@ function editMgmtItem(key, index) {
     var currentName = typeof emp === 'string' ? emp : emp.name;
     var currentDept = (typeof emp === 'object' ? emp.department : '') || '';
     var currentSec = (typeof emp === 'object' ? emp.section : '') || '';
+    var currentStart = (typeof emp === 'object' ? emp.startDate : '') || '';
+    var currentEnd = (typeof emp === 'object' ? emp.endDate : '') || '';
     var depts = data.departments || [];
     var secs = (data.sections || {})[currentDept] || [];
     var itemEl = document.getElementById('mgmt-item-employees-' + index);
     if (!itemEl) return;
-    var editHtml = '<div class="mgmt-edit-emp-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;padding:8px 0;">';
+    // Build month options for date selects
+    var monthOpts = '<option value="">— اختر —</option>';
+    var years = ['2025','2026','2027','2028'];
+    years.forEach(function(y) {
+      MONTHS.forEach(function(m) {
+        var val = m + ' ' + y;
+        monthOpts += '<option value="' + escapeAttr(val) + '">' + escapeHtml(val) + '</option>';
+      });
+    });
+    var editHtml = '<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding:8px 0;">';
+    editHtml += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
     editHtml += '<input class="mgmt-edit-input" style="flex:1;min-width:140px;" value="' + escapeAttr(currentName) + '" id="mgmt-edit-employees-' + index + '" placeholder="اسم الموظف">';
     editHtml += '<select id="mgmt-edit-dept-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:120px;padding:8px;" onchange="updateEditSectionDropdown(' + index + ')">';
     editHtml += '<option value="">الإدارة</option>';
@@ -3669,9 +3696,17 @@ function editMgmtItem(key, index) {
       editHtml += '<option value="' + escapeAttr(s) + '"' + (s === currentSec ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
     });
     editHtml += '</select>';
-    editHtml += '<button class="mgmt-add-btn" style="padding:6px 12px;" onclick="saveEditMgmt(\'employees\',' + index + ')">✅</button>';
-    editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 12px;" onclick="renderDataManagement()">❌</button>';
     editHtml += '</div>';
+    editHtml += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+    editHtml += '<label style="font-size:12px;color:var(--text-light);min-width:70px;">تاريخ البدء:</label>';
+    editHtml += '<select id="mgmt-edit-start-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:140px;padding:8px;">' + monthOpts.replace('value="' + escapeAttr(currentStart) + '"', 'value="' + escapeAttr(currentStart) + '" selected') + '</select>';
+    editHtml += '<label style="font-size:12px;color:var(--text-light);min-width:80px;">تاريخ الانتهاء:</label>';
+    editHtml += '<select id="mgmt-edit-end-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:140px;padding:8px;"><option value="">نشط (بدون تاريخ)</option>' + monthOpts.replace('value="' + escapeAttr(currentEnd) + '"', 'value="' + escapeAttr(currentEnd) + '" selected') + '</select>';
+    editHtml += '</div>';
+    editHtml += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+    editHtml += '<button class="mgmt-add-btn" style="padding:6px 16px;" onclick="saveEditMgmt(\'employees\',' + index + ')">✅ حفظ</button>';
+    editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 16px;" onclick="renderDataManagement()">❌ إلغاء</button>';
+    editHtml += '</div></div>';
     itemEl.innerHTML = editHtml;
     document.getElementById('mgmt-edit-employees-' + index).focus();
   } else {
@@ -3707,10 +3742,17 @@ function saveEditMgmt(key, index) {
     }
     var deptSelect = document.getElementById('mgmt-edit-dept-' + index);
     var secSelect = document.getElementById('mgmt-edit-section-' + index);
+    var startSelect = document.getElementById('mgmt-edit-start-' + index);
+    var endSelect = document.getElementById('mgmt-edit-end-' + index);
+    var existingEmp = data.employees[index];
+    var existingAbsences = (typeof existingEmp === 'object' && Array.isArray(existingEmp.absences)) ? existingEmp.absences : [];
     data.employees[index] = {
       name: val,
       department: sanitizeInput(deptSelect ? deptSelect.value : ''),
-      section: sanitizeInput(secSelect ? secSelect.value : '')
+      section: sanitizeInput(secSelect ? secSelect.value : ''),
+      startDate: startSelect ? startSelect.value : '',
+      endDate: endSelect ? endSelect.value : '',
+      absences: existingAbsences
     };
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
@@ -3725,6 +3767,161 @@ function saveEditMgmt(key, index) {
 }
 
 // Section CRUD
+// ==================== Absence Management ====================
+function manageAbsences(empIndex) {
+  var data = getMgmtData();
+  var emp = data.employees[empIndex];
+  if (!emp || typeof emp === 'string') return;
+  var absences = Array.isArray(emp.absences) ? emp.absences : [];
+  var name = emp.name;
+
+  // Build month options
+  var monthOpts = '<option value="">— اختر —</option>';
+  ['2025','2026','2027','2028'].forEach(function(y) {
+    MONTHS.forEach(function(m) {
+      var val = m + ' ' + y;
+      monthOpts += '<option value="' + escapeAttr(val) + '">' + escapeHtml(val) + '</option>';
+    });
+  });
+
+  var html = '<div style="max-width:500px;margin:0 auto;">';
+  html += '<h3 style="margin:0 0 16px;font-size:18px;">🔴 فترات الغياب — ' + escapeHtml(name) + '</h3>';
+
+  // List existing absences
+  if (absences.length > 0) {
+    html += '<div style="margin-bottom:16px;">';
+    absences.forEach(function(a, ai) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fef2f2;border-radius:8px;margin-bottom:6px;">';
+      html += '<span style="flex:1;font-size:13px;">📅 ' + escapeHtml(a.from) + ' → ' + escapeHtml(a.to);
+      if (a.reason) html += ' <span style="color:var(--text-light);">(' + escapeHtml(a.reason) + ')</span>';
+      html += '</span>';
+      html += '<button class="mgmt-action-btn delete" onclick="deleteAbsence(' + empIndex + ',' + ai + ')" title="حذف">🗑️</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<p style="color:var(--text-light);font-size:13px;margin-bottom:16px;">لا توجد فترات غياب مسجلة</p>';
+  }
+
+  // Add new absence form
+  html += '<div style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">';
+  html += '<div style="font-weight:600;font-size:13px;margin-bottom:8px;">+ إضافة فترة غياب</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  html += '<label style="font-size:12px;min-width:30px;">من:</label>';
+  html += '<select id="absence-from" style="flex:1;min-width:130px;padding:6px;border:1px solid #d1d5db;border-radius:6px;">' + monthOpts + '</select>';
+  html += '<label style="font-size:12px;min-width:30px;">إلى:</label>';
+  html += '<select id="absence-to" style="flex:1;min-width:130px;padding:6px;border:1px solid #d1d5db;border-radius:6px;">' + monthOpts + '</select>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;margin-top:8px;align-items:center;">';
+  html += '<input id="absence-reason" placeholder="السبب (اختياري)" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px;">';
+  html += '<button class="mgmt-add-btn" onclick="addAbsence(' + empIndex + ')">+ إضافة</button>';
+  html += '</div></div></div>';
+
+  openDrill('🔴 إدارة الغياب', escapeHtml(name) + ' — ' + escapeHtml(emp.department || '') + ' / ' + escapeHtml(emp.section || ''));
+  document.getElementById('drillBody').innerHTML = html;
+}
+
+function addAbsence(empIndex) {
+  var from = document.getElementById('absence-from').value;
+  var to = document.getElementById('absence-to').value;
+  var reason = document.getElementById('absence-reason').value.trim();
+  if (!from || !to) { showMgmtToast('يرجى اختيار تاريخ البدء والانتهاء', 'error'); return; }
+  // Validate from <= to
+  if (monthToIndex(from) > monthToIndex(to)) { showMgmtToast('تاريخ البدء يجب أن يكون قبل تاريخ الانتهاء', 'error'); return; }
+
+  var data = getMgmtData();
+  var emp = data.employees[empIndex];
+  if (!emp) return;
+  if (!Array.isArray(emp.absences)) emp.absences = [];
+  emp.absences.push({ from: from, to: to, reason: reason });
+  saveMgmtList('employees', data.employees);
+  manageAbsences(empIndex); // Refresh the dialog
+  showMgmtToast('تم إضافة فترة الغياب', 'success');
+}
+
+function deleteAbsence(empIndex, absIndex) {
+  var data = getMgmtData();
+  var emp = data.employees[empIndex];
+  if (!emp || !Array.isArray(emp.absences)) return;
+  emp.absences.splice(absIndex, 1);
+  saveMgmtList('employees', data.employees);
+  manageAbsences(empIndex); // Refresh
+  renderDataManagement();
+  showMgmtToast('تم حذف فترة الغياب', 'success');
+}
+
+// Convert "monthName year" to a sortable index
+function monthToIndex(dateStr) {
+  if (!dateStr) return -1;
+  var parts = dateStr.split(' ');
+  var m = MONTHS.indexOf(parts[0]);
+  var y = parseInt(parts[1]) || 2026;
+  return y * 12 + m;
+}
+
+// Check if an employee is active (not absent) in a given month
+function isEmployeeActiveInMonth(emp, monthName, year) {
+  if (typeof emp === 'string') return true;
+  var targetIdx = monthToIndex(monthName + ' ' + year);
+  if (targetIdx < 0) return true;
+
+  // Check employment period
+  if (emp.startDate) {
+    var startIdx = monthToIndex(emp.startDate);
+    if (startIdx > targetIdx) return false; // hasn't started yet
+  }
+  if (emp.endDate) {
+    var endIdx = monthToIndex(emp.endDate);
+    if (endIdx < targetIdx) return false; // already left
+  }
+
+  // Check absences
+  if (Array.isArray(emp.absences)) {
+    for (var i = 0; i < emp.absences.length; i++) {
+      var a = emp.absences[i];
+      var fromIdx = monthToIndex(a.from);
+      var toIdx = monthToIndex(a.to);
+      if (targetIdx >= fromIdx && targetIdx <= toIdx) return false; // on leave
+    }
+  }
+  return true;
+}
+
+// Check if employee is employed (ignoring absences) in a given month
+function isEmployeeEmployedInMonth(emp, monthName, year) {
+  if (typeof emp === 'string') return true;
+  var targetIdx = monthToIndex(monthName + ' ' + year);
+  if (targetIdx < 0) return true;
+  if (emp.startDate) {
+    if (monthToIndex(emp.startDate) > targetIdx) return false;
+  }
+  if (emp.endDate) {
+    if (monthToIndex(emp.endDate) < targetIdx) return false;
+  }
+  return true;
+}
+
+// Get monthly capacity for a section: count active employees (employed and not absent)
+function getSectionMonthlyCapacity(sectionName, monthName, year) {
+  var data = getMgmtData();
+  var count = 0;
+  data.employees.forEach(function(emp) {
+    if (typeof emp === 'string') return;
+    if (emp.section !== sectionName) return;
+    if (isEmployeeActiveInMonth(emp, monthName, year)) count++;
+  });
+  return count;
+}
+
+// Get capacity for a section across a set of months (returns total HC * 100 for each month)
+function getSectionCapacityForMonths(sectionName, months, year) {
+  var totalCapacity = 0;
+  months.forEach(function(m) {
+    totalCapacity += getSectionMonthlyCapacity(sectionName, m, year) * 100;
+  });
+  return totalCapacity;
+}
+
 function addSection(dept) {
   const input = document.getElementById('mgmt-section-input-' + CSS.escape(dept));
   if (!input) return;
@@ -3812,19 +4009,22 @@ function getFilteredNumMonths() {
 
 function renderDeptsAndSections() {
   var mgmt = getMgmtData();
-  var capData = getCapacityData();
 
   // Use local filters from this page
   var deptYearVal = (document.getElementById('deptYearFilter')?.value) || 'all';
   var deptQtrVal = (document.getElementById('deptQuarterFilter')?.value) || 'all';
 
-  // Determine numMonths from the local quarter filter
-  var numMonths;
+  // Determine months list based on quarter filter
+  var filterMonths;
   if (deptQtrVal === 'all') {
-    numMonths = 12;
+    filterMonths = MONTHS.slice();
   } else {
-    numMonths = 3; // each quarter = 3 months
+    filterMonths = QUARTER_MONTHS[deptQtrVal] || MONTHS.slice();
   }
+  var filterYear = (deptYearVal !== 'all') ? deptYearVal : '2026';
+
+  // Get dynamic capacity based on employee data for the selected months
+  var capData = getCapacityDataForMonths(filterMonths, filterYear);
 
   // Filter data locally based on this page's filters
   var localData = allData;
@@ -3851,7 +4051,6 @@ function renderDeptsAndSections() {
     usageByDept[dk] = (usageByDept[dk] || 0) + (parseFloat(r.occupancy) || 0);
     var key = dk + '|' + sk;
     usageByDeptSec[key] = (usageByDeptSec[key] || 0) + (parseFloat(r.occupancy) || 0);
-    // Count unique employees
     if (!empCountByDept[dk]) empCountByDept[dk] = new Set();
     empCountByDept[dk].add(r.name);
     if (!empCountByDeptSec[key]) empCountByDeptSec[key] = new Set();
@@ -3860,8 +4059,8 @@ function renderDeptsAndSections() {
 
   var departments = mgmt.departments || [];
   var sections = mgmt.sections || {};
+  var totalCap = Object.values(capData).reduce(function(s, d) { return s + d.totalCapacity; }, 0);
   var totalHC = Object.values(capData).reduce(function(s, d) { return s + d.totalHeadCount; }, 0);
-  var totalCap = totalHC * 100 * numMonths;
   var totalUsed = localData.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
   var totalUtil = totalCap > 0 ? (totalUsed / totalCap * 100).toFixed(1) : 0;
   var totalSections = 0;
@@ -3882,9 +4081,9 @@ function renderDeptsAndSections() {
 
   // Per-department cards
   departments.forEach(function(dept) {
-    var deptCap = capData[dept] || { sections: {}, totalHeadCount: 0, monthlyCapacity: 0 };
+    var deptCap = capData[dept] || { sections: {}, totalCapacity: 0, totalHeadCount: 0 };
     var deptUsed = usageByDept[dept] || 0;
-    var deptCapTotal = deptCap.monthlyCapacity * numMonths;
+    var deptCapTotal = deptCap.totalCapacity;
     var deptUtil = deptCapTotal > 0 ? (deptUsed / deptCapTotal * 100).toFixed(1) : 0;
     var deptUtilColor = getOccColor(deptUtil);
     var deptEmpCount = empCountByDept[dept] ? empCountByDept[dept].size : 0;
@@ -3914,17 +4113,17 @@ function renderDeptsAndSections() {
       html += '</tr></thead><tbody>';
 
       deptSecs.forEach(function(sec) {
-        var secCap = deptCap.sections[sec] || { headCount: 0, monthlyCapacity: 0 };
+        var secCap = deptCap.sections[sec] || { totalCapacity: 0, avgHeadCount: 0 };
         var secKey = dept + '|' + sec;
         var secUsed = usageByDeptSec[secKey] || 0;
-        var secCapTotal = secCap.monthlyCapacity * numMonths;
+        var secCapTotal = secCap.totalCapacity;
         var secUtil = secCapTotal > 0 ? (secUsed / secCapTotal * 100).toFixed(1) : 0;
         var secColor = getOccColor(secUtil);
         var secEmpCount = empCountByDeptSec[secKey] ? empCountByDeptSec[secKey].size : 0;
 
         html += '<tr>';
         html += '<td style="font-weight:600;text-align:right;">📂 ' + escapeHtml(sec) + '</td>';
-        html += '<td>' + secCap.headCount + '</td>';
+        html += '<td>' + secCap.avgHeadCount + '</td>';
         html += '<td>' + secEmpCount + '</td>';
         html += '<td>' + secCapTotal + '%</td>';
         html += '<td>' + secUsed.toFixed(0) + '%</td>';
@@ -3954,7 +4153,7 @@ function renderDeptsAndSections() {
     var canvas = document.getElementById('deptCapacityChart');
     if (!canvas) return;
     var deptLabels = departments;
-    var capValues = deptLabels.map(function(d) { return (capData[d] ? capData[d].monthlyCapacity * numMonths : 0); });
+    var capValues = deptLabels.map(function(d) { return (capData[d] ? capData[d].totalCapacity : 0); });
     var usedValues = deptLabels.map(function(d) { return usageByDept[d] ? parseFloat(usageByDept[d].toFixed(0)) : 0; });
     new Chart(canvas, {
       type: 'bar',
@@ -3974,36 +4173,58 @@ function renderDeptsAndSections() {
 }
 
 // Capacity helper
-function getCapacityData() {
-  const mgmt = getMgmtData();
-  const sectionCap = mgmt.sectionCapacity || {};
-  const result = {};
-  (mgmt.departments || []).forEach(dept => {
-    const secs = (mgmt.sections || {})[dept] || [];
-    result[dept] = { sections: {}, totalHeadCount: 0, monthlyCapacity: 0 };
-    secs.forEach(sec => {
-      const hc = sectionCap[dept + '|' + sec] || 0;
-      result[dept].sections[sec] = { headCount: hc, monthlyCapacity: hc * 100 };
-      result[dept].totalHeadCount += hc;
+// Dynamic capacity: calculates HC per section per month from employee data
+function getCapacityDataForMonths(monthsList, year) {
+  var mgmt = getMgmtData();
+  var result = {};
+  (mgmt.departments || []).forEach(function(dept) {
+    var secs = (mgmt.sections || {})[dept] || [];
+    result[dept] = { sections: {}, totalCapacity: 0, totalHeadCount: 0 };
+    secs.forEach(function(sec) {
+      var totalCap = 0;
+      var maxHC = 0;
+      monthsList.forEach(function(m) {
+        var hc = getSectionMonthlyCapacity(sec, m, year);
+        totalCap += hc * 100;
+        if (hc > maxHC) maxHC = hc;
+      });
+      result[dept].sections[sec] = { totalCapacity: totalCap, avgHeadCount: maxHC };
+      result[dept].totalCapacity += totalCap;
+      result[dept].totalHeadCount += maxHC;
     });
-    result[dept].monthlyCapacity = result[dept].totalHeadCount * 100;
   });
   return result;
 }
 
+// Legacy wrapper for backward compatibility
+function getCapacityData() {
+  return getCapacityDataForMonths(MONTHS, '2026');
+}
+
 function showCapacityDrill() {
-  const capData = getCapacityData();
-  const numMonths = getFilteredNumMonths();
   var quarter = document.getElementById('quarterFilter').value;
-  var drillFilterLabel = (quarter !== 'all') ? 'الربع ' + quarter : 'سنوي';
   var yearVal = document.getElementById('yearFilter').value;
+  var drillFilterLabel = (quarter !== 'all') ? 'الربع ' + quarter : 'سنوي';
   if (yearVal !== 'all') drillFilterLabel += ' ' + yearVal;
 
-  let html = '<div class="drill-stats-row">';
-  const totalHC = Object.values(capData).reduce((s,d)=>s+d.totalHeadCount,0);
-  const totalCap = totalHC * 100 * numMonths;
-  const totalUsed = filteredData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0);
-  const util = totalCap > 0 ? (totalUsed/totalCap*100).toFixed(1) : 0;
+  // Determine months list based on quarter filter
+  var filterMonths;
+  if (quarter === 'all') {
+    filterMonths = MONTHS.slice();
+  } else {
+    filterMonths = QUARTER_MONTHS[quarter] || MONTHS.slice();
+  }
+  var filterYear = (yearVal !== 'all') ? yearVal : '2026';
+
+  // Get dynamic capacity
+  var capData = getCapacityDataForMonths(filterMonths, filterYear);
+
+  var totalHC = Object.values(capData).reduce(function(s,d){return s+d.totalHeadCount;},0);
+  var totalCap = Object.values(capData).reduce(function(s,d){return s+d.totalCapacity;},0);
+  var totalUsed = filteredData.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+  var util = totalCap > 0 ? (totalUsed/totalCap*100).toFixed(1) : 0;
+
+  var html = '<div class="drill-stats-row">';
   html += '<div class="drill-stat-card"><div class="value">' + totalHC + '</div><div class="label">إجمالي HC</div></div>';
   html += '<div class="drill-stat-card"><div class="value">' + totalCap + '%</div><div class="label">السعة (' + drillFilterLabel + ')</div></div>';
   html += '<div class="drill-stat-card"><div class="value">' + totalUsed.toFixed(0) + '%</div><div class="label">الاستخدام الفعلي</div></div>';
@@ -4014,13 +4235,14 @@ function showCapacityDrill() {
 
   html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;"><table class="drill-table"><thead><tr><th>الإدارة</th><th>HC</th><th>السعة (' + drillFilterLabel + ')</th><th>الإشغال الفعلي</th><th>نسبة الاستغلال</th></tr></thead><tbody>';
 
-  const deptStats = {};
-  Object.entries(capData).forEach(([dept, d]) => {
-    const used = filteredData.filter(r => r.department === dept).reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0);
-    const cap = d.monthlyCapacity * numMonths;
-    const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
-    const color = getOccColor(pct);
-    deptStats[dept] = { used, cap, pct, hc: d.totalHeadCount };
+  var deptStats = {};
+  Object.entries(capData).forEach(function(entry) {
+    var dept = entry[0], d = entry[1];
+    var used = filteredData.filter(function(r){return r.department === dept;}).reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+    var cap = d.totalCapacity;
+    var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
+    var color = getOccColor(pct);
+    deptStats[dept] = { used: used, cap: cap, pct: pct, hc: d.totalHeadCount };
     html += '<tr><td style="font-weight:600">' + escapeHtml(dept) + '</td><td>' + d.totalHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
     html += '<td><span style="color:' + color + ';font-weight:700">' + pct + '%</span><div class="capacity-bar"><div class="capacity-fill" style="width:' + Math.min(pct,100) + '%;background:' + color + '"></div></div></td></tr>';
   });
@@ -4029,13 +4251,15 @@ function showCapacityDrill() {
   // Sections detail
   html += '<h3 style="font-size:15px;font-weight:700;margin:24px 0 12px;">📂 تفاصيل الأقسام</h3>';
   html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);"><table class="drill-table"><thead><tr><th>الإدارة</th><th>القسم</th><th>HC</th><th>السعة (' + drillFilterLabel + ')</th><th>الاستخدام</th><th>الاستغلال</th></tr></thead><tbody>';
-  Object.entries(capData).forEach(([dept, d]) => {
-    Object.entries(d.sections).forEach(([sec, s]) => {
-      const used = filteredData.filter(r => r.department === dept && r.section === sec).reduce((sum,r) => sum + (parseFloat(r.occupancy)||0), 0);
-      const cap = s.monthlyCapacity * numMonths;
-      const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
-      const color = getOccColor(pct);
-      html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.headCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
+  Object.entries(capData).forEach(function(entry) {
+    var dept = entry[0], d = entry[1];
+    Object.entries(d.sections).forEach(function(secEntry) {
+      var sec = secEntry[0], s = secEntry[1];
+      var used = filteredData.filter(function(r){return r.department === dept && r.section === sec;}).reduce(function(sum,r){return sum+(parseFloat(r.occupancy)||0);},0);
+      var cap = s.totalCapacity;
+      var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
+      var color = getOccColor(pct);
+      html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.avgHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
     });
   });
   html += '</tbody></table></div>';
@@ -4043,18 +4267,18 @@ function showCapacityDrill() {
   document.getElementById('drillBody').innerHTML = html;
   openDrill('📊 تحليل السعة', 'مقارنة السعة المتاحة مع الاستخدام الفعلي');
 
-  setTimeout(() => {
-    const depts = Object.keys(deptStats);
+  setTimeout(function() {
+    var depts = Object.keys(deptStats);
     drillCharts.capacity = new Chart(document.getElementById('drillCapacity'), {
       type: 'bar',
       data: {
         labels: depts,
         datasets: [
-          { label: 'السعة', data: depts.map(d => deptStats[d].cap), backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
-          { label: 'الاستخدام', data: depts.map(d => deptStats[d].used), backgroundColor: depts.map(d => getOccColorRgba(deptStats[d].pct)), borderRadius: 6 }
+          { label: 'السعة', data: depts.map(function(d){return deptStats[d].cap;}), backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
+          { label: 'الاستخدام', data: depts.map(function(d){return deptStats[d].used;}), backgroundColor: depts.map(function(d){return getOccColorRgba(deptStats[d].pct);}), borderRadius: 6 }
         ]
       },
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:'Tajawal'}}}}, scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}} }
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:'Tajawal'}}}}, scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:function(v){return v+'%';}}}} }
     });
   }, 100);
 }
