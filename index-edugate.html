@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نموذج خطة العمل الربعية</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --primary: #1B8354;
+    --primary-dark: #166a45;
+    --primary-light: #e8f5e9;
+    --primary-hover: #145a39;
+    --secondary: #DBA102;
+    --secondary-light: #fff8e1;
+    --bg: #F9FAFB;
+    --card-bg: #ffffff;
+    --border: #E5E7EB;
+    --border-focus: #1B8354;
+    --text-primary: #161616;
+    --text-secondary: #384250;
+    --text-tertiary: #6C737F;
+    --text-placeholder: #9DA4AE;
+    --danger: #DC2626;
+    --danger-light: #FEE2E2;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.07);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+    --font: 'IBM Plex Sans Arabic', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ===== Header ===== */
+  .header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: -40px;
+    width: 250px;
+    height: 250px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 50%;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -60px;
+    right: -20px;
+    width: 200px;
+    height: 200px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 50%;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 40px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    position: relative;
+    z-index: 1;
+  }
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header-logo-icon {
+    width: 44px;
+    height: 44px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+  .header-logo-text {
+    font-size: 15px;
+    font-weight: 600;
+    opacity: 0.95;
+    letter-spacing: -0.2px;
+  }
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    position: relative;
+    z-index: 1;
+  }
+  .header-btn {
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .header-btn:hover { background: rgba(255,255,255,0.22); }
+  .header-content {
+    padding: 28px 40px 34px;
+    position: relative;
+    z-index: 1;
+  }
+  .header-content h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+  }
+  .header-content p {
+    font-size: 14px;
+    opacity: 0.8;
+    font-weight: 400;
+    max-width: 700px;
+    line-height: 1.7;
+  }
+
+  /* ===== Container ===== */
+  .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+
+  /* ===== Cards ===== */
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 28px 30px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: var(--shadow-md); }
+  .card-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title .icon {
+    width: 36px;
+    height: 36px;
+    background: var(--primary-light);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  /* ===== Form Fields ===== */
+  .info-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+  }
+  .field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text-primary);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    direction: rtl;
+    -webkit-appearance: none;
+  }
+  .field input::placeholder { color: var(--text-placeholder); }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(27,131,84,0.12);
+    background: var(--card-bg);
+  }
+  .field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236C737F' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 12px center;
+    padding-left: 32px;
+  }
+
+  /* ===== Occupancy Meters ===== */
+  .meters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+  .meter-item {
+    text-align: center;
+    padding: 16px 12px;
+    border-radius: var(--radius);
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    transition: all 0.3s;
+  }
+  .meter-item.active { border-color: var(--primary); background: var(--primary-light); }
+  .meter-item.over { border-color: var(--danger); background: var(--danger-light); }
+  .meter-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; font-weight: 500; }
+  .meter-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+  .meter-item.over .meter-value { color: var(--danger); }
+  .meter-bar {
+    margin-top: 10px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--primary), #2ecc71);
+    transition: width 0.4s ease;
+  }
+  .meter-item.over .meter-fill { background: linear-gradient(90deg, var(--danger), #ef4444); }
+
+  /* ===== Task Entry ===== */
+  .task-entry {
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-bottom: 14px;
+    position: relative;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .task-entry:hover { border-color: #c5cdd6; box-shadow: var(--shadow-sm); }
+  .task-entry .entry-num {
+    position: absolute;
+    top: -10px;
+    right: 18px;
+    background: var(--primary);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+  .task-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .task-grid .field select, .task-grid .field input {
+    background: var(--card-bg);
+  }
+  .remove-btn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: none;
+    border: none;
+    color: #c5cdd6;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .remove-btn:hover { color: var(--danger); background: var(--danger-light); }
+
+  .add-row-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px;
+    border: 2px dashed #d1d5db;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .add-row-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-light);
+  }
+  .add-row-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+  .add-row-btn:disabled:hover { background: transparent; color: var(--text-tertiary); border-color: #d1d5db; }
+  .month-task-hint { font-size: 11px; color: var(--text-tertiary); font-weight: 400; }
+
+  /* ===== Buttons ===== */
+  .actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 8px;
+  }
+  .btn {
+    padding: 12px 28px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-submit {
+    background: var(--primary);
+    color: white;
+    padding: 14px 48px;
+    font-size: 15px;
+    border-radius: var(--radius);
+    box-shadow: 0 2px 6px rgba(27,131,84,0.25);
+  }
+  .btn-submit:hover:not(:disabled) {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(27,131,84,0.35);
+  }
+  .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-primary {
+    background: var(--primary-dark);
+    color: white;
+  }
+  .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(27,131,84,0.25); }
+  .btn-secondary {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border: 1.5px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--bg); border-color: #c5cdd6; }
+  .btn-danger {
+    background: var(--card-bg);
+    color: var(--danger);
+    border: 1.5px solid #fecaca;
+  }
+  .btn-danger:hover { background: var(--danger-light); }
+
+  /* ===== Spinner ===== */
+  .spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== Success Overlay ===== */
+  .success-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    backdrop-filter: blur(4px);
+  }
+  .success-overlay.show { opacity: 1; pointer-events: auto; }
+  .success-box {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 48px 40px;
+    text-align: center;
+    max-width: 440px;
+    width: 90%;
+    transform: scale(0.9);
+    transition: transform 0.3s;
+    box-shadow: var(--shadow-lg);
+  }
+  .success-overlay.show .success-box { transform: scale(1); }
+  .success-icon {
+    width: 72px;
+    height: 72px;
+    background: var(--primary-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    margin: 0 auto 20px;
+  }
+  .success-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: var(--primary); }
+  .success-msg { font-size: 14px; color: var(--text-tertiary); margin-bottom: 28px; line-height: 1.7; }
+  .success-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 12px 40px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .success-btn:hover { background: var(--primary-hover); }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text-primary);
+    color: white;
+    padding: 14px 28px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    z-index: 1001;
+    opacity: 0;
+    transition: all 0.4s ease;
+    max-width: 90%;
+    text-align: center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.error { background: var(--danger); }
+  .toast.success { background: var(--primary); }
+
+  .desc-field { grid-column: 1 / -1; }
+
+  /* ===== Autocomplete ===== */
+  .autocomplete-wrapper { position: relative; }
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    background: var(--card-bg);
+    border: 1.5px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 50;
+    box-shadow: var(--shadow-md);
+    display: none;
+  }
+  .autocomplete-list.show { display: block; }
+  .autocomplete-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--bg);
+  }
+  .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item:hover, .autocomplete-item.highlighted { background: var(--primary-light); color: var(--primary); }
+  .autocomplete-item .match { font-weight: 700; color: var(--primary); }
+
+  .desc-field textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 14px;
+    background: var(--card-bg);
+    resize: vertical;
+    min-height: 50px;
+    direction: rtl;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    color: var(--text-primary);
+  }
+  .desc-field textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(27,131,84,0.12);
+  }
+
+  /* ===== Setup Modal ===== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 36px;
+    max-width: 720px;
+    width: 92%;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    direction: rtl;
+    box-shadow: var(--shadow-lg);
+  }
+  .modal-close {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-tertiary);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .modal-close:hover { background: var(--bg); color: var(--text-primary); }
+  .modal-box h3 { font-size: 19px; font-weight: 700; margin-bottom: 20px; color: var(--text-primary); }
+
+  /* ===== Time-off ===== */
+  .timeoff-btn {
+    background: var(--secondary-light);
+    color: #92400e;
+    border: 1.5px dashed var(--secondary);
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: all 0.2s;
+  }
+  .timeoff-btn:hover { background: #fef3c7; border-color: #d97706; }
+  .task-entry.is-timeoff { background: var(--secondary-light); border: 1.5px solid #fcd34d; }
+  .task-entry.is-timeoff .entry-num { background: #d97706; }
+  .timeoff-badge {
+    display: inline-block;
+    background: var(--secondary);
+    color: white;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 8px;
+  }
+
+  /* ===== Footer ===== */
+  .footer {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-tertiary);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 600px) {
+    .header-top { padding: 12px 16px; }
+    .header-content { padding: 20px 16px 26px; }
+    .header-content h1 { font-size: 20px; }
+    .card { padding: 20px 16px; }
+    .task-grid { grid-template-columns: 1fr; }
+    .info-row { grid-template-columns: 1fr; }
+    .actions { flex-direction: column; align-items: stretch; }
+    .btn { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-top">
+    <div class="header-logo">
+      <div class="header-logo-icon">&#128203;</div>
+      <div class="header-logo-text">نظام خطط العمل الربعية</div>
+    </div>
+    <div class="header-actions">
+    </div>
+  </div>
+  <div class="header-content">
+    <h1>نموذج تسجيل خطة العمل الربعية</h1>
+    <p>يرجى تعبئة بيانات المهام المخطط لها خلال الربع &#8212; الحد الأدنى للإشغال 20% لكل مهمة، والحد الأقصى 120% لكل شهر</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Employee Info -->
+  <div class="card">
+    <div class="card-title">
+      <div class="icon">&#128100;</div>
+      بيانات الموظف
+    </div>
+    <div class="info-row">
+      <div class="field">
+        <label>الاسم</label>
+        <div class="autocomplete-wrapper">
+          <input type="text" id="empName" placeholder="ابدأ بكتابة اسمك..." autocomplete="off" oninput="filterEmployees()" onfocus="filterEmployees()" onkeydown="handleAutocompleteKey(event)">
+          <div class="autocomplete-list" id="empAutoList"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>الإدارة</label>
+        <select id="empDepartment" disabled>
+          <option value="">&#8212; يتم تعبئته تلقائيا &#8212;</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>القسم</label>
+        <select id="empSection" disabled>
+          <option value="">&#8212; يتم تعبئته تلقائيا &#8212;</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>السنة</label>
+        <select id="empYear">
+          <option value="">&#8212; اختر السنة &#8212;</option>
+          <option value="2026" selected>2026</option>
+          <option value="2027">2027</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>الربع</label>
+        <select id="empQuarter" onchange="updateMonths()">
+          <option value="">&#8212; اختر الربع &#8212;</option>
+          <option value="الأول">الربع الأول (يناير - مارس)</option>
+          <option value="الثاني">الربع الثاني (أبريل - يونيو)</option>
+          <option value="الثالث">الربع الثالث (يوليو - سبتمبر)</option>
+          <option value="الرابع">الربع الرابع (أكتوبر - ديسمبر)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Occupancy Meters -->
+  <div class="card">
+    <div class="card-title">
+      <div class="icon">&#128202;</div>
+      نسبة الإشغال الشهرية
+    </div>
+    <div class="meters-grid" id="metersGrid">
+      <div class="meter-item" id="meter-m1">
+        <div class="meter-label" id="meter-label-m1">الشهر 1</div>
+        <div class="meter-value" id="meter-val-m1">0%</div>
+        <div class="meter-bar"><div class="meter-fill" id="meter-fill-m1" style="width:0%"></div></div>
+      </div>
+      <div class="meter-item" id="meter-m2">
+        <div class="meter-label" id="meter-label-m2">الشهر 2</div>
+        <div class="meter-value" id="meter-val-m2">0%</div>
+        <div class="meter-bar"><div class="meter-fill" id="meter-fill-m2" style="width:0%"></div></div>
+      </div>
+      <div class="meter-item" id="meter-m3">
+        <div class="meter-label" id="meter-label-m3">الشهر 3</div>
+        <div class="meter-value" id="meter-val-m3">0%</div>
+        <div class="meter-bar"><div class="meter-fill" id="meter-fill-m3" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Entries -->
+  <div class="card">
+    <div class="card-title">
+      <div class="icon">&#128221;</div>
+      المهام المخطط لها
+    </div>
+    <div id="taskEntries"></div>
+    <button class="add-row-btn" onclick="addTask()">
+      <span style="font-size:18px">+</span> إضافة مهمة جديدة
+    </button>
+    <button class="timeoff-btn" onclick="addTimeOff()">
+      &#127964; تسجيل إجازة لشهر كامل
+    </button>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-submit" id="submitBtn" onclick="submitToSheets()">
+      <span id="submitLabel">&#9989; إرسال الخطة</span>
+    </button>
+    <button class="btn btn-primary" onclick="exportCSV()">
+      &#128229; تصدير CSV
+    </button>
+    <button class="btn btn-secondary" onclick="previewData()">
+      &#128065; معاينة
+    </button>
+    <button class="btn btn-danger" onclick="clearAll()">
+      &#128465; مسح الكل
+    </button>
+  </div>
+
+  <div class="footer">
+    نظام خطط العمل الربعية &copy; 2026
+  </div>
+</div>
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-box">
+    <div class="success-icon">&#9989;</div>
+    <div class="success-title">تم إرسال الخطة بنجاح!</div>
+    <div class="success-msg" id="successMsg">تم حفظ <strong id="successCount">0</strong> مهمة بنجاح وهي بانتظار الموافقة.<br>يمكنك إغلاق الصفحة أو إضافة خطة أخرى.</div>
+    <button class="success-btn" onclick="closeSuccess()">حسنا</button>
+  </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal-box" style="max-width:900px;">
+    <button class="modal-close" onclick="closePreview()">&#10005;</button>
+    <h3>&#128065; معاينة البيانات</h3>
+    <div id="previewContent" style="font-size:14px; overflow-x:auto; margin-top:16px;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== CONFIG =====
+const STORAGE_PREFIX = 'qplan_';
+const ADMIN_PREFIX = 'qplan_admin_';
+// Firebase config (loaded from admin settings in localStorage)
+var FIREBASE_CONFIG = {
+  apiKey: localStorage.getItem(ADMIN_PREFIX + 'fb_apiKey') || '',
+  authDomain: localStorage.getItem(ADMIN_PREFIX + 'fb_authDomain') || '',
+  databaseURL: localStorage.getItem(ADMIN_PREFIX + 'fb_databaseURL') || '',
+  projectId: localStorage.getItem(ADMIN_PREFIX + 'fb_projectId') || '',
+  storageBucket: localStorage.getItem(ADMIN_PREFIX + 'fb_storageBucket') || '',
+  messagingSenderId: localStorage.getItem(ADMIN_PREFIX + 'fb_messagingSenderId') || '',
+  appId: localStorage.getItem(ADMIN_PREFIX + 'fb_appId') || ''
+};
+var firebaseApp = null;
+var firebaseDb = null;
+var firebaseReady = false;
+
+function initFirebase() {
+  if (firebaseReady) return true;
+  if (!FIREBASE_CONFIG.databaseURL) return false;
+  try {
+    if (typeof firebase === 'undefined') return false;
+    if (!firebaseApp) {
+      if (firebase.apps.length === 0) {
+        firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+      } else {
+        firebaseApp = firebase.apps[0];
+      }
+    }
+    firebaseDb = firebase.database();
+    firebaseReady = true;
+    return true;
+  } catch (err) {
+    console.error('Firebase init failed:', err);
+    firebaseReady = false;
+    return false;
+  }
+}
+
+const STORAGE_KEY = 'quarterly_form_sheet_url';
+
+const QUARTERS = {
+  '\u0627\u0644\u0623\u0648\u0644':  ['\u064a\u0646\u0627\u064a\u0631', '\u0641\u0628\u0631\u0627\u064a\u0631', '\u0645\u0627\u0631\u0633'],
+  '\u0627\u0644\u062b\u0627\u0646\u064a': ['\u0623\u0628\u0631\u064a\u0644', '\u0645\u0627\u064a\u0648', '\u064a\u0648\u0646\u064a\u0648'],
+  '\u0627\u0644\u062b\u0627\u0644\u062b': ['\u064a\u0648\u0644\u064a\u0648', '\u0623\u063a\u0633\u0637\u0633', '\u0633\u0628\u062a\u0645\u0628\u0631'],
+  '\u0627\u0644\u0631\u0627\u0628\u0639': ['\u0623\u0643\u062a\u0648\u0628\u0631', '\u0646\u0648\u0641\u0645\u0628\u0631', '\u062f\u064a\u0633\u0645\u0628\u0631']
+};
+
+const DEFAULT_PLATFORMS = ['\u0646\u0648\u0631', '\u0645\u062f\u0631\u0633\u062a\u064a', '\u0633\u0641\u064a\u0631', '\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u062a\u0639\u0644\u064a\u0645', '\u0641\u0627\u0631\u0633'];
+const DEFAULT_TASK_TYPES = [
+  '\u062a\u062d\u0644\u064a\u0644 \u0623\u0639\u0645\u0627\u0644', '\u062a\u062c\u0631\u0628\u0629 \u0645\u0633\u062a\u062e\u062f\u0645', '\u062a\u0637\u0648\u064a\u0631 \u062d\u0644\u0648\u0644', '\u062a\u0637\u0648\u064a\u0631 \u062a\u0643\u0627\u0645\u0644\u0627\u062a',
+  '\u062a\u0637\u0648\u064a\u0631 \u0648\u0627\u062c\u0647\u0627\u062a', '\u062a\u0637\u0648\u064a\u0631 \u0645\u0648\u0628\u0627\u064a\u0644', '\u062c\u0648\u062f\u0629', '\u0625\u062f\u0627\u0631\u0629 \u0639\u0645\u0644\u064a\u0627\u062a DevOps',
+  '\u062f\u0639\u0645 L3', '\u0625\u062f\u0627\u0631\u0629 \u062a\u0633\u0644\u064a\u0645 \u062a\u0642\u0646\u064a', '\u0623\u0639\u0645\u0627\u0644 \u062f\u0627\u062e\u0644\u064a\u0629',
+  '\u0623\u0639\u0645\u0627\u0644 \u0645\u0634\u0627\u0631\u064a\u0639 \u062c\u062f\u064a\u062f\u0629 (\u0644\u0645 \u062a\u0639\u062a\u0645\u062f)', '\u062f\u0631\u0627\u0633\u0627\u062a \u0643\u0631\u0627\u0633\u0627\u062a \u0645\u0634\u0627\u0631\u064a\u0639 \u062c\u062f\u064a\u062f\u0629'
+];
+const DEFAULT_DEPARTMENTS = ['\u062a\u0637\u0648\u064a\u0631 \u0627\u0644\u062d\u0644\u0648\u0644','\u0627\u0644\u0627\u0633\u062a\u0634\u0627\u0631\u0627\u062a \u0648\u0647\u064a\u0643\u0644\u064a\u0629 \u0627\u0644\u062d\u0644\u0648\u0644','\u062a\u0646\u0641\u064a\u0630 \u062a\u0643\u0627\u0645\u0644 \u0627\u0644\u062d\u0644\u0648\u0644'];
+
+function loadMgmtList(key, fallback) {
+  try { const s = localStorage.getItem('qplan_mgmt_' + key); return s ? JSON.parse(s) : fallback; } catch(e) { return fallback; }
+}
+function loadMgmtObject(key, fallback) {
+  try { const s = localStorage.getItem('qplan_mgmt_' + key); return s ? JSON.parse(s) : fallback; } catch(e) { return fallback; }
+}
+const PLATFORMS = loadMgmtList('platforms', DEFAULT_PLATFORMS);
+const TASK_TYPES = loadMgmtList('taskTypes', DEFAULT_TASK_TYPES);
+const DEPARTMENTS = loadMgmtList('departments', DEFAULT_DEPARTMENTS);
+const SECTIONS = loadMgmtObject('sections', {
+  '\u062a\u0637\u0648\u064a\u0631 \u0627\u0644\u062d\u0644\u0648\u0644': ['\u062a\u0635\u0645\u064a\u0645 \u0627\u0644\u062d\u0644\u0648\u0644', '\u062a\u0637\u0648\u064a\u0631 \u0627\u0644\u0628\u0631\u0645\u062c\u064a\u0627\u062a', '\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u062a\u0633\u0644\u064a\u0645 \u0627\u0644\u062a\u0642\u0646\u064a \u0648\u0627\u0644\u062c\u0648\u062f\u0629', '\u0647\u0646\u062f\u0633\u0629 \u0627\u0644\u0645\u0646\u0635\u0627\u062a'],
+  '\u0627\u0644\u0627\u0633\u062a\u0634\u0627\u0631\u0627\u062a \u0648\u0647\u064a\u0643\u0644\u064a\u0629 \u0627\u0644\u062d\u0644\u0648\u0644': ['\u0647\u064a\u0643\u0644\u064a\u0629 \u0627\u0644\u062d\u0644\u0648\u0644'],
+  '\u062a\u0646\u0641\u064a\u0630 \u062a\u0643\u0627\u0645\u0644 \u0627\u0644\u062d\u0644\u0648\u0644': ['\u062a\u0643\u0627\u0645\u0644 \u0627\u0644\u062a\u0637\u0628\u064a\u0642\u0627\u062a', '\u0627\u0644\u062d\u0644\u0648\u0644 \u0627\u0644\u0645\u0624\u0633\u0633\u064a\u0629']
+});
+
+const SECTION_TASK_TYPES = loadMgmtObject('sectionTaskTypes', {});
+
+let EMPLOYEES_FULL = [];
+try {
+  const cached = localStorage.getItem('qplan_employees_full');
+  if (cached) EMPLOYEES_FULL = JSON.parse(cached);
+} catch(e) {}
+const MIN_OCCUPANCY = 20;
+const MAX_TASKS_PER_MONTH = 4;
+
+let currentEmployeeSection = '';
+
+function getTaskTypesForSection(sectionName) {
+  if (!sectionName || !SECTION_TASK_TYPES[sectionName] || SECTION_TASK_TYPES[sectionName].length === 0) {
+    return TASK_TYPES;
+  }
+  return TASK_TYPES.filter(t => SECTION_TASK_TYPES[sectionName].indexOf(t) !== -1);
+}
+
+function getFilteredTaskTypes() {
+  return getTaskTypesForSection(currentEmployeeSection);
+}
+
+function updateAllTaskTypeDropdowns() {
+  const allowed = getFilteredTaskTypes();
+  document.querySelectorAll('.task-entry:not(.is-timeoff)').forEach(entry => {
+    const taskTypeSelect = entry.querySelectorAll('select')[2];
+    if (!taskTypeSelect) return;
+    const currentVal = taskTypeSelect.value;
+    taskTypeSelect.innerHTML = makeOptions(allowed, '\u0646\u0648\u0639 \u0627\u0644\u0645\u0647\u0645\u0629');
+    if (currentVal && allowed.includes(currentVal)) {
+      taskTypeSelect.value = currentVal;
+    }
+  });
+}
+
+let taskCounter = 0;
+let currentMonths = ['\u0627\u0644\u0634\u0647\u0631 1', '\u0627\u0644\u0634\u0647\u0631 2', '\u0627\u0644\u0634\u0647\u0631 3'];
+
+// ===== EMPLOYEE LIST (autocomplete) =====
+let EMPLOYEE_LIST = [];
+let highlightedIndex = -1;
+
+function loadEmployeeList() {
+  if (EMPLOYEES_FULL.length) {
+    EMPLOYEE_LIST = EMPLOYEES_FULL.map(e => typeof e === 'object' ? e.name : e).filter(Boolean);
+  }
+  if (!EMPLOYEE_LIST.length) {
+    try {
+      var cached = localStorage.getItem('qplan_employees');
+      if (cached) EMPLOYEE_LIST = JSON.parse(cached);
+    } catch(e) {}
+  }
+  if (initFirebase() && firebaseDb) {
+    firebaseDb.ref('employees').once('value').then(snap => {
+      const data = snap.val();
+      if (data) {
+        const list = Object.values(data);
+        if (list.length) {
+          EMPLOYEES_FULL = list;
+          EMPLOYEE_LIST = list.map(e => typeof e === 'object' ? e.name : e).filter(Boolean);
+          localStorage.setItem('qplan_employees_full', JSON.stringify(EMPLOYEES_FULL));
+        }
+      }
+    }).catch(err => console.log('Could not load employees from Firebase:', err));
+  }
+}
+
+try {
+  if (EMPLOYEES_FULL.length) {
+    EMPLOYEE_LIST = EMPLOYEES_FULL.map(e => typeof e === 'object' ? e.name : e).filter(Boolean);
+  } else {
+    var cached = localStorage.getItem('qplan_employees');
+    if (cached) EMPLOYEE_LIST = JSON.parse(cached);
+  }
+} catch(e) {}
+
+function filterEmployees() {
+  const input = document.getElementById('empName');
+  const list = document.getElementById('empAutoList');
+  const val = input.value.trim();
+  highlightedIndex = -1;
+
+  if (!val || !EMPLOYEE_LIST.length) {
+    list.classList.remove('show');
+    return;
+  }
+
+  const matches = EMPLOYEE_LIST.filter(name =>
+    name.includes(val) || name.toLowerCase().includes(val.toLowerCase())
+  ).slice(0, 10);
+
+  if (!matches.length) {
+    list.classList.remove('show');
+    return;
+  }
+
+  list.innerHTML = matches.map((name, i) => {
+    const highlighted = name.replace(new RegExp('(' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<span class="match">$1</span>');
+    return `<div class="autocomplete-item" data-index="${i}" onmousedown="selectEmployee('${name.replace(/'/g, "\\'")}')">${highlighted}</div>`;
+  }).join('');
+  list.classList.add('show');
+}
+
+function selectEmployee(name) {
+  document.getElementById('empName').value = name;
+  document.getElementById('empAutoList').classList.remove('show');
+  highlightedIndex = -1;
+
+  const emp = EMPLOYEES_FULL.find(e => (typeof e === 'object' ? e.name : e) === name);
+  const deptSel = document.getElementById('empDepartment');
+  const secSel = document.getElementById('empSection');
+  if (emp && typeof emp === 'object' && emp.department) {
+    deptSel.innerHTML = '<option value="">\u2014 \u064a\u062a\u0645 \u062a\u0639\u0628\u0626\u062a\u0647 \u062a\u0644\u0642\u0627\u0626\u064a\u0627 \u2014</option>' +
+      DEPARTMENTS.map(d => `<option${d === emp.department ? ' selected' : ''}>${d}</option>`).join('');
+    const deptSections = SECTIONS[emp.department] || [];
+    secSel.innerHTML = '<option value="">\u2014 \u064a\u062a\u0645 \u062a\u0639\u0628\u0626\u062a\u0647 \u062a\u0644\u0642\u0627\u0626\u064a\u0627 \u2014</option>' +
+      deptSections.map(s => `<option${s === emp.section ? ' selected' : ''}>${s}</option>`).join('');
+    currentEmployeeSection = emp.section || '';
+  } else {
+    deptSel.innerHTML = '<option value="">\u2014 \u064a\u062a\u0645 \u062a\u0639\u0628\u0626\u062a\u0647 \u062a\u0644\u0642\u0627\u0626\u064a\u0627 \u2014</option>';
+    secSel.innerHTML = '<option value="">\u2014 \u064a\u062a\u0645 \u062a\u0639\u0628\u0626\u062a\u0647 \u062a\u0644\u0642\u0627\u0626\u064a\u0627 \u2014</option>';
+    currentEmployeeSection = '';
+  }
+  updateAllTaskTypeDropdowns();
+}
+
+function handleAutocompleteKey(e) {
+  const list = document.getElementById('empAutoList');
+  const items = list.querySelectorAll('.autocomplete-item');
+  if (!items.length || !list.classList.contains('show')) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+    items.forEach((item, i) => item.classList.toggle('highlighted', i === highlightedIndex));
+    items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    highlightedIndex = Math.max(highlightedIndex - 1, 0);
+    items.forEach((item, i) => item.classList.toggle('highlighted', i === highlightedIndex));
+    items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+    e.preventDefault();
+    const name = EMPLOYEE_LIST.filter(n => {
+      const val = document.getElementById('empName').value.trim();
+      return n.includes(val) || n.toLowerCase().includes(val.toLowerCase());
+    })[highlightedIndex];
+    if (name) selectEmployee(name);
+  } else if (e.key === 'Escape') {
+    list.classList.remove('show');
+    highlightedIndex = -1;
+  }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.autocomplete-wrapper')) {
+    document.getElementById('empAutoList').classList.remove('show');
+  }
+});
+
+// ===== INIT =====
+initFirebase();
+addTask();
+loadEmployeeList();
+
+// ===== MONTHS =====
+function updateMonths() {
+  const q = document.getElementById('empQuarter').value;
+  currentMonths = (q && QUARTERS[q]) ? QUARTERS[q] : ['\u0627\u0644\u0634\u0647\u0631 1', '\u0627\u0644\u0634\u0647\u0631 2', '\u0627\u0644\u0634\u0647\u0631 3'];
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('meter-label-m' + (i+1)).textContent = currentMonths[i];
+  }
+  document.querySelectorAll('.month-select').forEach(sel => {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">\u2014 \u0627\u0644\u0634\u0647\u0631 \u2014</option>';
+    currentMonths.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      if (m === prev) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  });
+  recalcMeters();
+}
+
+// ===== TASKS =====
+function makeOptions(arr, placeholder) {
+  return `<option value="">\u2014 ${placeholder} \u2014</option>` + arr.map(v => `<option value="${v}">${v}</option>`).join('');
+}
+
+function getMonthTaskCounts() {
+  const counts = {};
+  document.querySelectorAll('.task-entry').forEach(entry => {
+    const month = entry.querySelector('.month-select')?.value;
+    if (month) counts[month] = (counts[month] || 0) + 1;
+  });
+  return counts;
+}
+
+function getAvailableMonths() {
+  const counts = getMonthTaskCounts();
+  return currentMonths.filter(m => (counts[m] || 0) < MAX_TASKS_PER_MONTH);
+}
+
+function onMonthChange(selectEl) {
+  const counts = getMonthTaskCounts();
+  const selected = selectEl.value;
+  if (selected && counts[selected] > MAX_TASKS_PER_MONTH) {
+    showToast(`\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 ${MAX_TASKS_PER_MONTH} \u0645\u0647\u0627\u0645 \u0644\u0643\u0644 \u0634\u0647\u0631`, true);
+    selectEl.value = '';
+  }
+  updateAddTaskBtn();
+  recalcMeters();
+}
+
+function updateAddTaskBtn() {
+  const btn = document.querySelector('.add-row-btn');
+  if (!btn) return;
+  const totalEntries = document.querySelectorAll('.task-entry').length;
+  const maxTotal = MAX_TASKS_PER_MONTH * currentMonths.length;
+  const available = getAvailableMonths();
+  if (totalEntries >= maxTotal || available.length === 0) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.title = `\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 ${MAX_TASKS_PER_MONTH} \u0645\u0647\u0627\u0645 \u0644\u0643\u0644 \u0634\u0647\u0631 (${maxTotal} \u0625\u062c\u0645\u0627\u0644\u064a)`;
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.title = '';
+  }
+}
+
+function addTask() {
+  const totalEntries = document.querySelectorAll('.task-entry').length;
+  const maxTotal = MAX_TASKS_PER_MONTH * currentMonths.length;
+  if (totalEntries >= maxTotal) {
+    showToast(`\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 ${maxTotal} \u0645\u0647\u0645\u0629 (${MAX_TASKS_PER_MONTH} \u0644\u0643\u0644 \u0634\u0647\u0631)`, true);
+    return;
+  }
+  taskCounter++;
+  const div = document.createElement('div');
+  div.className = 'task-entry';
+  div.id = 'task-' + taskCounter;
+  const num = taskCounter;
+  let monthOpts = '<option value="">\u2014 \u0627\u0644\u0634\u0647\u0631 \u2014</option>' + currentMonths.map(m => `<option value="${m}">${m}</option>`).join('');
+
+  div.innerHTML = `
+    <div class="entry-num">\u0645\u0647\u0645\u0629 ${num}</div>
+    <button class="remove-btn" onclick="removeTask(${num})" title="\u062d\u0630\u0641">&#10005;</button>
+    <div class="task-grid">
+      <div class="field">
+        <label>\u0627\u0644\u0634\u0647\u0631 <span class="month-task-hint"></span></label>
+        <select class="month-select" onchange="onMonthChange(this)">${monthOpts}</select>
+      </div>
+      <div class="field">
+        <label>\u0627\u0644\u0645\u0646\u0635\u0629 / \u0627\u0644\u0645\u0646\u062a\u062c</label>
+        <select>${makeOptions(PLATFORMS, '\u0627\u0644\u0645\u0646\u0635\u0629')}</select>
+      </div>
+      <div class="field">
+        <label>\u0646\u0648\u0639 \u0627\u0644\u0645\u0647\u0645\u0629</label>
+        <select>${makeOptions(getFilteredTaskTypes(), '\u0646\u0648\u0639 \u0627\u0644\u0645\u0647\u0645\u0629')}</select>
+      </div>
+      <div class="field">
+        <label>\u0646\u0633\u0628\u0629 \u0627\u0644\u0625\u0634\u063a\u0627\u0644 % (\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u062f\u0646\u0649 ${MIN_OCCUPANCY}%)</label>
+        <input type="number" class="occ-input" min="${MIN_OCCUPANCY}" max="120" step="5" placeholder="\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u062f\u0646\u0649 ${MIN_OCCUPANCY}%" onchange="enforceMinOcc(this);recalcMeters()" oninput="recalcMeters()">
+      </div>
+      <div class="field desc-field">
+        <label>\u0648\u0635\u0641 \u0627\u0644\u0645\u0647\u0645\u0629</label>
+        <textarea rows="2" placeholder="\u0648\u0635\u0641 \u0645\u062e\u062a\u0635\u0631 \u0644\u0644\u0645\u0647\u0645\u0629..."></textarea>
+      </div>
+      <div class="field">
+        <label>\u0627\u0644\u062e\u062f\u0645\u0629 (\u0625\u0646 \u0648\u062c\u062f\u062a)</label>
+        <input type="text" placeholder="\u0627\u062e\u062a\u064a\u0627\u0631\u064a">
+      </div>
+    </div>`;
+  document.getElementById('taskEntries').appendChild(div);
+  updateAddTaskBtn();
+}
+
+function enforceMinOcc(input) {
+  const val = parseFloat(input.value);
+  if (val && val < MIN_OCCUPANCY) {
+    input.value = MIN_OCCUPANCY;
+    showToast(`\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u062f\u0646\u0649 \u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0625\u0634\u063a\u0627\u0644 \u0647\u0648 ${MIN_OCCUPANCY}%`, true);
+  }
+}
+
+function removeTask(id) {
+  const el = document.getElementById('task-' + id);
+  if (el) { el.remove(); recalcMeters(); updateAddTaskBtn(); }
+}
+
+function addTimeOff() {
+  const available = getAvailableMonths();
+  if (!available.length) {
+    showToast('\u062c\u0645\u064a\u0639 \u0627\u0644\u0623\u0634\u0647\u0631 \u0645\u0643\u062a\u0645\u0644\u0629 \u2014 \u0644\u0627 \u064a\u0645\u0643\u0646 \u0625\u0636\u0627\u0641\u0629 \u0625\u062c\u0627\u0632\u0629', true);
+    return;
+  }
+  const month = available.length === 1 ? available[0] : prompt('\u0627\u062e\u062a\u0631 \u0627\u0644\u0634\u0647\u0631 \u0644\u0644\u0625\u062c\u0627\u0632\u0629:\n' + available.map((m, i) => (i+1) + '. ' + m).join('\n') + '\n\n\u0623\u062f\u062e\u0644 \u0627\u0644\u0631\u0642\u0645:');
+  let selectedMonth;
+  if (available.length === 1) {
+    selectedMonth = available[0];
+  } else {
+    const idx = parseInt(month) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= available.length) {
+      if (month === null) return;
+      showToast('\u0627\u062e\u062a\u064a\u0627\u0631 \u063a\u064a\u0631 \u0635\u062d\u064a\u062d', true);
+      return;
+    }
+    selectedMonth = available[idx];
+  }
+
+  let hasTimeOff = false;
+  document.querySelectorAll('.task-entry.is-timeoff').forEach(entry => {
+    if (entry.querySelector('.month-select')?.value === selectedMonth) hasTimeOff = true;
+  });
+  if (hasTimeOff) {
+    showToast('\u0647\u0630\u0627 \u0627\u0644\u0634\u0647\u0631 \u0645\u0633\u062c\u0644 \u0643\u0625\u062c\u0627\u0632\u0629 \u0628\u0627\u0644\u0641\u0639\u0644', true);
+    return;
+  }
+
+  taskCounter++;
+  const num = taskCounter;
+  const div = document.createElement('div');
+  div.className = 'task-entry is-timeoff';
+  div.id = 'task-' + num;
+  div.innerHTML = `
+    <div class="entry-num"><span class="timeoff-badge">\u0625\u062c\u0627\u0632\u0629</span> ${selectedMonth}</div>
+    <button class="remove-btn" onclick="removeTask(${num})" title="\u062d\u0630\u0641">&#10005;</button>
+    <div class="task-grid">
+      <div class="field">
+        <label>\u0627\u0644\u0634\u0647\u0631</label>
+        <select class="month-select" disabled>
+          <option value="${selectedMonth}" selected>${selectedMonth}</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>\u0627\u0644\u0645\u0646\u0635\u0629 / \u0627\u0644\u0645\u0646\u062a\u062c</label>
+        <select disabled><option value="\u0625\u062c\u0627\u0632\u0629" selected>\u0625\u062c\u0627\u0632\u0629</option></select>
+      </div>
+      <div class="field">
+        <label>\u0646\u0648\u0639 \u0627\u0644\u0645\u0647\u0645\u0629</label>
+        <select disabled><option value="\u0625\u062c\u0627\u0632\u0629" selected>\u0625\u062c\u0627\u0632\u0629</option></select>
+      </div>
+      <div class="field">
+        <label>\u0646\u0633\u0628\u0629 \u0627\u0644\u0625\u0634\u063a\u0627\u0644 %</label>
+        <input type="number" class="occ-input" value="100" readonly disabled>
+      </div>
+      <div class="field desc-field">
+        <label>\u0648\u0635\u0641 \u0627\u0644\u0645\u0647\u0645\u0629</label>
+        <textarea rows="2" disabled>\u0625\u062c\u0627\u0632\u0629 \u2014 \u0634\u0647\u0631 \u0643\u0627\u0645\u0644</textarea>
+      </div>
+      <div class="field">
+        <label>\u0627\u0644\u062e\u062f\u0645\u0629</label>
+        <input type="text" value="" disabled>
+      </div>
+    </div>`;
+  document.getElementById('taskEntries').appendChild(div);
+  recalcMeters();
+  updateAddTaskBtn();
+  showToast(`\u062a\u0645 \u062a\u0633\u062c\u064a\u0644 ${selectedMonth} \u0643\u0625\u062c\u0627\u0632\u0629`, false, true);
+}
+
+// ===== METERS =====
+function recalcMeters() {
+  const totals = { m1: 0, m2: 0, m3: 0 };
+  document.querySelectorAll('.task-entry').forEach(entry => {
+    const month = entry.querySelector('.month-select')?.value;
+    const occ = parseFloat(entry.querySelector('.occ-input')?.value) || 0;
+    if (month === currentMonths[0]) totals.m1 += occ;
+    else if (month === currentMonths[1]) totals.m2 += occ;
+    else if (month === currentMonths[2]) totals.m3 += occ;
+  });
+  ['m1','m2','m3'].forEach(key => {
+    const val = totals[key];
+    document.getElementById('meter-val-' + key).textContent = val + '%';
+    document.getElementById('meter-fill-' + key).style.width = (Math.min(val, 120) / 120 * 100) + '%';
+    const item = document.getElementById('meter-' + key);
+    item.classList.toggle('over', val > 120);
+    item.classList.toggle('active', val > 0 && val <= 120);
+  });
+}
+
+// ===== DATA =====
+function gatherData() {
+  const name = document.getElementById('empName').value.trim();
+  const department = document.getElementById('empDepartment').value;
+  const section = document.getElementById('empSection').value;
+  const quarter = document.getElementById('empQuarter').value;
+  const year = document.getElementById('empYear').value;
+  const rows = [];
+  document.querySelectorAll('.task-entry').forEach(entry => {
+    const isTimeOff = entry.classList.contains('is-timeoff');
+    const selects = entry.querySelectorAll('select');
+    const inputs = entry.querySelectorAll('input');
+    const textarea = entry.querySelector('textarea');
+    const row = {
+      name, department, section, quarter, year,
+      month: selects[0]?.value || '',
+      platform: selects[1]?.value || '',
+      taskType: selects[2]?.value || '',
+      occupancy: parseFloat(inputs[0]?.value) || 0,
+      description: textarea?.value?.trim() || '',
+      service: inputs[1]?.value?.trim() || ''
+    };
+    if (isTimeOff) row.timeOff = true;
+    rows.push(row);
+  });
+  return rows;
+}
+
+function validate() {
+  const name = document.getElementById('empName').value.trim();
+  const department = document.getElementById('empDepartment').value;
+  const quarter = document.getElementById('empQuarter').value;
+  const year = document.getElementById('empYear').value;
+  if (!name) { showToast('\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0627\u0644\u0627\u0633\u0645', true); return false; }
+  if (!department) { showToast('\u064a\u0631\u062c\u0649 \u0627\u062e\u062a\u064a\u0627\u0631 \u0627\u0644\u0625\u062f\u0627\u0631\u0629 (\u0627\u062e\u062a\u0631 \u0627\u0633\u0645 \u0627\u0644\u0645\u0648\u0638\u0641 \u0623\u0648\u0644\u0627)', true); return false; }
+  if (!year) { showToast('\u064a\u0631\u062c\u0649 \u0627\u062e\u062a\u064a\u0627\u0631 \u0627\u0644\u0633\u0646\u0629', true); return false; }
+  if (!quarter) { showToast('\u064a\u0631\u062c\u0649 \u0627\u062e\u062a\u064a\u0627\u0631 \u0627\u0644\u0631\u0628\u0639', true); return false; }
+
+  const entries = document.querySelectorAll('.task-entry');
+  if (entries.length === 0) { showToast('\u064a\u0631\u062c\u0649 \u0625\u0636\u0627\u0641\u0629 \u0645\u0647\u0645\u0629 \u0648\u0627\u062d\u062f\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644', true); return false; }
+
+  const monthTotals = {};
+  const monthTaskCounts = {};
+  let hasEmpty = false;
+  let hasLowOcc = false;
+  entries.forEach(entry => {
+    const isTimeOff = entry.classList.contains('is-timeoff');
+    const month = entry.querySelector('.month-select')?.value;
+    const occ = parseFloat(entry.querySelector('.occ-input')?.value) || 0;
+    const platform = entry.querySelectorAll('select')[1]?.value;
+    const taskType = entry.querySelectorAll('select')[2]?.value;
+    if (!isTimeOff && (!month || !platform || !taskType || !occ)) hasEmpty = true;
+    if (!isTimeOff && occ > 0 && occ < MIN_OCCUPANCY) hasLowOcc = true;
+    if (month) {
+      monthTotals[month] = (monthTotals[month] || 0) + occ;
+      monthTaskCounts[month] = (monthTaskCounts[month] || 0) + 1;
+    }
+  });
+
+  if (hasEmpty) { showToast('\u064a\u0631\u062c\u0649 \u062a\u0639\u0628\u0626\u0629 \u062c\u0645\u064a\u0639 \u0627\u0644\u062d\u0642\u0648\u0644 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0641\u064a \u0643\u0644 \u0645\u0647\u0645\u0629', true); return false; }
+  if (hasLowOcc) { showToast(`\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u062f\u0646\u0649 \u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0625\u0634\u063a\u0627\u0644 \u0641\u064a \u0643\u0644 \u0645\u0647\u0645\u0629 \u0647\u0648 ${MIN_OCCUPANCY}%`, true); return false; }
+  for (const [m, count] of Object.entries(monthTaskCounts)) {
+    if (count > MAX_TASKS_PER_MONTH) {
+      showToast(`\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 ${MAX_TASKS_PER_MONTH} \u0645\u0647\u0627\u0645 \u0641\u064a \u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u0648\u0627\u062d\u062f (${m} \u064a\u062d\u062a\u0648\u064a ${count})`, true);
+      return false;
+    }
+  }
+  for (const [m, total] of Object.entries(monthTotals)) {
+    if (total > 120) {
+      showToast(`\u0646\u0633\u0628\u0629 \u0627\u0644\u0625\u0634\u063a\u0627\u0644 \u0641\u064a ${m} \u062a\u062a\u062c\u0627\u0648\u0632 120% (${total}%)`, true);
+      return false;
+    }
+  }
+  return true;
+}
+
+// ===== SUBMIT TO FIREBASE =====
+async function submitToSheets() {
+  if (!validate()) return;
+
+  if (!initFirebase()) {
+    showToast('\u0644\u0645 \u064a\u062a\u0645 \u0625\u0639\u062f\u0627\u062f \u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u2014 \u064a\u0631\u062c\u0649 \u0625\u0639\u062f\u0627\u062f Firebase \u0645\u0646 \u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645 \u0623\u0648\u0644\u0627', true);
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  const label = document.getElementById('submitLabel');
+  btn.disabled = true;
+  label.innerHTML = '<span class="spinner"></span> \u062c\u0627\u0631\u064a \u0627\u0644\u0625\u0631\u0633\u0627\u0644...';
+
+  const rows = gatherData();
+  const timestamp = new Date().toISOString();
+
+  try {
+    const promises = rows.map(row => {
+      row.timestamp = timestamp;
+      row.status = 'pending';
+      return firebaseDb.ref('tasks').push(row);
+    });
+    await Promise.all(promises);
+
+    document.getElementById('successCount').textContent = rows.length;
+    document.getElementById('successOverlay').classList.add('show');
+  } catch (err) {
+    showToast('\u062d\u062f\u062b \u062e\u0637\u0623 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0625\u0631\u0633\u0627\u0644: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    label.innerHTML = '&#9989; \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062e\u0637\u0629';
+  }
+}
+
+function closeSuccess() {
+  document.getElementById('successOverlay').classList.remove('show');
+}
+
+// ===== CSV EXPORT =====
+function exportCSV() {
+  if (!validate()) return;
+  const rows = gatherData();
+  const headers = ['\u0627\u0644\u0627\u0633\u0645','\u0627\u0644\u0625\u062f\u0627\u0631\u0629','\u0627\u0644\u0642\u0633\u0645','\u0627\u0644\u0634\u0647\u0631','\u0627\u0644\u0631\u0628\u0639','\u0627\u0644\u0633\u0646\u0629','\u0627\u0644\u0645\u0646\u0635\u0629/\u0627\u0644\u0645\u0646\u062a\u062c','\u0646\u0648\u0639 \u0627\u0644\u0645\u0647\u0645\u0629','\u0646\u0633\u0628\u0629 \u0627\u0644\u0625\u0646\u0634\u063a\u0627\u0644','\u0648\u0635\u0641 \u0627\u0644\u0645\u0647\u0645\u0629','\u0627\u0644\u062e\u062f\u0645\u0629 \u0625\u0646 \u0648\u062c\u062f\u062a'];
+  let csv = '\uFEFF' + headers.join(',') + '\n';
+  rows.forEach(r => {
+    csv += [r.name, r.department, r.section, r.month, r.quarter, r.year, r.platform, r.taskType, r.occupancy, `"${r.description}"`, r.service].join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `\u062e\u0637\u0629_\u0627\u0644\u0639\u0645\u0644_${document.getElementById('empName').value.trim()||'employee'}_${document.getElementById('empYear').value||''}_\u0627\u0644\u0631\u0628\u0639_${document.getElementById('empQuarter').value||'Q'}.csv`;
+  a.click();
+  showToast('\u062a\u0645 \u062a\u0635\u062f\u064a\u0631 \u0627\u0644\u0645\u0644\u0641 \u0628\u0646\u062c\u0627\u062d', false, true);
+}
+
+// ===== PREVIEW =====
+function previewData() {
+  if (!validate()) return;
+  const rows = gatherData();
+  const year = document.getElementById('empYear').value;
+  let html = `<p style="margin-bottom:12px;font-weight:600;">\u0627\u0644\u0633\u0646\u0629: ${year} | \u0627\u0644\u0631\u0628\u0639: ${rows[0]?.quarter || ''}</p>`;
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<tr style="background:var(--primary);color:white;">';
+  ['\u0627\u0644\u0634\u0647\u0631','\u0627\u0644\u0645\u0646\u0635\u0629','\u0646\u0648\u0639 \u0627\u0644\u0645\u0647\u0645\u0629','\u0646\u0633\u0628\u0629 \u0627\u0644\u0625\u0634\u063a\u0627\u0644','\u0648\u0635\u0641 \u0627\u0644\u0645\u0647\u0645\u0629','\u0627\u0644\u062e\u062f\u0645\u0629'].forEach(h => {
+    html += `<th style="padding:10px 12px;text-align:right;">${h}</th>`;
+  });
+  html += '</tr>';
+  rows.forEach((r, i) => {
+    html += `<tr style="background:${i%2===0?'var(--bg)':'white'}">`;
+    [r.month, r.platform, r.taskType, r.occupancy+'%', r.description, r.service].forEach(v => {
+      html += `<td style="padding:8px 12px;border-bottom:1px solid var(--border);">${v}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+  document.getElementById('previewContent').innerHTML = html;
+  document.getElementById('previewModal').classList.add('show');
+}
+function closePreview() { document.getElementById('previewModal').classList.remove('show'); }
+
+// ===== CLEAR =====
+function clearAll() {
+  if (!confirm('\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f \u0645\u0646 \u0645\u0633\u062d \u062c\u0645\u064a\u0639 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a\u061f')) return;
+  document.getElementById('empName').value = '';
+  document.getElementById('empDepartment').innerHTML = '<option value="">\u2014 \u064a\u062a\u0645 \u062a\u0639\u0628\u0626\u062a\u0647 \u062a\u0644\u0642\u0627\u0626\u064a\u0627 \u2014</option>';
+  document.getElementById('empSection').innerHTML = '<option value="">\u2014 \u064a\u062a\u0645 \u062a\u0639\u0628\u0626\u062a\u0647 \u062a\u0644\u0642\u0627\u0626\u064a\u0627 \u2014</option>';
+  document.getElementById('empQuarter').selectedIndex = 0;
+  document.getElementById('empYear').value = '2026';
+  document.getElementById('taskEntries').innerHTML = '';
+  taskCounter = 0;
+  updateMonths();
+  showToast('\u062a\u0645 \u0645\u0633\u062d \u062c\u0645\u064a\u0639 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a');
+}
+
+// ===== TOAST =====
+function showToast(msg, isError, isSuccess) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : isSuccess ? ' success' : '');
+  setTimeout(() => t.className = 'toast', 3500);
+}
+</script>
+</body>
+</html>
