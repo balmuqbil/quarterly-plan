@@ -143,16 +143,20 @@ body { font-family:'Tajawal',sans-serif; background:#f1f5f9; color:var(--text-pr
 .kpi-card:nth-child(4)::before { background:linear-gradient(90deg, var(--info), #22d3ee); }
 .kpi-card:nth-child(5)::before { background:linear-gradient(90deg, var(--danger), #f87171); }
 .kpi-card:nth-child(6)::before { background:linear-gradient(90deg, #8b5cf6, #ec4899); }
+.kpi-card:nth-child(7)::before { background:linear-gradient(90deg, #06b6d4, #0ea5e9); }
+.kpi-card:nth-child(8)::before { background:linear-gradient(90deg, #10b981, #059669); }
 .kpi-icon {
   width:48px; height:48px; border-radius:12px; display:flex;
   align-items:center; justify-content:center; font-size:24px; margin-bottom:16px;
 }
 .kpi-card:nth-child(1) .kpi-icon { background:rgba(99,102,241,0.1); }
 .kpi-card:nth-child(2) .kpi-icon { background:rgba(16,185,129,0.1); }
-.kpi-card:nth-child(3) .kpi-icon { background:rgba(245,158,11,0.1); }
+.kpi-card:nth-child(3) .kpi-icon { background:rgba(245,158,11,0.15); }
 .kpi-card:nth-child(4) .kpi-icon { background:rgba(6,182,212,0.1); }
-.kpi-card:nth-child(5) .kpi-icon { background:rgba(239,68,68,0.1); }
-.kpi-card:nth-child(6) .kpi-icon { background:rgba(139,92,246,0.1); }
+.kpi-card:nth-child(5) .kpi-icon { background:rgba(99,102,241,0.1); }
+.kpi-card:nth-child(6) .kpi-icon { background:rgba(239,68,68,0.1); }
+.kpi-card:nth-child(7) .kpi-icon { background:rgba(139,92,246,0.1); }
+.kpi-card:nth-child(8) .kpi-icon { background:rgba(16,185,129,0.1); }
 .kpi-value { font-size:32px; font-weight:800; color:var(--text-primary); margin-bottom:4px; }
 .kpi-label { font-size:13px; color:var(--text-secondary); font-weight:500; }
 .kpi-change { font-size:11px; margin-top:8px; display:inline-block; padding:3px 8px; border-radius:6px; font-weight:600; }
@@ -752,34 +756,40 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="kpi-card clickable animate-in delay-2" onclick="navigateTo('tasks')">
         <div class="kpi-icon">📋</div>
         <div class="kpi-value" id="kpiTasks">—</div>
-        <div class="kpi-label">إجمالي المهام المسجلة</div>
+        <div class="kpi-label">إجمالي المهام</div>
         <span class="kpi-change neutral" id="kpiTaskChange">—</span>
       </div>
-      <div class="kpi-card clickable animate-in delay-3" onclick="showOccupancyDrill()">
+      <div class="kpi-card clickable animate-in delay-3" onclick="document.getElementById('taskFilterStatus').value='pending';navigateTo('tasks')">
+        <div class="kpi-icon">⏳</div>
+        <div class="kpi-value" id="kpiPending">—</div>
+        <div class="kpi-label">بانتظار الموافقة</div>
+        <span class="kpi-change neutral" id="kpiPendingChange">—</span>
+      </div>
+      <div class="kpi-card clickable animate-in delay-4" onclick="showOccupancyDrill()">
         <div class="kpi-icon">📊</div>
         <div class="kpi-value" id="kpiAvgOcc">—</div>
         <div class="kpi-label">متوسط الإشغال</div>
         <span class="kpi-change neutral" id="kpiOccChange">—</span>
       </div>
-      <div class="kpi-card clickable animate-in delay-4" onclick="navigateTo('platforms')">
+      <div class="kpi-card clickable animate-in delay-1" onclick="navigateTo('platforms')">
         <div class="kpi-icon">💻</div>
         <div class="kpi-value" id="kpiPlatforms">—</div>
         <div class="kpi-label">المنصات النشطة</div>
         <span class="kpi-change neutral">من أصل 5 منصات</span>
       </div>
-      <div class="kpi-card clickable animate-in delay-1" onclick="showHighOccDrill()">
+      <div class="kpi-card clickable animate-in delay-2" onclick="showHighOccDrill()">
         <div class="kpi-icon">⚡</div>
         <div class="kpi-value" id="kpiHighOcc">—</div>
         <div class="kpi-label">موظفون بإشغال ≥ 100%</div>
         <span class="kpi-change neutral" id="kpiHighChange">تحتاج متابعة</span>
       </div>
-      <div class="kpi-card clickable animate-in delay-2" onclick="showDepartmentsDrill()">
+      <div class="kpi-card clickable animate-in delay-3" onclick="showDepartmentsDrill()">
         <div class="kpi-icon">🏢</div>
         <div class="kpi-value" id="kpiDepartments">—</div>
         <div class="kpi-label">الإدارات المشاركة</div>
         <span class="kpi-change neutral" id="kpiDeptChange">—</span>
       </div>
-      <div class="kpi-card clickable animate-in delay-3" onclick="showCapacityDrill()">
+      <div class="kpi-card clickable animate-in delay-4" onclick="showCapacityDrill()">
         <div class="kpi-icon">📊</div>
         <div class="kpi-value" id="kpiCapacity">—</div>
         <div class="kpi-label">استغلال السعة</div>
@@ -1782,15 +1792,33 @@ function updateKPIs() {
   const avgOcc = d.length > 0 ? (d.reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0) / d.length) : 0;
   const highOccEmployees = getHighOccEmployees();
 
+  // Status counts
+  var statusCounts = { pending: 0, approved: 0, rejected: 0 };
+  d.forEach(function(r) { statusCounts[r.status || 'pending']++; });
+
   animateValue('kpiEmployees', employees.length);
   animateValue('kpiTasks', d.length);
+  animateValue('kpiPending', statusCounts.pending);
   document.getElementById('kpiAvgOcc').textContent = avgOcc.toFixed(1) + '%';
   animateValue('kpiPlatforms', platforms.length);
   animateValue('kpiHighOcc', highOccEmployees.size);
   animateValue('kpiDepartments', departments.length);
 
   document.getElementById('kpiEmpChange').textContent = 'اضغط لعرض الموظفين';
-  document.getElementById('kpiTaskChange').textContent = 'اضغط لعرض المهام';
+  // Task change: show status breakdown
+  document.getElementById('kpiTaskChange').innerHTML =
+    '<span style="color:#2e7d32">✅ ' + statusCounts.approved + '</span> · ' +
+    '<span style="color:#e65100">⏳ ' + statusCounts.pending + '</span> · ' +
+    '<span style="color:#c62828">❌ ' + statusCounts.rejected + '</span>';
+  // Pending change
+  var pendingEl = document.getElementById('kpiPendingChange');
+  if (statusCounts.pending > 0) {
+    pendingEl.className = 'kpi-change down';
+    pendingEl.textContent = '⚠ تحتاج مراجعة — اضغط للعرض';
+  } else {
+    pendingEl.className = 'kpi-change up';
+    pendingEl.textContent = '✓ لا توجد مهام معلقة';
+  }
   const occClass = avgOcc > 80 ? 'up' : avgOcc > 50 ? 'neutral' : 'down';
   document.getElementById('kpiOccChange').className = 'kpi-change ' + occClass;
   document.getElementById('kpiOccChange').textContent = avgOcc > 80 ? '⬆ إشغال مرتفع' : avgOcc > 50 ? '— إشغال متوسط' : '⬇ إشغال منخفض';
