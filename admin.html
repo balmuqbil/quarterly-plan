@@ -1014,6 +1014,18 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <button class="bulk-btn bulk-reject" onclick="bulkUpdateStatus('rejected')">❌ رفض الكل</button>
       <span class="bulk-info" id="bulkInfo"></span>
     </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center;">
+      <select class="quarter-filter" id="taskCardSortBy" onchange="renderTasksSection()">
+        <option value="tasks">ترتيب: عدد المهام</option>
+        <option value="fte">ترتيب: FTEs</option>
+        <option value="employees">ترتيب: عدد الموظفين</option>
+        <option value="avgOcc">ترتيب: متوسط إشغال</option>
+        <option value="platforms">ترتيب: عدد المنصات</option>
+        <option value="name">ترتيب: الاسم</option>
+      </select>
+      <button class="export-btn" id="taskCardSortDir" style="font-size:14px;padding:6px 10px;min-width:36px;" onclick="toggleTaskCardSortDir()" title="تنازلي — اضغط للتبديل">⬇</button>
+      <span id="taskCardCount" style="font-size:12px;color:var(--text-light);"></span>
+    </div>
     <div class="detail-grid" id="tasksGrid"></div>
     <div class="table-card" style="margin-top:20px;">
       <div class="chart-header"><div><div class="chart-title">جدول المهام التفصيلي</div></div></div>
@@ -2160,6 +2172,14 @@ function renderPlatformsSection() {
 }
 
 // ==================== TASKS SECTION ====================
+var taskCardSortDir = 'desc';
+function toggleTaskCardSortDir() {
+  taskCardSortDir = taskCardSortDir === 'asc' ? 'desc' : 'asc';
+  document.getElementById('taskCardSortDir').textContent = taskCardSortDir === 'asc' ? '⬆' : '⬇';
+  document.getElementById('taskCardSortDir').title = taskCardSortDir === 'asc' ? 'تصاعدي — اضغط للتبديل' : 'تنازلي — اضغط للتبديل';
+  renderTasksSection();
+}
+
 var taskSortField = 'timestamp';
 var taskSortDir = -1; // 1=asc, -1=desc (default: newest first)
 var MONTH_ORDER = {'يناير':1,'فبراير':2,'مارس':3,'أبريل':4,'مايو':5,'يونيو':6,'يوليو':7,'أغسطس':8,'سبتمبر':9,'أكتوبر':10,'نوفمبر':11,'ديسمبر':12};
@@ -2293,6 +2313,11 @@ function renderTasksSection() {
   populateTaskFilters();
 
   // Task type cards (from global filteredData, not local filters)
+  // Count distinct months for FTE calculation
+  var taskActiveMonths = new Set();
+  filteredData.forEach(function(r) { taskActiveMonths.add((r.month||'') + '|' + (r.year||'')); });
+  var taskMonthCount = taskActiveMonths.size || 1;
+
   const typeMap = {};
   filteredData.forEach(r => {
     if (!typeMap[r.taskType]) typeMap[r.taskType] = { name: r.taskType, count: 0, employees: new Set(), platforms: new Set(), totalOcc: 0, _tasks: [] };
@@ -2302,19 +2327,50 @@ function renderTasksSection() {
     typeMap[r.taskType].totalOcc += parseFloat(r.occupancy) || 0;
     typeMap[r.taskType]._tasks.push(r);
   });
-  const types = Object.values(typeMap).sort((a,b) => b.count - a.count);
+
+  // Pre-compute FTE and avgOcc for sorting
+  var types = Object.values(typeMap);
+  types.forEach(function(t) {
+    t._fte = t.totalOcc / (100 * taskMonthCount);
+    t._avgOcc = calcAvgOccPerMonth(t._tasks);
+  });
+
+  // Sort task type cards
+  var tcSortBy = (document.getElementById('taskCardSortBy')?.value) || 'tasks';
+  var tcDir = taskCardSortDir === 'asc' ? 1 : -1;
+  types.sort(function(a, b) {
+    switch (tcSortBy) {
+      case 'name': return tcDir * a.name.localeCompare(b.name, 'ar');
+      case 'tasks': return tcDir * (a.count - b.count);
+      case 'fte': return tcDir * (a._fte - b._fte);
+      case 'employees': return tcDir * (a.employees.size - b.employees.size);
+      case 'avgOcc': return tcDir * (a._avgOcc - b._avgOcc);
+      case 'platforms': return tcDir * (a.platforms.size - b.platforms.size);
+      default: return tcDir * (a.count - b.count);
+    }
+  });
+
+  // Update card count
+  var tcCountEl = document.getElementById('taskCardCount');
+  if (tcCountEl) tcCountEl.textContent = types.length + ' نوع مهمة';
+
   const grid = document.getElementById('tasksGrid');
-  grid.innerHTML = types.map((t,i) => `<div class="detail-card" onclick="showTaskTypeDrill('` + escapeJS(t.name) + `')">
+  grid.innerHTML = types.map((t,i) => {
+    var fte = t._fte.toFixed(1);
+    var avgOcc = t._avgOcc.toFixed(0);
+    return `<div class="detail-card" onclick="showTaskTypeDrill('` + escapeJS(t.name) + `')">
     <div class="detail-card-header">
       <div class="detail-card-name">${escapeHtml(t.name)}</div>
       <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${t.count} مهمة</span>
     </div>
     <div class="detail-card-stats">
       <div class="detail-stat"><div class="detail-stat-value">${t.employees.size}</div><div class="detail-stat-label">موظف</div></div>
+      <div class="detail-stat"><div class="detail-stat-value">${fte}</div><div class="detail-stat-label">FTEs</div></div>
       <div class="detail-stat"><div class="detail-stat-value">${t.platforms.size}</div><div class="detail-stat-label">منصات</div></div>
-      <div class="detail-stat"><div class="detail-stat-value">${calcAvgOccPerMonth(t._tasks).toFixed(0)}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
+      <div class="detail-stat"><div class="detail-stat-value">${avgOcc}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
     </div>
-  </div>`).join('');
+  </div>`;
+  }).join('');
 
   // Tasks table (with sorting and filtering)
   updateSortIcons();
