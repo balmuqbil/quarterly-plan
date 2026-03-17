@@ -838,8 +838,30 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       </div>
       <div class="top-actions">
         <button class="export-btn" onclick="openTaskModal()">➕ إضافة مهمة</button>
-        <input type="text" class="search-box" id="taskSearch" placeholder="🔍 بحث في المهام..." oninput="renderTasksSection()">
       </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center;">
+      <input type="text" class="search-box" id="taskSearch" placeholder="🔍 بحث بالاسم، الإدارة، القسم، المنصة..." oninput="tasksPage=1;renderTasksSection()" style="min-width:260px;">
+      <select class="quarter-filter" id="taskFilterType" onchange="tasksPage=1;renderTasksSection()">
+        <option value="all">جميع أنواع المهام</option>
+      </select>
+      <select class="quarter-filter" id="taskFilterOcc" onchange="tasksPage=1;renderTasksSection()">
+        <option value="all">جميع الإشغال</option>
+        <option value="20">≥ 20%</option>
+        <option value="50">≥ 50%</option>
+        <option value="70">≥ 70%</option>
+        <option value="100">≥ 100%</option>
+        <option value="101">100%+</option>
+      </select>
+      <select class="quarter-filter" id="taskFilterMonth" onchange="tasksPage=1;renderTasksSection()">
+        <option value="all">جميع الأشهر</option>
+        <option value="يناير">يناير</option><option value="فبراير">فبراير</option><option value="مارس">مارس</option>
+        <option value="أبريل">أبريل</option><option value="مايو">مايو</option><option value="يونيو">يونيو</option>
+        <option value="يوليو">يوليو</option><option value="أغسطس">أغسطس</option><option value="سبتمبر">سبتمبر</option>
+        <option value="أكتوبر">أكتوبر</option><option value="نوفمبر">نوفمبر</option><option value="ديسمبر">ديسمبر</option>
+      </select>
+      <button class="export-btn" style="font-size:12px;padding:6px 12px;" onclick="resetTaskFilters()">↻ إعادة تعيين</button>
+      <span id="taskFilterCount" style="font-size:12px;color:var(--text-light);margin-right:auto;"></span>
     </div>
     <div class="detail-grid" id="tasksGrid"></div>
     <div class="table-card" style="margin-top:20px;">
@@ -1607,9 +1629,73 @@ function updateSortIcons() {
   });
 }
 
+function populateTaskFilters() {
+  var typeFilter = document.getElementById('taskFilterType');
+  if (!typeFilter) return;
+  var currentType = typeFilter.value;
+  var types = [...new Set(filteredData.map(function(r) { return r.taskType; }).filter(Boolean))].sort();
+  typeFilter.innerHTML = '<option value="all">جميع أنواع المهام</option>' + types.map(function(t) {
+    return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>';
+  }).join('');
+  typeFilter.value = currentType;
+}
+
+function resetTaskFilters() {
+  document.getElementById('taskSearch').value = '';
+  document.getElementById('taskFilterType').value = 'all';
+  document.getElementById('taskFilterOcc').value = 'all';
+  document.getElementById('taskFilterMonth').value = 'all';
+  tasksPage = 1;
+  renderTasksSection();
+}
+
+function getTaskFilteredData() {
+  var search = (document.getElementById('taskSearch')?.value || '').trim().toLowerCase();
+  var typeVal = (document.getElementById('taskFilterType')?.value) || 'all';
+  var occVal = (document.getElementById('taskFilterOcc')?.value) || 'all';
+  var monthVal = (document.getElementById('taskFilterMonth')?.value) || 'all';
+
+  var data = filteredData;
+
+  // Text search: name, department, section, platform
+  if (search) {
+    data = data.filter(function(r) {
+      return (r.name||'').toLowerCase().indexOf(search) !== -1 ||
+             (r.department||'').toLowerCase().indexOf(search) !== -1 ||
+             (r.section||'').toLowerCase().indexOf(search) !== -1 ||
+             (r.platform||'').toLowerCase().indexOf(search) !== -1 ||
+             (r.description||'').toLowerCase().indexOf(search) !== -1;
+    });
+  }
+
+  // Task type filter
+  if (typeVal !== 'all') {
+    data = data.filter(function(r) { return r.taskType === typeVal; });
+  }
+
+  // Occupancy filter
+  if (occVal !== 'all') {
+    var occThreshold = parseInt(occVal);
+    if (occVal === '101') {
+      // 100%+ means strictly over 100
+      data = data.filter(function(r) { return (parseFloat(r.occupancy)||0) > 100; });
+    } else {
+      data = data.filter(function(r) { return (parseFloat(r.occupancy)||0) >= occThreshold; });
+    }
+  }
+
+  // Month filter
+  if (monthVal !== 'all') {
+    data = data.filter(function(r) { return r.month === monthVal; });
+  }
+
+  return data;
+}
+
 function renderTasksSection() {
-  const search = (document.getElementById('taskSearch')?.value || '').trim().toLowerCase();
-  // Task type cards
+  populateTaskFilters();
+
+  // Task type cards (from global filteredData, not local filters)
   const typeMap = {};
   filteredData.forEach(r => {
     if (!typeMap[r.taskType]) typeMap[r.taskType] = { name: r.taskType, count: 0, employees: new Set(), platforms: new Set(), totalOcc: 0 };
@@ -1632,10 +1718,19 @@ function renderTasksSection() {
     </div>
   </div>`).join('');
 
-  // Tasks table (with sorting)
+  // Tasks table (with sorting and filtering)
   updateSortIcons();
-  let data = filteredData;
-  if (search) data = data.filter(r => (r.name||'').includes(search) || (r.taskType||'').includes(search) || (r.platform||'').includes(search) || (r.description||'').includes(search));
+  let data = getTaskFilteredData();
+
+  // Show filter result count
+  var countEl = document.getElementById('taskFilterCount');
+  if (countEl) {
+    if (data.length !== filteredData.length) {
+      countEl.textContent = '📊 ' + data.length + ' من ' + filteredData.length + ' مهمة';
+    } else {
+      countEl.textContent = '📊 ' + data.length + ' مهمة';
+    }
+  }
   data = getTaskSortedData(data);
   const totalPages = Math.ceil(data.length / PAGE_SIZE) || 1;
   if (tasksPage > totalPages) tasksPage = totalPages;
