@@ -1369,7 +1369,7 @@ function setDefaultFilters() {
   }
 }
 const COLORS = ['#1B8354','#16a34a','#DBA102','#DC2626','#0891b2','#166a45','#0d9488','#22a366','#f97316','#384250','#84cc16','#e11d48','#0ea5e9'];
-const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','Other':'💻'};
+const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','إجازة':'🏖️','بدون منصة':'📌','Other':'💻'};
 
 // ==================== OCCUPANCY COLOR (consistent everywhere) ====================
 // >70% green (good), 50-70% orange (fair), <50% red (not good)
@@ -1619,6 +1619,10 @@ function fixPlatformValues(data) {
     // If platform has a department name, it was likely swapped in old data — clear it
     if (knownDepartments.has(platform) && !knownPlatforms.has(platform)) {
       r.platform = '';
+    }
+    // Normalize empty platform to display name
+    if (!r.platform || r.platform.trim() === '') {
+      r.platform = r.taskType === 'إجازة' ? 'إجازة' : 'بدون منصة';
     }
   });
 
