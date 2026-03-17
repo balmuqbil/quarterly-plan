@@ -2101,6 +2101,7 @@ function saveTask() {
 
   closeTaskModal();
   applyFilters();
+  syncTestData(); // Persist changes if test data is active
   // Sync to Google Sheets if configured
   syncTaskToSheet(fields, editIdx, originalTask);
 }
@@ -2111,6 +2112,7 @@ function deleteTask(idx) {
   if (!confirm(`هل تريد حذف مهمة "${r.taskType}" للموظف "${r.name}" في ${r.month}؟`)) return;
   allData.splice(idx, 1);
   applyFilters();
+  syncTestData(); // Persist changes if test data is active
   showMgmtToast('تم حذف المهمة', 'success');
   // Sync deletion to Google Sheets
   syncDeleteToSheet(r);
@@ -3071,6 +3073,13 @@ function clearTestData() {
   hideTestDataBanner();
   loadData();
   showMgmtToast('تم حذف البيانات التجريبية — جاري تحميل البيانات الحقيقية', 'success');
+}
+
+function syncTestData() {
+  // If test data is active, persist current allData back to localStorage
+  if (hasTestData()) {
+    localStorage.setItem(STORAGE_PREFIX + 'testData', JSON.stringify(allData));
+  }
 }
 
 function hasTestData() {
