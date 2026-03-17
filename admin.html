@@ -1125,7 +1125,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.5';
+const ADMIN_VERSION = 'v20260317.6';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -2125,6 +2125,7 @@ function selectTaskEmployee(name) {
 
   var deptSelect = document.getElementById('taskField_department');
   var secSelect = document.getElementById('taskField_section');
+  var taskTypeSelect = document.getElementById('taskField_taskType');
 
   if (emp && emp.department) {
     deptSelect.value = emp.department;
@@ -2135,9 +2136,38 @@ function selectTaskEmployee(name) {
     if (emp.section) {
       secSelect.value = emp.section;
     }
+
+    // Filter task types based on employee's section
+    var empSection = (emp && emp.section) ? emp.section : '';
+    updateTaskTypesBySection(empSection);
   } else {
     deptSelect.selectedIndex = 0;
     secSelect.innerHTML = '<option value="">— يتم تعبئته تلقائياً —</option>';
+    // Show all task types when no section
+    updateTaskTypesBySection('');
+  }
+}
+
+function updateTaskTypesBySection(sectionName) {
+  var taskTypeSelect = document.getElementById('taskField_taskType');
+  var currentVal = taskTypeSelect.value;
+  var allowedTypes;
+
+  if (sectionName) {
+    allowedTypes = getTaskTypesForSection(sectionName);
+  } else {
+    var mgmt = getMgmtData();
+    allowedTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
+  }
+
+  taskTypeSelect.innerHTML = '<option value="">— اختر نوع المهمة —</option>' +
+    allowedTypes.map(function(t) {
+      return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>';
+    }).join('');
+
+  // Restore previous selection if still valid
+  if (currentVal && allowedTypes.indexOf(currentVal) !== -1) {
+    taskTypeSelect.value = currentVal;
   }
 }
 
@@ -2915,6 +2945,7 @@ var DEFAULT_MGMT = {
     'تنفيذ تكامل الحلول': ['تكامل التطبيقات', 'الحلول المؤسسية']
   },
   sectionCapacity: {},
+  sectionTaskTypes: {},  // { "sectionName": ["taskType1", ...] } — empty means all enabled
   platforms: ['نور','مدرستي','سفير','بوابة التعليم','فارس'],
   taskTypes: ['تحليل أعمال','تجربة مستخدم','تطوير حلول','تطوير تكاملات','تطوير واجهات','تطوير موبايل','جودة','إدارة عمليات DevOps','دعم L3','إدارة تسليم تقني','أعمال داخلية','أعمال مشاريع جديدة (لم تعتمد)','دراسات كراسات مشاريع جديدة']
 };
@@ -3118,7 +3149,7 @@ function getMgmtData() {
     } catch(e) { data[key] = [...(DEFAULT_MGMT[key] || [])]; }
   });
   // Object categories
-  ['sections', 'sectionCapacity'].forEach(key => {
+  ['sections', 'sectionCapacity', 'sectionTaskTypes'].forEach(key => {
     try {
       const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + key);
       data[key] = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULT_MGMT[key] || {}));
@@ -3470,8 +3501,69 @@ function renderDataManagement() {
           }).join('')}
         </div>
       </div>`;
+    } else if (cat.key === 'taskTypes') {
+      // Custom task types card with section linking
+      const items = data[cat.key] || [];
+      const depts = data.departments || [];
+      const secs = data.sections || {};
+      const stt = data.sectionTaskTypes || {};
+
+      // Collect all sections across departments
+      var allSections = [];
+      depts.forEach(function(dept) {
+        (secs[dept] || []).forEach(function(sec) {
+          allSections.push({ dept: dept, section: sec });
+        });
+      });
+
+      html += `<div class="mgmt-card" id="mgmt-card-taskTypes" style="grid-column: 1 / -1;">
+        <div class="mgmt-card-header">
+          <div class="mgmt-card-title">${cat.icon} ${cat.title} — ربط بالأقسام</div>
+          <span class="mgmt-card-count">${items.length} نوع</span>
+        </div>
+        <div style="overflow-x:auto; max-height:600px; overflow-y:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+              <tr style="background:#f1f5f9; position:sticky; top:0; z-index:2;">
+                <th style="padding:10px 12px; text-align:right; min-width:180px; border-bottom:2px solid #e2e8f0; position:sticky; right:0; background:#f1f5f9; z-index:3;">نوع المهمة</th>
+                ${allSections.map(function(s) {
+                  return '<th style="padding:8px 6px; text-align:center; min-width:90px; border-bottom:2px solid #e2e8f0; font-size:11px; line-height:1.3;"><div style="color:#6366f1;font-weight:700;">' + escapeHtml(s.dept) + '</div><div style="color:#64748b;">' + escapeHtml(s.section) + '</div></th>';
+                }).join('')}
+                <th style="padding:8px; border-bottom:2px solid #e2e8f0; min-width:60px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(function(taskType, ti) {
+                return '<tr style="border-bottom:1px solid #f1f5f9;">' +
+                  '<td style="padding:8px 12px; font-weight:500; position:sticky; right:0; background:white; z-index:1;">' +
+                    '<span id="mgmt-name-taskTypes-' + ti + '">' + escapeHtml(taskType) + '</span>' +
+                  '</td>' +
+                  allSections.map(function(s) {
+                    var secKey = s.section;
+                    var enabledList = stt[secKey];
+                    var isEnabled = !enabledList || enabledList.length === 0 || enabledList.indexOf(taskType) !== -1;
+                    return '<td style="padding:4px; text-align:center;">' +
+                      '<input type="checkbox" ' + (isEnabled ? 'checked' : '') +
+                      ' onchange="toggleSectionTaskType(\'' + escapeJS(secKey) + '\',\'' + escapeJS(taskType) + '\',this.checked)"' +
+                      ' style="width:18px;height:18px;cursor:pointer;accent-color:#6366f1;">' +
+                      '</td>';
+                  }).join('') +
+                  '<td style="padding:4px; text-align:center;">' +
+                    '<button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem(\'taskTypes\',' + ti + ')" style="margin-left:2px;">✏️</button>' +
+                    '<button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem(\'taskTypes\',' + ti + ')">🗑️</button>' +
+                  '</td>' +
+                '</tr>';
+              }).join('')}
+              ${items.length === 0 ? '<tr><td colspan="' + (allSections.length + 2) + '" style="text-align:center;padding:20px;color:var(--text-light);">لا توجد أنواع مهام</td></tr>' : ''}
+            </tbody>
+          </table>
+        </div>
+        <div class="mgmt-add-row">
+          <input class="mgmt-add-input" id="mgmt-input-taskTypes" placeholder="${cat.placeholder}" onkeydown="if(event.key==='Enter')addMgmtItem('taskTypes')">
+          <button class="mgmt-add-btn" onclick="addMgmtItem('taskTypes')">+ إضافة</button>
+        </div>`;
     } else {
-      // Simple array categories (departments, platforms, taskTypes)
+      // Simple array categories (departments, platforms)
       const items = data[cat.key] || [];
       html += `<div class="mgmt-card" id="mgmt-card-${cat.key}">
         <div class="mgmt-card-header">
@@ -3664,6 +3756,49 @@ function updateSectionCapacity(dept, sec, hc) {
   const data = getMgmtData();
   data.sectionCapacity[dept + '|' + sec] = parseInt(hc) || 0;
   saveMgmtList('sectionCapacity', data.sectionCapacity);
+}
+
+function toggleSectionTaskType(section, taskType, enabled) {
+  var data = getMgmtData();
+  var stt = data.sectionTaskTypes || {};
+  var allTaskTypes = data.taskTypes || [];
+
+  if (!stt[section]) {
+    // First toggle for this section — initialize with all task types enabled
+    stt[section] = allTaskTypes.slice();
+  }
+
+  if (enabled) {
+    // Add task type if not already present
+    if (stt[section].indexOf(taskType) === -1) {
+      stt[section].push(taskType);
+    }
+  } else {
+    // Remove task type
+    stt[section] = stt[section].filter(function(t) { return t !== taskType; });
+  }
+
+  // If all task types are enabled, remove the entry (means "all allowed")
+  if (stt[section].length >= allTaskTypes.length) {
+    delete stt[section];
+  }
+
+  saveMgmtList('sectionTaskTypes', stt);
+}
+
+function getTaskTypesForSection(sectionName) {
+  var data = getMgmtData();
+  var stt = data.sectionTaskTypes || {};
+  var allTaskTypes = data.taskTypes.length ? data.taskTypes : DEFAULT_MGMT.taskTypes;
+
+  if (!stt[sectionName] || stt[sectionName].length === 0) {
+    // No restriction — all task types allowed
+    return allTaskTypes;
+  }
+  // Return only enabled task types, preserving original order
+  return allTaskTypes.filter(function(t) {
+    return stt[sectionName].indexOf(t) !== -1;
+  });
 }
 
 // ==================== DEPARTMENTS & SECTIONS PAGE ====================
@@ -3950,9 +4085,12 @@ function importMgmtData(event) {
           saveMgmtList(cat.key, data[cat.key]);
         }
       });
-      // Also handle sectionCapacity if present
+      // Also handle sectionCapacity and sectionTaskTypes if present
       if (data.sectionCapacity && typeof data.sectionCapacity === 'object') {
         saveMgmtList('sectionCapacity', data.sectionCapacity);
+      }
+      if (data.sectionTaskTypes && typeof data.sectionTaskTypes === 'object') {
+        saveMgmtList('sectionTaskTypes', data.sectionTaskTypes);
       }
       renderDataManagement();
       showMgmtToast('تم استيراد الإعدادات بنجاح', 'success');
