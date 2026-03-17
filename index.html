@@ -772,6 +772,7 @@ const SECTIONS = loadMgmtObject('sections', {
 });
 
 const SECTION_TASK_TYPES = loadMgmtObject('sectionTaskTypes', {});
+const TASK_TYPE_NO_PLATFORM = loadMgmtObject('taskTypeNoPlatform', {});
 
 // Load full employee objects (with department & section)
 let EMPLOYEES_FULL = [];
@@ -806,7 +807,28 @@ function updateAllTaskTypeDropdowns() {
     if (currentVal && allowed.includes(currentVal)) {
       taskTypeSelect.value = currentVal;
     }
+    // Update platform visibility based on current task type
+    onTaskTypeChange(taskTypeSelect);
   });
+}
+
+function onTaskTypeChange(selectEl) {
+  const taskType = selectEl.value;
+  const entry = selectEl.closest('.task-entry');
+  if (!entry) return;
+  const platformField = entry.querySelector('.platform-field');
+  if (!platformField) return;
+  const platformSelect = platformField.querySelector('select');
+  if (taskType && TASK_TYPE_NO_PLATFORM[taskType]) {
+    platformField.style.opacity = '0.4';
+    platformField.style.pointerEvents = 'none';
+    if (platformSelect) platformSelect.value = '';
+    platformField.title = 'هذا النوع لا يتطلب منصة';
+  } else {
+    platformField.style.opacity = '';
+    platformField.style.pointerEvents = '';
+    platformField.title = '';
+  }
 }
 
 let taskCounter = 0;
@@ -1041,13 +1063,13 @@ function addTask() {
         <label>الشهر <span class="month-task-hint"></span></label>
         <select class="month-select" onchange="onMonthChange(this)">${monthOpts}</select>
       </div>
-      <div class="field">
+      <div class="field platform-field">
         <label>المنصة / المنتج</label>
         <select>${makeOptions(PLATFORMS, 'المنصة')}</select>
       </div>
       <div class="field">
         <label>نوع المهمة</label>
-        <select>${makeOptions(getFilteredTaskTypes(), 'نوع المهمة')}</select>
+        <select onchange="onTaskTypeChange(this)">${makeOptions(getFilteredTaskTypes(), 'نوع المهمة')}</select>
       </div>
       <div class="field">
         <label>نسبة الإشغال % (الحد الأدنى ${MIN_OCCUPANCY}%)</label>
@@ -1223,7 +1245,8 @@ function validate() {
     const occ = parseFloat(entry.querySelector('.occ-input')?.value) || 0;
     const platform = entry.querySelectorAll('select')[1]?.value;
     const taskType = entry.querySelectorAll('select')[2]?.value;
-    if (!isTimeOff && (!month || !platform || !taskType || !occ)) hasEmpty = true;
+    const platformRequired = !taskType || !TASK_TYPE_NO_PLATFORM[taskType];
+    if (!isTimeOff && (!month || (platformRequired && !platform) || !taskType || !occ)) hasEmpty = true;
     if (!isTimeOff && occ > 0 && occ < MIN_OCCUPANCY) hasLowOcc = true;
     if (month) {
       monthTotals[month] = (monthTotals[month] || 0) + occ;
