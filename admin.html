@@ -944,6 +944,20 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <h1>🏢 الإدارات والأقسام</h1>
         <div class="subtitle">هيكل الإدارات والأقسام مع تقارير السعة والإشغال</div>
       </div>
+      <div class="top-actions">
+        <select class="quarter-filter" id="deptYearFilter" onchange="renderDeptsAndSections()">
+          <option value="all">جميع السنوات</option>
+          <option value="2026" selected>2026</option>
+          <option value="2027">2027</option>
+        </select>
+        <select class="quarter-filter" id="deptQuarterFilter" onchange="renderDeptsAndSections()">
+          <option value="all">جميع الأرباع</option>
+          <option value="الأول">الربع الأول</option>
+          <option value="الثاني">الربع الثاني</option>
+          <option value="الثالث">الربع الثالث</option>
+          <option value="الرابع">الربع الرابع</option>
+        </select>
+      </div>
     </div>
     <div id="deptsAndSectionsContent"></div>
   </div>
@@ -3149,20 +3163,41 @@ function getFilteredNumMonths() {
 function renderDeptsAndSections() {
   var mgmt = getMgmtData();
   var capData = getCapacityData();
-  var numMonths = getFilteredNumMonths();
 
-  // Calculate usage per dept and section, grouped by month for accurate per-month reporting
+  // Use local filters from this page
+  var deptYearVal = (document.getElementById('deptYearFilter')?.value) || 'all';
+  var deptQtrVal = (document.getElementById('deptQuarterFilter')?.value) || 'all';
+
+  // Determine numMonths from the local quarter filter
+  var numMonths;
+  if (deptQtrVal === 'all') {
+    numMonths = 12;
+  } else {
+    numMonths = 3; // each quarter = 3 months
+  }
+
+  // Filter data locally based on this page's filters
+  var localData = allData;
+  if (deptYearVal !== 'all') localData = localData.filter(function(r) { return String(r.year) === deptYearVal; });
+  if (deptQtrVal !== 'all') localData = localData.filter(function(r) { return r.quarter === deptQtrVal; });
+
+  // Build filter label for display
+  var filterLabel = '';
+  if (deptQtrVal !== 'all') {
+    filterLabel = 'الربع ' + deptQtrVal;
+  } else {
+    filterLabel = 'سنوي';
+  }
+  if (deptYearVal !== 'all') filterLabel += ' ' + deptYearVal;
+
+  // Calculate usage per dept and section
   var usageByDeptSec = {};
   var usageByDept = {};
   var empCountByDeptSec = {};
   var empCountByDept = {};
-  // Track per-employee per-month usage for accurate averaging
-  var usageByDeptSecMonth = {};
-  var usageByDeptMonth = {};
-  filteredData.forEach(function(r) {
+  localData.forEach(function(r) {
     var dk = r.department || '';
     var sk = r.section || '';
-    var month = r.month || '';
     usageByDept[dk] = (usageByDept[dk] || 0) + (parseFloat(r.occupancy) || 0);
     var key = dk + '|' + sk;
     usageByDeptSec[key] = (usageByDeptSec[key] || 0) + (parseFloat(r.occupancy) || 0);
@@ -3177,7 +3212,7 @@ function renderDeptsAndSections() {
   var sections = mgmt.sections || {};
   var totalHC = Object.values(capData).reduce(function(s, d) { return s + d.totalHeadCount; }, 0);
   var totalCap = totalHC * 100 * numMonths;
-  var totalUsed = filteredData.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
+  var totalUsed = localData.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
   var totalUtil = totalCap > 0 ? (totalUsed / totalCap * 100).toFixed(1) : 0;
   var totalSections = 0;
   departments.forEach(function(d) { totalSections += (sections[d] || []).length; });
@@ -3188,9 +3223,11 @@ function renderDeptsAndSections() {
   html += '<div class="kpi-grid" style="margin-bottom:24px;">';
   html += '<div class="kpi-card animate-in"><div class="kpi-icon">🏢</div><div class="kpi-value">' + departments.length + '</div><div class="kpi-label">إجمالي الإدارات</div></div>';
   html += '<div class="kpi-card animate-in delay-1"><div class="kpi-icon">📂</div><div class="kpi-value">' + totalSections + '</div><div class="kpi-label">إجمالي الأقسام</div></div>';
-  html += '<div class="kpi-card animate-in delay-2"><div class="kpi-icon">👥</div><div class="kpi-value">' + totalHC + '</div><div class="kpi-label">إجمالي عدد الموظفين (HC)</div></div>';
+  html += '<div class="kpi-card animate-in delay-2"><div class="kpi-icon">👥</div><div class="kpi-value">' + totalHC + '</div><div class="kpi-label">إجمالي HC</div></div>';
+  html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📦</div><div class="kpi-value">' + totalCap + '%</div><div class="kpi-label">السعة (' + filterLabel + ')</div></div>';
+  html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📈</div><div class="kpi-value">' + totalUsed.toFixed(0) + '%</div><div class="kpi-label">الإشغال الفعلي</div></div>';
   var utilColor = totalUtil > 90 ? 'var(--danger)' : totalUtil > 70 ? 'var(--warning)' : 'var(--success)';
-  html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📊</div><div class="kpi-value" style="color:' + utilColor + '">' + totalUtil + '%</div><div class="kpi-label">نسبة الاستغلال الإجمالية</div></div>';
+  html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📊</div><div class="kpi-value" style="color:' + utilColor + '">' + totalUtil + '%</div><div class="kpi-label">نسبة الاستغلال</div></div>';
   html += '</div>';
 
   // Per-department cards
@@ -3212,17 +3249,16 @@ function renderDeptsAndSections() {
     html += '<div style="text-align:left;min-width:180px;">';
     html += '<div style="font-size:24px;font-weight:800;color:' + deptUtilColor + '">' + deptUtil + '%</div>';
     html += '<div class="capacity-bar" style="width:180px;margin-top:6px;"><div class="capacity-fill" style="width:' + Math.min(deptUtil, 100) + '%;background:' + deptUtilColor + '"></div></div>';
-    html += '<div style="font-size:11px;color:var(--text-light);margin-top:4px;">الاستغلال: ' + deptUsed.toFixed(0) + '% من ' + deptCapTotal + '%</div>';
+    html += '<div style="font-size:11px;color:var(--text-light);margin-top:4px;">' + deptUsed.toFixed(0) + '% من ' + deptCapTotal + '% (' + filterLabel + ')</div>';
     html += '</div></div>';
 
     // Sections table
     if (deptSecs.length > 0) {
       html += '<div style="overflow-x:auto;"><table class="drill-table" style="margin:0;border:none;"><thead><tr>';
       html += '<th style="text-align:right;">القسم</th>';
-      html += '<th>عدد الموظفين (HC)</th>';
-      html += '<th>الموظفون النشطون</th>';
-      html += '<th>السعة الشهرية (لكل شهر)</th>';
-      html += '<th>السعة الإجمالية (' + numMonths + ' شهر)</th>';
+      html += '<th>HC</th>';
+      html += '<th>النشطون</th>';
+      html += '<th>السعة (' + filterLabel + ')</th>';
       html += '<th>الإشغال الفعلي</th>';
       html += '<th>نسبة الاستغلال</th>';
       html += '</tr></thead><tbody>';
@@ -3240,7 +3276,6 @@ function renderDeptsAndSections() {
         html += '<td style="font-weight:600;text-align:right;">📂 ' + escapeHtml(sec) + '</td>';
         html += '<td>' + secCap.headCount + '</td>';
         html += '<td>' + secEmpCount + '</td>';
-        html += '<td>' + secCap.monthlyCapacity + '%</td>';
         html += '<td>' + secCapTotal + '%</td>';
         html += '<td>' + secUsed.toFixed(0) + '%</td>';
         html += '<td><span style="color:' + secColor + ';font-weight:700;">' + secUtil + '%</span>';
@@ -3309,20 +3344,25 @@ function getCapacityData() {
 function showCapacityDrill() {
   const capData = getCapacityData();
   const numMonths = getFilteredNumMonths();
+  var quarter = document.getElementById('quarterFilter').value;
+  var drillFilterLabel = (quarter !== 'all') ? 'الربع ' + quarter : 'سنوي';
+  var yearVal = document.getElementById('yearFilter').value;
+  if (yearVal !== 'all') drillFilterLabel += ' ' + yearVal;
+
   let html = '<div class="drill-stats-row">';
   const totalHC = Object.values(capData).reduce((s,d)=>s+d.totalHeadCount,0);
   const totalCap = totalHC * 100 * numMonths;
   const totalUsed = filteredData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0);
   const util = totalCap > 0 ? (totalUsed/totalCap*100).toFixed(1) : 0;
-  html += '<div class="drill-stat-card"><div class="value">' + totalHC + '</div><div class="label">إجمالي الموظفين (HC)</div></div>';
-  html += '<div class="drill-stat-card"><div class="value">' + totalCap + '%</div><div class="label">السعة الإجمالية (' + numMonths + ' شهر)</div></div>';
+  html += '<div class="drill-stat-card"><div class="value">' + totalHC + '</div><div class="label">إجمالي HC</div></div>';
+  html += '<div class="drill-stat-card"><div class="value">' + totalCap + '%</div><div class="label">السعة (' + drillFilterLabel + ')</div></div>';
   html += '<div class="drill-stat-card"><div class="value">' + totalUsed.toFixed(0) + '%</div><div class="label">الاستخدام الفعلي</div></div>';
   html += '<div class="drill-stat-card"><div class="value">' + util + '%</div><div class="label">نسبة الاستغلال</div></div>';
   html += '</div>';
 
   html += '<div class="drill-chart-container" style="height:350px;"><canvas id="drillCapacity"></canvas></div>';
 
-  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;"><table class="drill-table"><thead><tr><th>الإدارة</th><th>HC</th><th>السعة الشهرية</th><th>السعة الإجمالية (' + numMonths + ' شهر)</th><th>الاستخدام الفعلي</th><th>نسبة الاستغلال</th></tr></thead><tbody>';
+  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;"><table class="drill-table"><thead><tr><th>الإدارة</th><th>HC</th><th>السعة (' + drillFilterLabel + ')</th><th>الإشغال الفعلي</th><th>نسبة الاستغلال</th></tr></thead><tbody>';
 
   const deptStats = {};
   Object.entries(capData).forEach(([dept, d]) => {
@@ -3331,21 +3371,21 @@ function showCapacityDrill() {
     const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
     const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
     deptStats[dept] = { used, cap, pct, hc: d.totalHeadCount };
-    html += '<tr><td style="font-weight:600">' + escapeHtml(dept) + '</td><td>' + d.totalHeadCount + '</td><td>' + d.monthlyCapacity + '%</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
+    html += '<tr><td style="font-weight:600">' + escapeHtml(dept) + '</td><td>' + d.totalHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
     html += '<td><span style="color:' + color + ';font-weight:700">' + pct + '%</span><div class="capacity-bar"><div class="capacity-fill" style="width:' + Math.min(pct,100) + '%;background:' + color + '"></div></div></td></tr>';
   });
   html += '</tbody></table></div>';
 
   // Sections detail
   html += '<h3 style="font-size:15px;font-weight:700;margin:24px 0 12px;">📂 تفاصيل الأقسام</h3>';
-  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);"><table class="drill-table"><thead><tr><th>الإدارة</th><th>القسم</th><th>HC</th><th>السعة الشهرية</th><th>السعة الإجمالية</th><th>الاستخدام</th><th>الاستغلال</th></tr></thead><tbody>';
+  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);"><table class="drill-table"><thead><tr><th>الإدارة</th><th>القسم</th><th>HC</th><th>السعة (' + drillFilterLabel + ')</th><th>الاستخدام</th><th>الاستغلال</th></tr></thead><tbody>';
   Object.entries(capData).forEach(([dept, d]) => {
     Object.entries(d.sections).forEach(([sec, s]) => {
       const used = filteredData.filter(r => r.department === dept && r.section === sec).reduce((sum,r) => sum + (parseFloat(r.occupancy)||0), 0);
       const cap = s.monthlyCapacity * numMonths;
       const pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
       const color = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981';
-      html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.headCount + '</td><td>' + s.monthlyCapacity + '%</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
+      html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.headCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
     });
   });
   html += '</tbody></table></div>';
