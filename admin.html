@@ -915,6 +915,17 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <option value="all">جميع السنوات</option>
       </select>
       <button class="export-btn" style="font-size:12px;padding:6px 12px;" onclick="resetEmpFilters()">↻ إعادة تعيين</button>
+      <span style="border-right:1px solid var(--border);height:24px;margin:0 4px;"></span>
+      <select class="quarter-filter" id="empSortBy" onchange="renderEmployeesSection()">
+        <option value="name">ترتيب: الاسم</option>
+        <option value="avgOcc">ترتيب: متوسط إشغال</option>
+        <option value="tasks">ترتيب: عدد المهام</option>
+        <option value="months">ترتيب: عدد الأشهر</option>
+        <option value="platforms">ترتيب: عدد المنصات</option>
+        <option value="department">ترتيب: الإدارة</option>
+      </select>
+      <button class="export-btn" id="empSortDir" style="font-size:14px;padding:6px 10px;min-width:36px;" onclick="toggleEmpSortDir()" title="تبديل الترتيب">⬇</button>
+      <span id="empCount" style="font-size:12px;color:var(--text-light);margin-right:auto;"></span>
     </div>
     <div class="detail-grid" id="employeesGrid"></div>
   </div>
@@ -1931,6 +1942,14 @@ function resetEmpFilters() {
   renderEmployeesSection();
 }
 
+var empSortDir = 'desc'; // 'asc' or 'desc'
+function toggleEmpSortDir() {
+  empSortDir = empSortDir === 'asc' ? 'desc' : 'asc';
+  document.getElementById('empSortDir').textContent = empSortDir === 'asc' ? '⬆' : '⬇';
+  document.getElementById('empSortDir').title = empSortDir === 'asc' ? 'تصاعدي — اضغط للتبديل' : 'تنازلي — اضغط للتبديل';
+  renderEmployeesSection();
+}
+
 function renderEmployeesSection() {
   populateEmpFilters();
 
@@ -1957,8 +1976,29 @@ function renderEmployeesSection() {
     empMap[r.name].months.add(r.month);
     empMap[r.name].platforms.add(r.platform);
   });
-  var employees = Object.values(empMap).sort(function(a, b) { return b.totalOcc - a.totalOcc; });
+
+  // Sort employees
+  var sortBy = (document.getElementById('empSortBy')?.value) || 'avgOcc';
+  var dir = empSortDir === 'asc' ? 1 : -1;
+  var employees = Object.values(empMap);
+  // Pre-compute avgOcc for sorting
+  employees.forEach(function(e) { e._avgOcc = calcAvgOccPerMonth(e.tasks); });
+  employees.sort(function(a, b) {
+    switch (sortBy) {
+      case 'name': return dir * a.name.localeCompare(b.name, 'ar');
+      case 'avgOcc': return dir * (a._avgOcc - b._avgOcc);
+      case 'tasks': return dir * (a.tasks.length - b.tasks.length);
+      case 'months': return dir * (a.months.size - b.months.size);
+      case 'platforms': return dir * (a.platforms.size - b.platforms.size);
+      case 'department': return dir * a.department.localeCompare(b.department, 'ar');
+      default: return dir * (a._avgOcc - b._avgOcc);
+    }
+  });
   if (search) employees = employees.filter(function(e) { return e.name.includes(search) || e.department.includes(search); });
+
+  // Update count
+  var countEl = document.getElementById('empCount');
+  if (countEl) countEl.textContent = employees.length + ' موظف';
 
   var grid = document.getElementById('employeesGrid');
   grid.innerHTML = employees.map(function(e) {
