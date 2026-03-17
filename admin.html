@@ -1049,7 +1049,8 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="top-actions">
         <select class="quarter-filter" id="deptYearFilter" onchange="renderDeptsAndSections()">
           <option value="all">جميع السنوات</option>
-          <option value="2026" selected>2026</option>
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
           <option value="2027">2027</option>
         </select>
         <select class="quarter-filter" id="deptQuarterFilter" onchange="renderDeptsAndSections()">
@@ -1229,6 +1230,27 @@ function setDefaultFilters() {
   var quarterFilter = document.getElementById('quarterFilter');
   if (quarterFilter) {
     quarterFilter.value = currentQuarter;
+  }
+
+  // Also set department page filters
+  var deptYearFilter = document.getElementById('deptYearFilter');
+  if (deptYearFilter) {
+    var hasDeptYear = false;
+    for (var j = 0; j < deptYearFilter.options.length; j++) {
+      if (deptYearFilter.options[j].value === currentYear) { hasDeptYear = true; break; }
+    }
+    if (!hasDeptYear) {
+      var opt2 = document.createElement('option');
+      opt2.value = currentYear;
+      opt2.textContent = currentYear;
+      deptYearFilter.appendChild(opt2);
+    }
+    deptYearFilter.value = currentYear;
+  }
+
+  var deptQuarterFilter = document.getElementById('deptQuarterFilter');
+  if (deptQuarterFilter) {
+    deptQuarterFilter.value = currentQuarter;
   }
 }
 const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
