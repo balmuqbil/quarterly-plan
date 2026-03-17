@@ -1786,12 +1786,24 @@ function getHighOccEmployees() {
   return highOcc;
 }
 
+// Calculate average occupancy per month (sum tasks within same employee+month, then average months)
+function calcAvgOccPerMonth(data) {
+  if (!data.length) return 0;
+  var empMonths = {};
+  data.forEach(function(r) {
+    var key = (r.name||'') + '|' + (r.month||'') + '|' + (r.year||'');
+    empMonths[key] = (empMonths[key]||0) + (parseFloat(r.occupancy)||0);
+  });
+  var vals = Object.values(empMonths);
+  return vals.length > 0 ? vals.reduce(function(s,v){return s+v;},0) / vals.length : 0;
+}
+
 function updateKPIs() {
   const d = filteredData;
   const employees = [...new Set(d.map(r => r.name))];
   const platforms = [...new Set(d.map(r => r.platform))];
   const departments = [...new Set(d.map(r => r.department))];
-  const avgOcc = d.length > 0 ? (d.reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0) / d.length) : 0;
+  const avgOcc = calcAvgOccPerMonth(d);
   const highOccEmployees = getHighOccEmployees();
 
   // Status counts
@@ -1952,7 +1964,7 @@ function renderEmployeesSection() {
 
   var grid = document.getElementById('employeesGrid');
   grid.innerHTML = employees.map(function(e) {
-    var avgOcc = (e.totalOcc / e.tasks.length).toFixed(0);
+    var avgOcc = calcAvgOccPerMonth(e.tasks).toFixed(0);
     var barColor = getOccColor(avgOcc);
     return '<div class="detail-card" onclick="showEmployeeDrill(\'' + escapeJS(e.name) + '\')">' +
       '<div class="detail-card-header">' +
@@ -2138,11 +2150,12 @@ function renderTasksSection() {
   // Task type cards (from global filteredData, not local filters)
   const typeMap = {};
   filteredData.forEach(r => {
-    if (!typeMap[r.taskType]) typeMap[r.taskType] = { name: r.taskType, count: 0, employees: new Set(), platforms: new Set(), totalOcc: 0 };
+    if (!typeMap[r.taskType]) typeMap[r.taskType] = { name: r.taskType, count: 0, employees: new Set(), platforms: new Set(), totalOcc: 0, _tasks: [] };
     typeMap[r.taskType].count++;
     typeMap[r.taskType].employees.add(r.name);
     typeMap[r.taskType].platforms.add(r.platform);
     typeMap[r.taskType].totalOcc += parseFloat(r.occupancy) || 0;
+    typeMap[r.taskType]._tasks.push(r);
   });
   const types = Object.values(typeMap).sort((a,b) => b.count - a.count);
   const grid = document.getElementById('tasksGrid');
@@ -2154,7 +2167,7 @@ function renderTasksSection() {
     <div class="detail-card-stats">
       <div class="detail-stat"><div class="detail-stat-value">${t.employees.size}</div><div class="detail-stat-label">موظف</div></div>
       <div class="detail-stat"><div class="detail-stat-value">${t.platforms.size}</div><div class="detail-stat-label">منصات</div></div>
-      <div class="detail-stat"><div class="detail-stat-value">${(t.totalOcc/t.count).toFixed(0)}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
+      <div class="detail-stat"><div class="detail-stat-value">${calcAvgOccPerMonth(t._tasks).toFixed(0)}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
     </div>
   </div>`).join('');
 
@@ -2840,7 +2853,7 @@ function showEmployeeDrill(name) {
   const department = empData[0].department;
   const section = empData[0].section || '';
   const totalOcc = empData.reduce((s,r) => s + (parseFloat(r.occupancy)||0), 0);
-  const avgOcc = (totalOcc / empData.length).toFixed(1);
+  const avgOcc = calcAvgOccPerMonth(empData).toFixed(1);
   const platforms = [...new Set(empData.map(r => r.platform))];
   const months = MONTHS.filter(m => empData.some(r => r.month === m));
 
@@ -2898,7 +2911,7 @@ function showPlatformDrill(platform) {
   if (!pData.length) return;
   const empNames = [...new Set(pData.map(r => r.name))];
   const departments = [...new Set(pData.map(r => r.department))];
-  const avgOcc = (pData.reduce((s,r) => s+(parseFloat(r.occupancy)||0),0)/pData.length).toFixed(1);
+  const avgOcc = calcAvgOccPerMonth(pData).toFixed(1);
 
   const monthOcc = {};
   pData.forEach(r => {
@@ -2950,7 +2963,7 @@ function showTaskTypeDrill(taskType) {
   const tData = filteredData.filter(r => r.taskType === taskType);
   if (!tData.length) return;
   const empNames = [...new Set(tData.map(r => r.name))];
-  const avgOcc = (tData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/tData.length).toFixed(1);
+  const avgOcc = calcAvgOccPerMonth(tData).toFixed(1);
 
   let html = `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${tData.length}</div><div class="label">مهام</div></div>
@@ -3129,7 +3142,7 @@ function showDepartmentMembersDrill(department) {
   let html = `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${Object.keys(empMap).length}</div><div class="label">موظف</div></div>
     <div class="drill-stat-card"><div class="value">${tData.length}</div><div class="label">مهام</div></div>
-    <div class="drill-stat-card"><div class="value">${(tData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/tData.length).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
+    <div class="drill-stat-card"><div class="value">${calcAvgOccPerMonth(tData).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
   </div>
   <div class="drill-chart-container"><canvas id="drillTeamMembers"></canvas></div>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
@@ -3184,7 +3197,7 @@ function showMonthDrill(month) {
   let html = `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${mData.length}</div><div class="label">مهام</div></div>
     <div class="drill-stat-card"><div class="value">${Object.keys(empMap).length}</div><div class="label">موظف</div></div>
-    <div class="drill-stat-card"><div class="value">${(mData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/mData.length).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
+    <div class="drill-stat-card"><div class="value">${calcAvgOccPerMonth(mData).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
   </div>
   <div class="drill-chart-container" style="height:350px;"><canvas id="drillMonth"></canvas></div>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
@@ -3266,7 +3279,7 @@ function showHeatmapCellDrill(department, month) {
   let html = `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${cData.length}</div><div class="label">مهام</div></div>
     <div class="drill-stat-card"><div class="value">${[...new Set(cData.map(r=>r.name))].length}</div><div class="label">موظف</div></div>
-    <div class="drill-stat-card"><div class="value">${(cData.reduce((s,r)=>s+(parseFloat(r.occupancy)||0),0)/cData.length).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
+    <div class="drill-stat-card"><div class="value">${calcAvgOccPerMonth(cData).toFixed(1)}%</div><div class="label">متوسط إشغال</div></div>
   </div>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>المنصة</th><th>نوع المهمة</th><th>الإشغال</th><th>الوصف</th></tr></thead><tbody>`;
