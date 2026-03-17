@@ -998,20 +998,21 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         </div>
         <div class="task-modal-field">
           <label>الشهر</label>
-          <select id="taskField_month">
+          <select id="taskField_month" onchange="updateTaskOccInfo()">
             <option value="">— اختر الربع أولاً —</option>
           </select>
         </div>
         <div class="task-modal-field">
           <label>السنة</label>
-          <select id="taskField_year">
+          <select id="taskField_year" onchange="updateTaskOccInfo()">
             <option value="">— اختر —</option>
             <option>2026</option><option>2027</option>
           </select>
         </div>
         <div class="task-modal-field">
           <label>نسبة الإشغال %</label>
-          <input type="number" id="taskField_occupancy" min="20" max="120" step="5" placeholder="20 - 120">
+          <input type="number" id="taskField_occupancy" min="20" max="120" step="5" placeholder="20 - 120" oninput="updateTaskOccInfo()">
+          <div id="taskOccInfo" style="font-size:11px;margin-top:4px;min-height:16px;"></div>
         </div>
         <div class="task-modal-field full-width">
           <label>وصف المهمة</label>
@@ -1020,6 +1021,13 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         <div class="task-modal-field">
           <label>الخدمة (اختياري)</label>
           <input type="text" id="taskField_service" placeholder="اختياري">
+        </div>
+      </div>
+      <div id="taskEmpWarning" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#991b1b;"></div>
+      <div id="taskTimeOffBar" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:12px;color:#0369a1;">🏖️ هل تريد تسجيل هذا الشهر كإجازة للموظف؟</div>
+          <button onclick="quickAddTimeOff()" style="padding:6px 14px;border:1.5px solid #0284c7;border-radius:8px;background:#fff;color:#0284c7;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#0284c7';this.style.color='#fff'" onmouseout="this.style.background='#fff';this.style.color='#0284c7'">🏖️ تسجيل إجازة</button>
         </div>
       </div>
       <div class="task-modal-actions">
@@ -1146,7 +1154,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.11';
+const ADMIN_VERSION = 'v20260317.12';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -2143,6 +2151,7 @@ function filterTaskMonthsByQuarter() {
   }
   var months = QUARTER_MONTHS[q] || [];
   monthSelect.innerHTML = '<option value="">— اختر الشهر —</option>' + months.map(function(m) { return '<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>'; }).join('');
+  updateTaskOccInfo();
 }
 
 var taskAutoHighlight = -1;
@@ -2221,6 +2230,8 @@ function selectTaskEmployee(name) {
     // Show all task types when no section
     updateTaskTypesBySection('');
   }
+  // Update occupancy info
+  updateTaskOccInfo();
 }
 
 function updateTaskTypesBySection(sectionName) {
@@ -2244,6 +2255,143 @@ function updateTaskTypesBySection(sectionName) {
   if (currentVal && allowedTypes.indexOf(currentVal) !== -1) {
     taskTypeSelect.value = currentVal;
   }
+}
+
+function updateTaskOccInfo() {
+  var infoEl = document.getElementById('taskOccInfo');
+  var warningEl = document.getElementById('taskEmpWarning');
+  var timeOffBar = document.getElementById('taskTimeOffBar');
+  if (!infoEl) return;
+  infoEl.innerHTML = '';
+  if (warningEl) warningEl.style.display = 'none';
+  if (timeOffBar) timeOffBar.style.display = 'none';
+
+  var empName = (document.getElementById('taskField_name')?.value || '').trim();
+  var month = (document.getElementById('taskField_month')?.value || '');
+  var year = (document.getElementById('taskField_year')?.value || '');
+  var occ = parseFloat(document.getElementById('taskField_occupancy')?.value) || 0;
+  var editIdx = parseInt(document.getElementById('taskEditIdx')?.value) || -1;
+
+  if (!empName || !month || !year) return;
+
+  // Find employee record
+  var mgmt = getMgmtData();
+  var emp = null;
+  for (var i = 0; i < mgmt.employees.length; i++) {
+    var e = mgmt.employees[i];
+    if ((typeof e === 'string' ? e : e.name) === empName) { emp = typeof e === 'object' ? e : null; break; }
+  }
+
+  // Check if employee is active in this month
+  if (emp) {
+    var isActive = isEmployeeActiveInMonth(emp, month, year);
+    var isEmployed = isEmployeeEmployedInMonth(emp, month, year);
+
+    if (!isEmployed) {
+      if (warningEl) {
+        warningEl.innerHTML = '⚠️ الموظف <strong>' + escapeHtml(empName) + '</strong> غير موظف في شهر <strong>' + escapeHtml(month + ' ' + year) + '</strong>' +
+          (emp.startDate ? '<br>فترة العمل: ' + escapeHtml(emp.startDate) + (emp.endDate ? ' → ' + escapeHtml(emp.endDate) : ' → الآن') : '');
+        warningEl.style.display = 'block';
+      }
+      return;
+    }
+
+    if (!isActive && isEmployed) {
+      // Employee is employed but on absence
+      var absReason = '';
+      (emp.absences || []).forEach(function(a) {
+        var checkIdx = monthToIndex(month + ' ' + year);
+        if (checkIdx >= monthToIndex(a.from) && checkIdx <= monthToIndex(a.to)) {
+          absReason = a.reason || 'إجازة';
+        }
+      });
+      if (warningEl) {
+        warningEl.innerHTML = '🔴 الموظف <strong>' + escapeHtml(empName) + '</strong> في إجازة خلال شهر <strong>' + escapeHtml(month + ' ' + year) + '</strong>' +
+          (absReason ? ' (' + escapeHtml(absReason) + ')' : '') +
+          '<br><span style="font-size:11px;">لا يُحتسب ضمن السعة المتاحة لهذا الشهر</span>';
+        warningEl.style.display = 'block';
+      }
+    }
+  }
+
+  // Calculate existing occupancy for this employee+month+year
+  var existingTotal = 0;
+  for (var j = 0; j < allData.length; j++) {
+    if (j === editIdx) continue;
+    if (allData[j].name === empName && allData[j].month === month && String(allData[j].year) === year) {
+      existingTotal += parseFloat(allData[j].occupancy) || 0;
+    }
+  }
+
+  var remaining = 120 - existingTotal;
+  var willTotal = existingTotal + occ;
+
+  var color = '#166534';
+  if (remaining <= 20) color = '#dc2626';
+  else if (remaining <= 40) color = '#f59e0b';
+
+  var info = '<span style="color:' + color + ';">المتبقي: <strong>' + remaining + '%</strong></span>';
+  if (existingTotal > 0) {
+    info += ' <span style="color:var(--text-light);">(الحالي: ' + existingTotal + '%';
+    if (occ > 0) info += ' + ' + occ + '% = ' + willTotal + '%';
+    info += ')</span>';
+  }
+  if (occ > 0 && willTotal > 120) {
+    info += '<br><span style="color:#dc2626;">⚠️ يتجاوز الحد الأقصى 120%</span>';
+  }
+  if (occ > 0 && occ < 20) {
+    info += '<br><span style="color:#dc2626;">⚠️ الحد الأدنى للإشغال 20%</span>';
+  }
+  infoEl.innerHTML = info;
+
+  // Show time-off bar if employee has no tasks and no absence for this month
+  if (timeOffBar && emp && remaining >= 100) {
+    var hasAbsence = false;
+    (emp.absences || []).forEach(function(a) {
+      var checkIdx = monthToIndex(month + ' ' + year);
+      if (checkIdx >= monthToIndex(a.from) && checkIdx <= monthToIndex(a.to)) hasAbsence = true;
+    });
+    if (!hasAbsence) {
+      timeOffBar.style.display = 'block';
+    }
+  }
+}
+
+function quickAddTimeOff() {
+  var empName = (document.getElementById('taskField_name')?.value || '').trim();
+  var month = (document.getElementById('taskField_month')?.value || '');
+  var year = (document.getElementById('taskField_year')?.value || '');
+  if (!empName || !month || !year) { showMgmtToast('يرجى اختيار الموظف والشهر والسنة أولاً', 'error'); return; }
+
+  var mgmt = getMgmtData();
+  var empIndex = -1;
+  for (var i = 0; i < mgmt.employees.length; i++) {
+    var e = mgmt.employees[i];
+    if ((typeof e === 'string' ? e : e.name) === empName) { empIndex = i; break; }
+  }
+  if (empIndex === -1) { showMgmtToast('الموظف غير موجود في البيانات', 'error'); return; }
+
+  var emp = mgmt.employees[empIndex];
+  if (typeof emp === 'string') {
+    emp = { name: emp, department: '', section: '', startDate: 'يناير 2026', endDate: '', absences: [] };
+    mgmt.employees[empIndex] = emp;
+  }
+  if (!Array.isArray(emp.absences)) emp.absences = [];
+
+  var absVal = month + ' ' + year;
+  // Check if already has absence for this month
+  var alreadyHas = emp.absences.some(function(a) {
+    var checkIdx = monthToIndex(absVal);
+    return checkIdx >= monthToIndex(a.from) && checkIdx <= monthToIndex(a.to);
+  });
+  if (alreadyHas) { showMgmtToast('هذا الشهر مسجل بالفعل كإجازة', 'error'); return; }
+
+  emp.absences.push({ from: absVal, to: absVal, reason: 'إجازة' });
+  saveMgmtList('employees', mgmt.employees);
+  showMgmtToast('✅ تم تسجيل شهر ' + month + ' ' + year + ' كإجازة لـ ' + empName, 'success');
+
+  // Update the info display
+  updateTaskOccInfo();
 }
 
 function handleTaskAutocompleteKey(event) {
@@ -2291,6 +2439,10 @@ function openTaskModal(editIdx) {
   const isEdit = editIdx !== undefined && editIdx >= 0;
   document.getElementById('taskModalTitle').textContent = isEdit ? '✏️ تعديل المهمة' : '➕ إضافة مهمة جديدة';
   document.getElementById('taskEditIdx').value = isEdit ? editIdx : '-1';
+  // Reset info/warning areas
+  var occInfo = document.getElementById('taskOccInfo'); if (occInfo) occInfo.innerHTML = '';
+  var empWarn = document.getElementById('taskEmpWarning'); if (empWarn) empWarn.style.display = 'none';
+  var timeOff = document.getElementById('taskTimeOffBar'); if (timeOff) timeOff.style.display = 'none';
 
   if (isEdit) {
     const r = allData[editIdx];
@@ -2351,6 +2503,25 @@ function saveTask() {
   if (!fields.year) { showMgmtToast('يرجى اختيار السنة', 'error'); return; }
   if (fields.occupancy < 20) { showMgmtToast('الحد الأدنى للإشغال 20%', 'error'); return; }
   if (fields.occupancy > 120) { showMgmtToast('الحد الأقصى للإشغال 120%', 'error'); return; }
+
+  // Check if employee is employed and active in the selected month
+  var mgmtCheck = getMgmtData();
+  var empCheck = null;
+  for (var ei = 0; ei < mgmtCheck.employees.length; ei++) {
+    var ec = mgmtCheck.employees[ei];
+    if ((typeof ec === 'string' ? ec : ec.name) === fields.name) { empCheck = typeof ec === 'object' ? ec : null; break; }
+  }
+  if (empCheck) {
+    if (!isEmployeeEmployedInMonth(empCheck, fields.month, fields.year)) {
+      showMgmtToast('⚠️ الموظف "' + fields.name + '" غير موظف في شهر ' + fields.month + ' ' + fields.year, 'error');
+      return;
+    }
+    if (!isEmployeeActiveInMonth(empCheck, fields.month, fields.year)) {
+      if (!confirm('⚠️ الموظف "' + fields.name + '" في إجازة خلال شهر ' + fields.month + ' ' + fields.year + '.\nهل تريد المتابعة على أي حال؟')) {
+        return;
+      }
+    }
+  }
 
   const editIdx = parseInt(document.getElementById('taskEditIdx').value);
 
