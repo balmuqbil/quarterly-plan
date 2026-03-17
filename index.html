@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>نموذج خطة العمل الربعية</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
 
@@ -560,6 +563,33 @@
     cursor: pointer;
   }
 
+  .timeoff-btn {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1.5px dashed #ffcc80;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: all 0.2s;
+  }
+  .timeoff-btn:hover { background: #ffe0b2; border-color: #ffa726; }
+  .task-entry.is-timeoff { background: #fff8e1; border: 1.5px solid #ffe082; }
+  .task-entry.is-timeoff .entry-num { color: #e65100; }
+  .timeoff-badge {
+    display: inline-block;
+    background: #ff9800;
+    color: white;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 8px;
+  }
+
   @media (max-width: 600px) {
     .header { padding: 24px 20px; }
     .header h1 { font-size: 22px; }
@@ -574,9 +604,8 @@
 
 <div class="header">
   <h1>نموذج خطة العمل الربعية</h1>
-  <p>يرجى تعبئة بيانات المهام المخطط لها خلال الربع — الحد الأدنى للإشغال 25% لكل مهمة، والحد الأقصى 120% لكل شهر</p>
+  <p>يرجى تعبئة بيانات المهام المخطط لها خلال الربع — الحد الأدنى للإشغال 20% لكل مهمة، والحد الأقصى 120% لكل شهر</p>
   <div class="header-actions">
-    <button class="header-btn" onclick="openSetup()">&#9881; إعداد الربط</button>
   </div>
 </div>
 
@@ -584,7 +613,7 @@
   <!-- Connection Status -->
   <div id="statusBanner" class="status-banner disconnected">
     <div class="status-dot"></div>
-    <span id="statusText">غير متصل بـ Google Sheets — اضغط "إعداد الربط" لتفعيل الإرسال المباشر</span>
+    <span id="statusText">جاري الاتصال بقاعدة البيانات...</span>
   </div>
 
   <!-- Employee Info -->
@@ -660,6 +689,9 @@
     <button class="add-row-btn" onclick="addTask()">
       <span style="font-size:20px">+</span> إضافة مهمة جديدة
     </button>
+    <button class="timeoff-btn" onclick="addTimeOff()">
+      &#127964; تسجيل إجازة لشهر كامل
+    </button>
   </div>
 
   <!-- Actions -->
@@ -684,171 +716,8 @@
   <div class="success-box">
     <div class="success-icon">&#9989;</div>
     <div class="success-title">تم إرسال الخطة بنجاح!</div>
-    <div class="success-msg" id="successMsg">تم حفظ <strong id="successCount">0</strong> مهمة في Google Sheets.<br>يمكنك إغلاق الصفحة أو إضافة خطة أخرى.</div>
+    <div class="success-msg" id="successMsg">تم حفظ <strong id="successCount">0</strong> مهمة بنجاح.<br>يمكنك إغلاق الصفحة أو إضافة خطة أخرى.</div>
     <button class="success-btn" onclick="closeSuccess()">حسناً</button>
-  </div>
-</div>
-
-<!-- Setup Modal -->
-<div class="modal-overlay" id="setupModal">
-  <div class="modal-box">
-    <button class="modal-close" onclick="closeSetup()">&#10005;</button>
-    <h3>&#9881; إعداد الربط مع Google Sheets</h3>
-
-    <div class="setup-step">
-      <span class="step-num">1</span>
-      <span class="step-title">أنشئ جدول Google Sheets جديد</span>
-      <p>افتح <a href="https://sheets.google.com" target="_blank">Google Sheets</a> وأنشئ جدول بيانات جديد. أضف هذه العناوين في الصف الأول بورقة "البيانات":</p>
-      <div class="code-block"><button class="copy-code-btn" onclick="copyCode(this)">نسخ</button>الاسم | الإدارة | الشهر | الربع | السنة | المنصة/المنتج | نوع المهمة | نسبة الإنشغال | وصف المهمة | الخدمة إن وجدت | تاريخ الإرسال | القسم</div>
-      <p style="margin-top:10px;">ثم أضف ورقة ثانية باسم <strong>"الموظفون"</strong> وضع أسماء الموظفين في العمود الأول (عمود A).</p>
-    </div>
-
-    <div class="setup-step">
-      <span class="step-num">2</span>
-      <span class="step-title">افتح محرر Apps Script</span>
-      <p>من القائمة العلوية اختر: <strong>Extensions &gt; Apps Script</strong></p>
-    </div>
-
-    <div class="setup-step">
-      <span class="step-num">3</span>
-      <span class="step-title">الصق الكود التالي</span>
-      <p>امسح المحتوى الافتراضي والصق هذا الكود:</p>
-      <div class="code-block" id="appsScriptCode"><button class="copy-code-btn" onclick="copyCode(this)">نسخ</button>function doPost(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('البيانات') || ss.getActiveSheet();
-  var data = JSON.parse(e.postData.contents);
-  var action = data.action || 'add';
-
-  if (action === 'add') {
-    var rows = data.rows;
-    var timestamp = new Date().toLocaleString('ar-SA');
-    for (var i = 0; i &lt; rows.length; i++) {
-      var r = rows[i];
-      sheet.appendRow([
-        r.name, r.department, r.month, r.quarter, r.year,
-        r.platform, r.taskType, r.occupancy,
-        r.description, r.service, timestamp, r.section || ''
-      ]);
-    }
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'success', count: rows.length
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  if (action === 'update') {
-    var match = data.match;
-    var updated = data.updated;
-    var all = sheet.getDataRange().getValues();
-    for (var i = 1; i &lt; all.length; i++) {
-      if (all[i][0] === match.name &amp;&amp; all[i][2] === match.month
-        &amp;&amp; String(all[i][4]) === String(match.year)
-        &amp;&amp; all[i][5] === match.platform
-        &amp;&amp; all[i][6] === match.taskType) {
-        var ts = new Date().toLocaleString('ar-SA');
-        sheet.getRange(i+1,1,1,12).setValues([[
-          updated.name, updated.department || updated.team || '', updated.month, updated.quarter,
-          updated.year, updated.platform, updated.taskType, updated.occupancy,
-          updated.description, updated.service, ts, updated.section || ''
-        ]]);
-        break;
-      }
-    }
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'success'
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  if (action === 'delete') {
-    var match = data.match;
-    var all = sheet.getDataRange().getValues();
-    for (var i = all.length - 1; i >= 1; i--) {
-      if (all[i][0] === match.name &amp;&amp; all[i][2] === match.month
-        &amp;&amp; String(all[i][4]) === String(match.year)
-        &amp;&amp; all[i][5] === match.platform
-        &amp;&amp; all[i][6] === match.taskType) {
-        sheet.deleteRow(i + 1);
-        break;
-      }
-    }
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'success'
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: 'error', message: 'Unknown action'
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-function doGet(e) {
-  var action = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.action) || '';
-  var callback = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.callback) || '';
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  if (action === 'getEmployees') {
-    var empSheet = ss.getSheetByName('الموظفون');
-    var names = [];
-    if (empSheet) {
-      var data = empSheet.getRange('A2:A').getValues();
-      for (var i = 0; i &lt; data.length; i++) {
-        if (data[i][0]) names.push(data[i][0].toString().trim());
-      }
-    }
-    var result = JSON.stringify({status:'success',employees:names});
-    if (callback) {
-      return ContentService.createTextOutput(callback+'('+result+')')
-        .setMimeType(ContentService.MimeType.JAVASCRIPT);
-    }
-    return ContentService.createTextOutput(result)
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-
-  if (action === 'getData') {
-    var dataSheet = ss.getSheetByName('البيانات') || ss.getActiveSheet();
-    var all = dataSheet.getDataRange().getValues();
-    var headers = all[0];
-    var rows = [];
-    for (var i = 1; i &lt; all.length; i++) {
-      rows.push({
-        name:all[i][0],department:all[i][1],month:all[i][2],
-        quarter:all[i][3],year:all[i][4],platform:all[i][5],
-        taskType:all[i][6],occupancy:all[i][7],
-        description:all[i][8],service:all[i][9],
-        timestamp:all[i][10],section:all[i][11]||''
-      });
-    }
-    var result = JSON.stringify({status:'success',data:rows});
-    if (callback) {
-      return ContentService.createTextOutput(callback+'('+result+')')
-        .setMimeType(ContentService.MimeType.JAVASCRIPT);
-    }
-    return ContentService.createTextOutput(result)
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status:"ok",message:"Endpoint is active"
-  })).setMimeType(ContentService.MimeType.JSON);
-}</div>
-    </div>
-
-    <div class="setup-step">
-      <span class="step-num">4</span>
-      <span class="step-title">انشر كتطبيق ويب</span>
-      <p>اضغط <strong>Deploy &gt; New deployment</strong> ثم اختر <strong>Web app</strong>.<br>
-      في "Execute as" اختر <strong>Me</strong>، وفي "Who has access" اختر <strong>Anyone</strong>.<br>
-      اضغط <strong>Deploy</strong> وانسخ الرابط الذي يظهر.</p>
-    </div>
-
-    <div class="setup-step">
-      <span class="step-num">5</span>
-      <span class="step-title">الصق رابط التطبيق هنا</span>
-      <p>الصق رابط Web App الذي حصلت عليه:</p>
-      <div class="url-input-row">
-        <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/..." dir="ltr">
-        <button onclick="saveSheetUrl()">حفظ</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -865,8 +734,45 @@ function doGet(e) {
 
 <script>
 // ===== CONFIG =====
+const STORAGE_PREFIX = 'qplan_';
+// Firebase config (loaded from admin settings in localStorage)
+var FIREBASE_CONFIG = {
+  apiKey: localStorage.getItem(STORAGE_PREFIX + 'fb_apiKey') || '',
+  authDomain: localStorage.getItem(STORAGE_PREFIX + 'fb_authDomain') || '',
+  databaseURL: localStorage.getItem(STORAGE_PREFIX + 'fb_databaseURL') || '',
+  projectId: localStorage.getItem(STORAGE_PREFIX + 'fb_projectId') || '',
+  storageBucket: localStorage.getItem(STORAGE_PREFIX + 'fb_storageBucket') || '',
+  messagingSenderId: localStorage.getItem(STORAGE_PREFIX + 'fb_messagingSenderId') || '',
+  appId: localStorage.getItem(STORAGE_PREFIX + 'fb_appId') || ''
+};
+var firebaseApp = null;
+var firebaseDb = null;
+var firebaseReady = false;
+
+function initFirebase() {
+  if (firebaseReady) return true;
+  if (!FIREBASE_CONFIG.databaseURL) return false;
+  try {
+    if (typeof firebase === 'undefined') return false;
+    if (!firebaseApp) {
+      if (firebase.apps.length === 0) {
+        firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+      } else {
+        firebaseApp = firebase.apps[0];
+      }
+    }
+    firebaseDb = firebase.database();
+    firebaseReady = true;
+    return true;
+  } catch (err) {
+    console.error('Firebase init failed:', err);
+    firebaseReady = false;
+    return false;
+  }
+}
+
+// Legacy key (no longer used)
 const STORAGE_KEY = 'quarterly_form_sheet_url';
-let SHEET_URL = localStorage.getItem(STORAGE_KEY) || 'https://script.google.com/macros/s/AKfycbzadKc3RXC9_vof_Hz4vd-WEMa8B8jTOgrKqHF11_Rq0UwzvoDJpf8WbV_RbxQLXrLZzQ/exec';
 
 const QUARTERS = {
   'الأول':  ['يناير', 'فبراير', 'مارس'],
@@ -905,41 +811,52 @@ try {
   const cached = localStorage.getItem('qplan_employees_full');
   if (cached) EMPLOYEES_FULL = JSON.parse(cached);
 } catch(e) {}
-const MIN_OCCUPANCY = 25;
+const MIN_OCCUPANCY = 20;
 const MAX_TASKS_PER_MONTH = 4;
 
 let taskCounter = 0;
 let currentMonths = ['الشهر 1', 'الشهر 2', 'الشهر 3'];
 
 // ===== EMPLOYEE LIST (autocomplete) =====
-let EMPLOYEE_LIST = [];  // Will be loaded from Google Sheet
+let EMPLOYEE_LIST = [];
 let highlightedIndex = -1;
 
 function loadEmployeeList() {
-  if (!SHEET_URL) return;
-  var cbName = '_empListCb_' + Date.now();
-  window[cbName] = function(json) {
-    delete window[cbName];
-    var s = document.getElementById('emp-list-loader');
-    if (s) s.remove();
-    if (json && json.status === 'success' && json.employees && json.employees.length) {
-      EMPLOYEE_LIST = json.employees;
-      localStorage.setItem('qplan_employees', JSON.stringify(EMPLOYEE_LIST));
-    }
-  };
-  var old = document.getElementById('emp-list-loader');
-  if (old) old.remove();
-  var script = document.createElement('script');
-  script.id = 'emp-list-loader';
-  script.src = SHEET_URL + '?action=getEmployees&callback=' + cbName;
-  script.onerror = function() { delete window[cbName]; };
-  document.head.appendChild(script);
+  // Load from EMPLOYEES_FULL (cached from admin page via localStorage)
+  if (EMPLOYEES_FULL.length) {
+    EMPLOYEE_LIST = EMPLOYEES_FULL.map(e => typeof e === 'object' ? e.name : e).filter(Boolean);
+  }
+  // Fallback: try legacy cached list
+  if (!EMPLOYEE_LIST.length) {
+    try {
+      var cached = localStorage.getItem('qplan_employees');
+      if (cached) EMPLOYEE_LIST = JSON.parse(cached);
+    } catch(e) {}
+  }
+  // Try loading from Firebase if available
+  if (initFirebase() && firebaseDb) {
+    firebaseDb.ref('employees').once('value').then(snap => {
+      const data = snap.val();
+      if (data) {
+        const list = Object.values(data);
+        if (list.length) {
+          EMPLOYEES_FULL = list;
+          EMPLOYEE_LIST = list.map(e => typeof e === 'object' ? e.name : e).filter(Boolean);
+          localStorage.setItem('qplan_employees_full', JSON.stringify(EMPLOYEES_FULL));
+        }
+      }
+    }).catch(err => console.log('Could not load employees from Firebase:', err));
+  }
 }
 
-// Load cached employee list first, then try fetching fresh
+// Initial load from localStorage
 try {
-  var cached = localStorage.getItem('qplan_employees');
-  if (cached) EMPLOYEE_LIST = JSON.parse(cached);
+  if (EMPLOYEES_FULL.length) {
+    EMPLOYEE_LIST = EMPLOYEES_FULL.map(e => typeof e === 'object' ? e.name : e).filter(Boolean);
+  } else {
+    var cached = localStorage.getItem('qplan_employees');
+    if (cached) EMPLOYEE_LIST = JSON.parse(cached);
+  }
 } catch(e) {}
 
 function filterEmployees() {
@@ -1029,50 +946,36 @@ document.addEventListener('click', e => {
 
 // ===== INIT =====
 // Department & Section dropdowns are auto-filled when employee is selected
+initFirebase();
 updateConnectionStatus();
 addTask();
 loadEmployeeList();
 
-// ===== SETUP & CONNECTION =====
-function openSetup() {
-  document.getElementById('setupModal').classList.add('show');
-  if (SHEET_URL) document.getElementById('sheetUrl').value = SHEET_URL;
-}
-function closeSetup() { document.getElementById('setupModal').classList.remove('show'); }
-
-function saveSheetUrl() {
-  const url = document.getElementById('sheetUrl').value.trim();
-  if (!url.startsWith('https://script.google.com/')) {
-    showToast('الرابط غير صحيح — يجب أن يبدأ بـ https://script.google.com/', true);
-    return;
-  }
-  SHEET_URL = url;
-  localStorage.setItem(STORAGE_KEY, url);
-  updateConnectionStatus();
-  loadEmployeeList();
-  closeSetup();
-  showToast('تم حفظ الرابط بنجاح — النموذج جاهز للإرسال', false, true);
-}
-
+// ===== CONNECTION STATUS =====
 function updateConnectionStatus() {
   const banner = document.getElementById('statusBanner');
   const text = document.getElementById('statusText');
-  if (SHEET_URL) {
+  if (firebaseReady) {
     banner.className = 'status-banner connected';
-    text.textContent = 'متصل بـ Google Sheets — جاهز لاستقبال البيانات';
+    text.textContent = 'متصل بقاعدة البيانات — جاهز لاستقبال البيانات';
+  } else if (FIREBASE_CONFIG.databaseURL) {
+    banner.className = 'status-banner disconnected';
+    text.textContent = 'جاري الاتصال بقاعدة البيانات...';
+    // Retry init
+    setTimeout(() => {
+      initFirebase();
+      if (firebaseReady) {
+        banner.className = 'status-banner connected';
+        text.textContent = 'متصل بقاعدة البيانات — جاهز لاستقبال البيانات';
+        loadEmployeeList();
+      } else {
+        text.textContent = 'تعذر الاتصال بقاعدة البيانات — يرجى التأكد من إعدادات Firebase في لوحة التحكم';
+      }
+    }, 1500);
   } else {
     banner.className = 'status-banner disconnected';
-    text.textContent = 'غير متصل بـ Google Sheets — اضغط "إعداد الربط" لتفعيل الإرسال المباشر';
+    text.textContent = 'لم يتم إعداد قاعدة البيانات — يرجى إعداد Firebase من لوحة التحكم (admin) أولاً';
   }
-}
-
-function copyCode(btn) {
-  const block = btn.parentElement;
-  const text = block.textContent.replace('نسخ', '').trim();
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = 'تم!';
-    setTimeout(() => btn.textContent = 'نسخ', 1500);
-  });
 }
 
 // ===== MONTHS =====
@@ -1204,6 +1107,79 @@ function removeTask(id) {
   if (el) { el.remove(); recalcMeters(); updateAddTaskBtn(); }
 }
 
+function addTimeOff() {
+  // Show a quick selector for which month to mark as time-off
+  const available = getAvailableMonths();
+  if (!available.length) {
+    showToast('جميع الأشهر مكتملة — لا يمكن إضافة إجازة', true);
+    return;
+  }
+  const month = available.length === 1 ? available[0] : prompt('اختر الشهر للإجازة:\n' + available.map((m, i) => (i+1) + '. ' + m).join('\n') + '\n\nأدخل الرقم:');
+  let selectedMonth;
+  if (available.length === 1) {
+    selectedMonth = available[0];
+  } else {
+    const idx = parseInt(month) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= available.length) {
+      if (month === null) return; // cancelled
+      showToast('اختيار غير صحيح', true);
+      return;
+    }
+    selectedMonth = available[idx];
+  }
+
+  // Check if this month already has a time-off entry
+  let hasTimeOff = false;
+  document.querySelectorAll('.task-entry.is-timeoff').forEach(entry => {
+    if (entry.querySelector('.month-select')?.value === selectedMonth) hasTimeOff = true;
+  });
+  if (hasTimeOff) {
+    showToast('هذا الشهر مسجل كإجازة بالفعل', true);
+    return;
+  }
+
+  taskCounter++;
+  const num = taskCounter;
+  const div = document.createElement('div');
+  div.className = 'task-entry is-timeoff';
+  div.id = 'task-' + num;
+  div.innerHTML = `
+    <div class="entry-num"><span class="timeoff-badge">إجازة</span> ${selectedMonth}</div>
+    <button class="remove-btn" onclick="removeTask(${num})" title="حذف">&#10005;</button>
+    <div class="task-grid">
+      <div class="field">
+        <label>الشهر</label>
+        <select class="month-select" disabled>
+          <option value="${selectedMonth}" selected>${selectedMonth}</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>المنصة / المنتج</label>
+        <select disabled><option value="إجازة" selected>إجازة</option></select>
+      </div>
+      <div class="field">
+        <label>نوع المهمة</label>
+        <select disabled><option value="إجازة" selected>إجازة</option></select>
+      </div>
+      <div class="field">
+        <label>نسبة الإشغال %</label>
+        <input type="number" class="occ-input" value="100" readonly disabled>
+      </div>
+      <div class="field desc-field">
+        <label>وصف المهمة</label>
+        <textarea rows="2" disabled>إجازة — شهر كامل</textarea>
+      </div>
+      <div class="field">
+        <label>الخدمة</label>
+        <input type="text" value="" disabled>
+      </div>
+    </div>`;
+  document.getElementById('taskEntries').appendChild(div);
+  recalcMeters();
+  updateAddTaskBtn();
+  showToast(`تم تسجيل ${selectedMonth} كإجازة`, false, true);
+}
+
 // ===== METERS =====
 function recalcMeters() {
   const totals = { m1: 0, m2: 0, m3: 0 };
@@ -1233,10 +1209,11 @@ function gatherData() {
   const year = document.getElementById('empYear').value;
   const rows = [];
   document.querySelectorAll('.task-entry').forEach(entry => {
+    const isTimeOff = entry.classList.contains('is-timeoff');
     const selects = entry.querySelectorAll('select');
     const inputs = entry.querySelectorAll('input');
     const textarea = entry.querySelector('textarea');
-    rows.push({
+    const row = {
       name, department, section, quarter, year,
       month: selects[0]?.value || '',
       platform: selects[1]?.value || '',
@@ -1244,7 +1221,9 @@ function gatherData() {
       occupancy: parseFloat(inputs[0]?.value) || 0,
       description: textarea?.value?.trim() || '',
       service: inputs[1]?.value?.trim() || ''
-    });
+    };
+    if (isTimeOff) row.timeOff = true;
+    rows.push(row);
   });
   return rows;
 }
@@ -1267,12 +1246,13 @@ function validate() {
   let hasEmpty = false;
   let hasLowOcc = false;
   entries.forEach(entry => {
+    const isTimeOff = entry.classList.contains('is-timeoff');
     const month = entry.querySelector('.month-select')?.value;
     const occ = parseFloat(entry.querySelector('.occ-input')?.value) || 0;
     const platform = entry.querySelectorAll('select')[1]?.value;
     const taskType = entry.querySelectorAll('select')[2]?.value;
-    if (!month || !platform || !taskType || !occ) hasEmpty = true;
-    if (occ > 0 && occ < MIN_OCCUPANCY) hasLowOcc = true;
+    if (!isTimeOff && (!month || !platform || !taskType || !occ)) hasEmpty = true;
+    if (!isTimeOff && occ > 0 && occ < MIN_OCCUPANCY) hasLowOcc = true;
     if (month) {
       monthTotals[month] = (monthTotals[month] || 0) + occ;
       monthTaskCounts[month] = (monthTaskCounts[month] || 0) + 1;
@@ -1296,13 +1276,12 @@ function validate() {
   return true;
 }
 
-// ===== SUBMIT TO GOOGLE SHEETS =====
+// ===== SUBMIT TO FIREBASE =====
 async function submitToSheets() {
   if (!validate()) return;
 
-  if (!SHEET_URL) {
-    showToast('يرجى إعداد الربط مع Google Sheets أولاً', true);
-    openSetup();
+  if (!initFirebase()) {
+    showToast('لم يتم إعداد قاعدة البيانات — يرجى إعداد Firebase من لوحة التحكم أولاً', true);
     return;
   }
 
@@ -1312,14 +1291,14 @@ async function submitToSheets() {
   label.innerHTML = '<span class="spinner"></span> جاري الإرسال...';
 
   const rows = gatherData();
+  const timestamp = new Date().toISOString();
 
   try {
-    const response = await fetch(SHEET_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows })
+    const promises = rows.map(row => {
+      row.timestamp = timestamp;
+      return firebaseDb.ref('tasks').push(row);
     });
+    await Promise.all(promises);
 
     document.getElementById('successCount').textContent = rows.length;
     document.getElementById('successOverlay').classList.add('show');
