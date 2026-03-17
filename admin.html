@@ -780,7 +780,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
       <div class="kpi-card clickable animate-in delay-2" onclick="showHighOccDrill()">
         <div class="kpi-icon">⚡</div>
         <div class="kpi-value" id="kpiHighOcc">—</div>
-        <div class="kpi-label">موظفون بإشغال ≥ 100%</div>
+        <div class="kpi-label">موظفون بإشغال > 100%</div>
         <span class="kpi-change neutral" id="kpiHighChange">تحتاج متابعة</span>
       </div>
       <div class="kpi-card clickable animate-in delay-3" onclick="showDepartmentsDrill()">
@@ -1780,7 +1780,7 @@ function getHighOccEmployees() {
     empMonthOcc[key] = (empMonthOcc[key]||0) + (parseFloat(r.occupancy)||0);
   });
   const highOcc = new Set();
-  Object.entries(empMonthOcc).forEach(([k,v]) => { if (v >= 100) highOcc.add(k.split('|')[0]); });
+  Object.entries(empMonthOcc).forEach(([k,v]) => { if (v > 100) highOcc.add(k.split('|')[0]); });
   return highOcc;
 }
 
@@ -3006,7 +3006,7 @@ function showHighOccDrill() {
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>الشهر</th><th>الإشغال</th></tr></thead><tbody>`;
   Object.entries(empMap).forEach(([name,d]) => {
-    Object.entries(d.months).filter(([_,v])=>v>=100).sort((a,b)=>b[1]-a[1]).forEach(([month,occ]) => {
+    Object.entries(d.months).filter(([_,v])=>v>100).sort((a,b)=>b[1]-a[1]).forEach(([month,occ]) => {
       html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
         <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(d.department)}</span></td>
         <td>${escapeHtml(month)}</td><td style="color:${getOccColor(occ)};font-weight:700">${occ.toFixed(0)}%</td></tr>`;
