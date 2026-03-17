@@ -1447,6 +1447,7 @@ let ADMIN_PASS_HASH = localStorage.getItem(STORAGE_PREFIX + 'passHash') || DEFAU
 
 let allData = [];
 let filteredData = [];
+let approvedData = [];
 let charts = {};
 let drillCharts = {};
 let currentPage = 1;
@@ -1840,13 +1841,14 @@ function applyFilters() {
   filteredData = [...allData];
   if (quarter !== 'all') filteredData = filteredData.filter(r => r.quarter === quarter);
   if (year !== 'all') filteredData = filteredData.filter(r => String(r.year) === year);
+  approvedData = filteredData.filter(function(r) { return (r.status || 'pending') === 'approved'; });
   updateKPIs(); renderCharts(); currentPage = 1; renderTable(); renderHeatmap();
 }
 
 // ==================== KPIs ====================
 function getHighOccEmployees() {
   const empMonthOcc = {};
-  filteredData.forEach(r => {
+  approvedData.forEach(r => {
     const key = r.name + '|' + r.month;
     empMonthOcc[key] = (empMonthOcc[key]||0) + (parseFloat(r.occupancy)||0);
   });
@@ -1868,16 +1870,16 @@ function calcAvgOccPerMonth(data) {
 }
 
 function updateKPIs() {
-  const d = filteredData;
+  const d = approvedData;
   const employees = [...new Set(d.map(r => r.name))];
   const platforms = [...new Set(d.map(r => r.platform))];
   const departments = [...new Set(d.map(r => r.department))];
   const avgOcc = calcAvgOccPerMonth(d);
   const highOccEmployees = getHighOccEmployees();
 
-  // Status counts
+  // Status counts (use filteredData to show all statuses)
   var statusCounts = { pending: 0, approved: 0, rejected: 0 };
-  d.forEach(function(r) { statusCounts[r.status || 'pending']++; });
+  filteredData.forEach(function(r) { statusCounts[r.status || 'pending']++; });
 
   animateValue('kpiEmployees', employees.length);
   animateValue('kpiTasks', d.length);
@@ -2020,8 +2022,8 @@ function renderEmployeesSection() {
   var qtrVal = (document.getElementById('empQuarterFilter')?.value) || 'all';
   var yearVal = (document.getElementById('empYearFilter')?.value) || 'all';
 
-  // Apply local filters on top of global filteredData
-  var data = filteredData;
+  // Apply local filters on top of global approvedData
+  var data = approvedData;
   if (deptVal !== 'all') data = data.filter(function(r) { return r.department === deptVal; });
   if (secVal !== 'all') data = data.filter(function(r) { return r.section === secVal; });
   if (platVal !== 'all') data = data.filter(function(r) { return r.platform === platVal; });
@@ -2095,7 +2097,7 @@ function renderPlatformsSection() {
   // Apply local year/quarter filters
   var yearVal = (document.getElementById('platYearFilter')?.value) || 'all';
   var qtrVal = (document.getElementById('platQuarterFilter')?.value) || 'all';
-  var data = filteredData;
+  var data = approvedData;
   if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
   if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
 
@@ -2313,14 +2315,14 @@ function getTaskFilteredData() {
 function renderTasksSection() {
   populateTaskFilters();
 
-  // Task type cards (from global filteredData, not local filters)
+  // Task type cards (from global approvedData, not local filters)
   // Count distinct months for FTE calculation
   var taskActiveMonths = new Set();
-  filteredData.forEach(function(r) { taskActiveMonths.add((r.month||'') + '|' + (r.year||'')); });
+  approvedData.forEach(function(r) { taskActiveMonths.add((r.month||'') + '|' + (r.year||'')); });
   var taskMonthCount = taskActiveMonths.size || 1;
 
   const typeMap = {};
-  filteredData.forEach(r => {
+  approvedData.forEach(r => {
     if (!typeMap[r.taskType]) typeMap[r.taskType] = { name: r.taskType, count: 0, employees: new Set(), platforms: new Set(), totalOcc: 0, _tasks: [] };
     typeMap[r.taskType].count++;
     typeMap[r.taskType].employees.add(r.name);
@@ -3109,7 +3111,7 @@ document.getElementById('drillModal').addEventListener('click', e => { if (e.tar
 
 // ---- Employee Drill ----
 function showEmployeeDrill(name) {
-  const empData = filteredData.filter(r => r.name === name);
+  const empData = approvedData.filter(r => r.name === name);
   if (!empData.length) return;
   const department = empData[0].department;
   const section = empData[0].section || '';
@@ -3193,7 +3195,7 @@ function showEmployeeDrill(name) {
 
 // ---- Platform Drill ----
 function showPlatformDrill(platform) {
-  const pData = filteredData.filter(r => r.platform === platform);
+  const pData = approvedData.filter(r => r.platform === platform);
   if (!pData.length) return;
   const empNames = [...new Set(pData.map(r => r.name))];
   const departments = [...new Set(pData.map(r => r.department))];
@@ -3246,7 +3248,7 @@ function showPlatformDrill(platform) {
 
 // ---- Task Type Drill ----
 function showTaskTypeDrill(taskType) {
-  const tData = filteredData.filter(r => r.taskType === taskType);
+  const tData = approvedData.filter(r => r.taskType === taskType);
   if (!tData.length) return;
   const empNames = [...new Set(tData.map(r => r.name))];
   const avgOcc = calcAvgOccPerMonth(tData).toFixed(1);
@@ -3272,7 +3274,7 @@ function showTaskTypeDrill(taskType) {
 // ---- KPI Drills ----
 function showOccupancyDrill() {
   const empOcc = {};
-  filteredData.forEach(r => {
+  approvedData.forEach(r => {
     if (!empOcc[r.name]) empOcc[r.name] = {department:r.department, sum:0, count:0};
     empOcc[r.name].sum += parseFloat(r.occupancy)||0;
     empOcc[r.name].count++;
@@ -3297,7 +3299,7 @@ function showOccupancyDrill() {
 
 function showHighOccDrill() {
   const highOcc = getHighOccEmployees();
-  const empData = filteredData.filter(r => highOcc.has(r.name));
+  const empData = approvedData.filter(r => highOcc.has(r.name));
   const empMap = {};
   empData.forEach(r => {
     if (!empMap[r.name]) empMap[r.name] = {department:r.department, months:{}};
@@ -3320,7 +3322,7 @@ function showHighOccDrill() {
 
 function showDepartmentsDrill() {
   const deptMap = {};
-  filteredData.forEach(r => {
+  approvedData.forEach(r => {
     if (!deptMap[r.department]) deptMap[r.department] = {employees:new Set(), tasks:0, totalOcc:0};
     deptMap[r.department].employees.add(r.name);
     deptMap[r.department].tasks++;
@@ -3372,7 +3374,7 @@ function destroyChart(name) { if (charts[name]) { charts[name].destroy(); charts
 function renderPlatformChart() {
   destroyChart('platform');
   const counts = {};
-  filteredData.forEach(r => { counts[r.platform] = (counts[r.platform]||0) + 1; });
+  approvedData.forEach(r => { counts[r.platform] = (counts[r.platform]||0) + 1; });
   const labels = Object.keys(counts);
   charts.platform = new Chart(document.getElementById('platformChart'), {
     type:'doughnut', data:{ labels, datasets:[{data:Object.values(counts),backgroundColor:COLORS.slice(0,labels.length),borderWidth:0,hoverOffset:8}] },
@@ -3384,7 +3386,7 @@ function renderPlatformChart() {
 function renderTaskTypeChart() {
   destroyChart('taskType');
   const counts = {};
-  filteredData.forEach(r => { counts[r.taskType] = (counts[r.taskType]||0) + 1; });
+  approvedData.forEach(r => { counts[r.taskType] = (counts[r.taskType]||0) + 1; });
   const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]);
   charts.taskType = new Chart(document.getElementById('taskTypeChart'), {
     type:'bar', data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:COLORS.slice(0,sorted.length),borderRadius:6,borderSkipped:false}]},
@@ -3398,7 +3400,7 @@ function renderTaskTypeChart() {
 function renderDepartmentChart() {
   destroyChart('department');
   const taskCounts = {}, empSets = {};
-  filteredData.forEach(r => {
+  approvedData.forEach(r => {
     taskCounts[r.department] = (taskCounts[r.department]||0) + 1;
     if (!empSets[r.department]) empSets[r.department] = new Set();
     empSets[r.department].add(r.name);
@@ -3410,14 +3412,14 @@ function renderDepartmentChart() {
       {label:'الموظفون',data:labels.map(l=>empSets[l]?.size||0),backgroundColor:'#10b981',borderRadius:6}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      onClick:(e,els)=>{if(els.length){const department=labels[els[0].index];const emps=filteredData.filter(r=>r.department===department);if(emps.length){showDepartmentMembersDrill(department);}}},
+      onClick:(e,els)=>{if(els.length){const department=labels[els[0].index];const emps=approvedData.filter(r=>r.department===department);if(emps.length){showDepartmentMembersDrill(department);}}},
       plugins:{legend:{labels:{font:{family:'IBM Plex Sans Arabic'}}}},
       scales:{x:{grid:{display:false},ticks:{font:{family:'IBM Plex Sans Arabic',size:11}}},y:{grid:{color:'#E5E7EB'},ticks:{font:{family:'IBM Plex Sans Arabic'}}}}}
   });
 }
 
 function showDepartmentMembersDrill(department) {
-  const tData = filteredData.filter(r => r.department === department);
+  const tData = approvedData.filter(r => r.department === department);
   const empMap = {};
   tData.forEach(r => {
     if (!empMap[r.name]) empMap[r.name] = {count:0, occ:0, months:new Set()};
@@ -3454,7 +3456,7 @@ function showDepartmentMembersDrill(department) {
 function renderMonthlyChart() {
   destroyChart('monthly');
   const monthData = {};
-  filteredData.forEach(r => {
+  approvedData.forEach(r => {
     if (!monthData[r.month]) monthData[r.month] = { sum:0, count:0 };
     monthData[r.month].sum += parseFloat(r.occupancy)||0;
     monthData[r.month].count++;
@@ -3473,7 +3475,7 @@ function renderMonthlyChart() {
 }
 
 function showMonthDrill(month) {
-  const mData = filteredData.filter(r => r.month === month);
+  const mData = approvedData.filter(r => r.month === month);
   const empMap = {};
   mData.forEach(r => {
     if (!empMap[r.name]) empMap[r.name] = {department:r.department, occ:0, count:0};
@@ -3509,7 +3511,7 @@ function showMonthDrill(month) {
 function renderTopEmployeesChart() {
   destroyChart('topEmp');
   const empOcc = {};
-  filteredData.forEach(r => { empOcc[r.name] = (empOcc[r.name]||0) + (parseFloat(r.occupancy)||0); });
+  approvedData.forEach(r => { empOcc[r.name] = (empOcc[r.name]||0) + (parseFloat(r.occupancy)||0); });
   const sorted = Object.entries(empOcc).sort((a,b) => b[1] - a[1]).slice(0, 15);
   const colors = sorted.map(([_,v]) => v > 300 ? '#DC2626' : v > 200 ? '#DBA102' : '#1B8354');
   charts.topEmp = new Chart(document.getElementById('topEmployeesChart'), {
@@ -3523,14 +3525,14 @@ function renderTopEmployeesChart() {
 
 // ==================== HEATMAP (clickable) ====================
 function renderHeatmap() {
-  const departments = [...new Set(filteredData.map(r => r.department))].filter(Boolean);
-  const months = MONTHS.filter(m => filteredData.some(r => r.month === m));
+  const departments = [...new Set(approvedData.map(r => r.department))].filter(Boolean);
+  const months = MONTHS.filter(m => approvedData.some(r => r.month === m));
   if (!departments.length || !months.length) {
     document.getElementById('heatmapContainer').innerHTML = '<div class="no-data"><p>لا توجد بيانات كافية للخريطة الحرارية</p></div>';
     return;
   }
   const grid = {};
-  filteredData.forEach(r => {
+  approvedData.forEach(r => {
     const k = r.department + '|' + r.month;
     if (!grid[k]) grid[k] = { sum:0, count:0 };
     grid[k].sum += parseFloat(r.occupancy)||0;
@@ -3560,7 +3562,7 @@ function renderHeatmap() {
 }
 
 function showHeatmapCellDrill(department, month) {
-  const cData = filteredData.filter(r => r.department === department && r.month === month);
+  const cData = approvedData.filter(r => r.department === department && r.month === month);
   if (!cData.length) return;
   let html = `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${cData.length}</div><div class="label">مهام</div></div>
@@ -5053,7 +5055,7 @@ function renderDeptsAndSections() {
   var capData = getCapacityDataForMonths(filterMonths, filterYear);
 
   // Filter data locally based on this page's filters — only approved tasks
-  var localData = allData.filter(function(r) { return (r.status || 'pending') === 'approved'; });
+  var localData = approvedData.slice();
   if (deptYearVal !== 'all') localData = localData.filter(function(r) { return String(r.year) === deptYearVal; });
   if (deptQtrVal !== 'all') localData = localData.filter(function(r) { return r.quarter === deptQtrVal; });
 
@@ -5245,8 +5247,7 @@ function showCapacityDrill() {
   // Get dynamic capacity
   var capData = getCapacityDataForMonths(filterMonths, filterYear);
 
-  // Only count approved tasks for capacity calculations
-  var approvedData = filteredData.filter(function(r) { return (r.status || 'pending') === 'approved'; });
+  // Only count approved tasks for capacity calculations (uses global approvedData)
 
   var totalActive = Object.values(capData).reduce(function(s,d){return s+d.totalActiveEmployees;},0);
   var totalCap = Object.values(capData).reduce(function(s,d){return s+d.totalCapacity;},0);
