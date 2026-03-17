@@ -1154,7 +1154,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.12';
+const ADMIN_VERSION = 'v20260317.13';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -1234,24 +1234,30 @@ const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec
 const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','Other':'💻'};
 
 // ==================== OCCUPANCY COLOR (consistent everywhere) ====================
-// ≤90% green, 90-100% orange, >100% red
+// >70% green (good), 50-70% orange (fair), <50% red (not good)
 function getOccColor(val) {
   var v = parseFloat(val) || 0;
-  if (v > 100) return '#ef4444';
-  if (v > 90) return '#f59e0b';
-  return '#10b981';
+  if (v >= 70) return '#10b981';
+  if (v >= 50) return '#f59e0b';
+  return '#ef4444';
 }
 function getOccColorRgba(val) {
   var v = parseFloat(val) || 0;
-  if (v > 100) return 'rgba(239,68,68,0.6)';
-  if (v > 90) return 'rgba(245,158,11,0.6)';
-  return 'rgba(16,185,129,0.6)';
+  if (v >= 70) return 'rgba(16,185,129,0.6)';
+  if (v >= 50) return 'rgba(245,158,11,0.6)';
+  return 'rgba(239,68,68,0.6)';
 }
 function getOccColorVar(val) {
   var v = parseFloat(val) || 0;
-  if (v > 100) return 'var(--danger)';
-  if (v > 90) return 'var(--warning)';
-  return 'var(--success)';
+  if (v >= 70) return 'var(--success)';
+  if (v >= 50) return 'var(--warning)';
+  return 'var(--danger)';
+}
+function getOccLabel(val) {
+  var v = parseFloat(val) || 0;
+  if (v >= 70) return 'جيد';
+  if (v >= 50) return 'مقبول';
+  return 'ضعيف';
 }
 
 // ==================== SECURITY UTILITIES ====================
@@ -1735,20 +1741,23 @@ function updateKPIs() {
   document.getElementById('kpiHighChange').className = 'kpi-change ' + highClass;
   document.getElementById('kpiHighChange').textContent = highOccEmployees.size > 0 ? '⚠ اضغط للمراجعة' : '✓ ضمن الحدود';
 
-  // Capacity
-  const capData = getCapacityData();
-  const totalHC = Object.values(capData).reduce((s, dept) => s + dept.totalHeadCount, 0);
-  const activeMonths = [...new Set(d.map(r => r.month))].length || 1;
-  const totalCapacity = totalHC * 100 * activeMonths;
-  const totalUsed = d.reduce((s, r) => s + (parseFloat(r.occupancy) || 0), 0);
-  const capUtil = totalCapacity > 0 ? ((totalUsed / totalCapacity) * 100).toFixed(1) : '—';
+  // Capacity — use filtered months from current quarter/year filters
+  var kpiQuarter = document.getElementById('quarterFilter').value;
+  var kpiYear = document.getElementById('yearFilter').value;
+  var kpiMonths = (kpiQuarter !== 'all') ? (QUARTER_MONTHS[kpiQuarter] || MONTHS.slice()) : MONTHS.slice();
+  var kpiFilterYear = (kpiYear !== 'all') ? kpiYear : '2026';
+  var capData = getCapacityDataForMonths(kpiMonths, kpiFilterYear);
+  var totalActive = Object.values(capData).reduce(function(s, dept) { return s + dept.totalActiveEmployees; }, 0);
+  var totalCapacity = Object.values(capData).reduce(function(s, dept) { return s + dept.totalCapacity; }, 0);
+  var totalUsed = d.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
+  var capUtil = totalCapacity > 0 ? ((totalUsed / totalCapacity) * 100).toFixed(1) : '—';
   document.getElementById('kpiCapacity').textContent = totalCapacity > 0 ? capUtil + '%' : '—';
-  const capEl = document.getElementById('kpiCapChange');
+  var capEl = document.getElementById('kpiCapChange');
   if (totalCapacity > 0) {
-    capEl.textContent = totalHC + ' موظف × ' + activeMonths + ' شهر';
-    capEl.className = 'kpi-change ' + (capUtil > 100 ? 'down' : capUtil > 90 ? 'neutral' : 'up');
+    capEl.textContent = totalActive + ' موظف نشط · ' + getOccLabel(capUtil);
+    capEl.className = 'kpi-change ' + (capUtil >= 70 ? 'up' : capUtil >= 50 ? 'neutral' : 'down');
   } else {
-    capEl.textContent = 'لم يتم تحديد السعة';
+    capEl.textContent = 'لا يوجد موظفون نشطون';
     capEl.className = 'kpi-change neutral';
   }
 }
@@ -2838,20 +2847,25 @@ function showDepartmentsDrill() {
     deptMap[r.department].tasks++;
     deptMap[r.department].totalOcc += parseFloat(r.occupancy)||0;
   });
-  const capData = getCapacityData();
-  const activeMonths = [...new Set(filteredData.map(r => r.month))].length || 1;
+  var kpiQ = document.getElementById('quarterFilter').value;
+  var kpiY = document.getElementById('yearFilter').value;
+  var drillMonths = (kpiQ !== 'all') ? (QUARTER_MONTHS[kpiQ] || MONTHS.slice()) : MONTHS.slice();
+  var drillYear = (kpiY !== 'all') ? kpiY : '2026';
+  const capData = getCapacityDataForMonths(drillMonths, drillYear);
   let html = `<div class="drill-chart-container" style="height:300px;"><canvas id="drillTeams"></canvas></div>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;">
-  <table class="drill-table"><thead><tr><th>الإدارة</th><th>عدد الموظفين</th><th>عدد المهام</th><th>متوسط الإشغال</th><th>HC</th><th>السعة %</th></tr></thead><tbody>`;
+  <table class="drill-table"><thead><tr><th>الإدارة</th><th>عدد الموظفين</th><th>عدد المهام</th><th>متوسط الإشغال</th><th>النشطون</th><th>الاستغلال</th><th>التقييم</th></tr></thead><tbody>`;
   Object.entries(deptMap).sort((a,b)=>b[1].tasks-a[1].tasks).forEach(([dept,d]) => {
     const avg = (d.totalOcc/d.tasks).toFixed(1);
     const cap = capData[dept];
-    const hc = cap ? cap.totalHeadCount : 0;
-    const totalCap = hc * 100 * activeMonths;
+    const activeEmp = cap ? cap.totalActiveEmployees : 0;
+    const totalCap = cap ? cap.totalCapacity : 0;
     const capPct = totalCap > 0 ? (d.totalOcc / totalCap * 100).toFixed(1) : '—';
+    const capColor = getOccColor(capPct);
     html += `<tr><td style="font-weight:600">${escapeHtml(dept)}</td><td>${d.employees.size}</td><td>${d.tasks}</td>
       <td><span style="color:${getOccColor(avg)};font-weight:700">${avg}%</span></td>
-      <td>${hc}</td><td>${capPct}${capPct !== '—' ? '%' : ''}</td></tr>`;
+      <td>${activeEmp}</td><td><span style="color:${capColor};font-weight:700">${capPct}${capPct !== '—' ? '%' : ''}</span></td>
+      <td><span style="color:${capColor};font-size:12px;">${capPct !== '—' ? getOccLabel(capPct) : '—'}</span></td></tr>`;
   });
   html += '</tbody></table></div>';
   document.getElementById('drillBody').innerHTML = html;
@@ -3781,12 +3795,9 @@ function renderDataManagement() {
               </div>
               <div>
                 ${deptSecs.map((sec, si) => {
-                  const hc = capData[dept + '|' + sec] || 0;
                   return `<div class="mgmt-item mgmt-section-item">
                     <span class="mgmt-item-name">${escapeHtml(sec)}</span>
                     <div style="display:flex;align-items:center;gap:6px;">
-                      <span style="font-size:11px;color:var(--text-light);">HC:</span>
-                      <input type="number" class="section-hc-input" value="${hc}" min="0" onchange="updateSectionCapacity('` + escapeJS(dept) + `','` + escapeJS(sec) + `',this.value)">
                       <button class="mgmt-action-btn delete" title="حذف" onclick="deleteSection('` + escapeJS(dept) + `',${si})">🗑️</button>
                     </div>
                   </div>`;
@@ -4410,7 +4421,7 @@ function renderDeptsAndSections() {
   var departments = mgmt.departments || [];
   var sections = mgmt.sections || {};
   var totalCap = Object.values(capData).reduce(function(s, d) { return s + d.totalCapacity; }, 0);
-  var totalHC = Object.values(capData).reduce(function(s, d) { return s + d.totalHeadCount; }, 0);
+  var totalActiveEmp = Object.values(capData).reduce(function(s, d) { return s + d.totalActiveEmployees; }, 0);
   var totalUsed = localData.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
   var totalUtil = totalCap > 0 ? (totalUsed / totalCap * 100).toFixed(1) : 0;
   var totalSections = 0;
@@ -4422,31 +4433,30 @@ function renderDeptsAndSections() {
   html += '<div class="kpi-grid" style="margin-bottom:24px;">';
   html += '<div class="kpi-card animate-in"><div class="kpi-icon">🏢</div><div class="kpi-value">' + departments.length + '</div><div class="kpi-label">إجمالي الإدارات</div></div>';
   html += '<div class="kpi-card animate-in delay-1"><div class="kpi-icon">📂</div><div class="kpi-value">' + totalSections + '</div><div class="kpi-label">إجمالي الأقسام</div></div>';
-  html += '<div class="kpi-card animate-in delay-2"><div class="kpi-icon">👥</div><div class="kpi-value">' + totalHC + '</div><div class="kpi-label">إجمالي HC</div></div>';
+  html += '<div class="kpi-card animate-in delay-2"><div class="kpi-icon">👥</div><div class="kpi-value">' + totalActiveEmp + '</div><div class="kpi-label">الموظفون النشطون</div></div>';
   html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📦</div><div class="kpi-value">' + totalCap + '%</div><div class="kpi-label">السعة (' + filterLabel + ')</div></div>';
   html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📈</div><div class="kpi-value">' + totalUsed.toFixed(0) + '%</div><div class="kpi-label">الإشغال الفعلي</div></div>';
   var utilColor = getOccColorVar(totalUtil);
-  html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📊</div><div class="kpi-value" style="color:' + utilColor + '">' + totalUtil + '%</div><div class="kpi-label">نسبة الاستغلال</div></div>';
+  html += '<div class="kpi-card animate-in delay-3"><div class="kpi-icon">📊</div><div class="kpi-value" style="color:' + utilColor + '">' + totalUtil + '% <span style="font-size:12px;">(' + getOccLabel(totalUtil) + ')</span></div><div class="kpi-label">نسبة الاستغلال</div></div>';
   html += '</div>';
 
   // Per-department cards
   departments.forEach(function(dept) {
-    var deptCap = capData[dept] || { sections: {}, totalCapacity: 0, totalHeadCount: 0 };
+    var deptCap = capData[dept] || { sections: {}, totalCapacity: 0, totalActiveEmployees: 0 };
     var deptUsed = usageByDept[dept] || 0;
     var deptCapTotal = deptCap.totalCapacity;
     var deptUtil = deptCapTotal > 0 ? (deptUsed / deptCapTotal * 100).toFixed(1) : 0;
     var deptUtilColor = getOccColor(deptUtil);
-    var deptEmpCount = empCountByDept[dept] ? empCountByDept[dept].size : 0;
     var deptSecs = sections[dept] || [];
 
     html += '<div class="chart-card" style="margin-bottom:20px;">';
     html += '<div class="chart-header" style="border-bottom:1px solid var(--border);padding-bottom:16px;">';
     html += '<div style="flex:1;">';
     html += '<div class="chart-title" style="font-size:18px;">🏢 ' + escapeHtml(dept) + '</div>';
-    html += '<div class="chart-subtitle">' + deptSecs.length + ' أقسام · ' + deptEmpCount + ' موظف نشط · HC: ' + deptCap.totalHeadCount + '</div>';
+    html += '<div class="chart-subtitle">' + deptSecs.length + ' أقسام · ' + deptCap.totalActiveEmployees + ' موظف نشط · السعة: ' + deptCapTotal + '%</div>';
     html += '</div>';
     html += '<div style="text-align:left;min-width:180px;">';
-    html += '<div style="font-size:24px;font-weight:800;color:' + deptUtilColor + '">' + deptUtil + '%</div>';
+    html += '<div style="font-size:24px;font-weight:800;color:' + deptUtilColor + '">' + deptUtil + '% <span style="font-size:13px;font-weight:600;">(' + getOccLabel(deptUtil) + ')</span></div>';
     html += '<div class="capacity-bar" style="width:180px;margin-top:6px;"><div class="capacity-fill" style="width:' + Math.min(deptUtil, 100) + '%;background:' + deptUtilColor + '"></div></div>';
     html += '<div style="font-size:11px;color:var(--text-light);margin-top:4px;">' + deptUsed.toFixed(0) + '% من ' + deptCapTotal + '% (' + filterLabel + ')</div>';
     html += '</div></div>';
@@ -4455,31 +4465,31 @@ function renderDeptsAndSections() {
     if (deptSecs.length > 0) {
       html += '<div style="overflow-x:auto;"><table class="drill-table" style="margin:0;border:none;"><thead><tr>';
       html += '<th style="text-align:right;">القسم</th>';
-      html += '<th>HC</th>';
       html += '<th>النشطون</th>';
       html += '<th>السعة (' + filterLabel + ')</th>';
       html += '<th>الإشغال الفعلي</th>';
       html += '<th>نسبة الاستغلال</th>';
+      html += '<th>التقييم</th>';
       html += '</tr></thead><tbody>';
 
       deptSecs.forEach(function(sec) {
-        var secCap = deptCap.sections[sec] || { totalCapacity: 0, avgHeadCount: 0 };
+        var secCap = deptCap.sections[sec] || { totalCapacity: 0, activeEmployees: 0 };
         var secKey = dept + '|' + sec;
         var secUsed = usageByDeptSec[secKey] || 0;
         var secCapTotal = secCap.totalCapacity;
         var secUtil = secCapTotal > 0 ? (secUsed / secCapTotal * 100).toFixed(1) : 0;
         var secColor = getOccColor(secUtil);
-        var secEmpCount = empCountByDeptSec[secKey] ? empCountByDeptSec[secKey].size : 0;
 
         html += '<tr>';
         html += '<td style="font-weight:600;text-align:right;">📂 ' + escapeHtml(sec) + '</td>';
-        html += '<td>' + secCap.avgHeadCount + '</td>';
-        html += '<td>' + secEmpCount + '</td>';
+        html += '<td>' + secCap.activeEmployees + '</td>';
         html += '<td>' + secCapTotal + '%</td>';
         html += '<td>' + secUsed.toFixed(0) + '%</td>';
         html += '<td><span style="color:' + secColor + ';font-weight:700;">' + secUtil + '%</span>';
         html += '<div class="capacity-bar" style="width:100px;display:inline-block;vertical-align:middle;margin-right:8px;"><div class="capacity-fill" style="width:' + Math.min(secUtil, 100) + '%;background:' + secColor + '"></div></div>';
-        html += '</td></tr>';
+        html += '</td>';
+        html += '<td><span style="color:' + secColor + ';font-weight:600;font-size:12px;">' + getOccLabel(secUtil) + '</span></td>';
+        html += '</tr>';
       });
 
       html += '</tbody></table></div>';
@@ -4523,24 +4533,25 @@ function renderDeptsAndSections() {
 }
 
 // Capacity helper
-// Dynamic capacity: calculates HC per section per month from employee data
+// Dynamic capacity: calculates active employees per section per month from employee data
+// Capacity = active employees × 100% per month
 function getCapacityDataForMonths(monthsList, year) {
   var mgmt = getMgmtData();
   var result = {};
   (mgmt.departments || []).forEach(function(dept) {
     var secs = (mgmt.sections || {})[dept] || [];
-    result[dept] = { sections: {}, totalCapacity: 0, totalHeadCount: 0 };
+    result[dept] = { sections: {}, totalCapacity: 0, totalActiveEmployees: 0 };
     secs.forEach(function(sec) {
       var totalCap = 0;
-      var maxHC = 0;
+      var maxActive = 0;
       monthsList.forEach(function(m) {
-        var hc = getSectionMonthlyCapacity(sec, m, year);
-        totalCap += hc * 100;
-        if (hc > maxHC) maxHC = hc;
+        var active = getSectionMonthlyCapacity(sec, m, year);
+        totalCap += active * 100; // 100% per employee per month
+        if (active > maxActive) maxActive = active;
       });
-      result[dept].sections[sec] = { totalCapacity: totalCap, avgHeadCount: maxHC };
+      result[dept].sections[sec] = { totalCapacity: totalCap, activeEmployees: maxActive };
       result[dept].totalCapacity += totalCap;
-      result[dept].totalHeadCount += maxHC;
+      result[dept].totalActiveEmployees += maxActive;
     });
   });
   return result;
@@ -4569,21 +4580,21 @@ function showCapacityDrill() {
   // Get dynamic capacity
   var capData = getCapacityDataForMonths(filterMonths, filterYear);
 
-  var totalHC = Object.values(capData).reduce(function(s,d){return s+d.totalHeadCount;},0);
+  var totalActive = Object.values(capData).reduce(function(s,d){return s+d.totalActiveEmployees;},0);
   var totalCap = Object.values(capData).reduce(function(s,d){return s+d.totalCapacity;},0);
   var totalUsed = filteredData.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
   var util = totalCap > 0 ? (totalUsed/totalCap*100).toFixed(1) : 0;
 
   var html = '<div class="drill-stats-row">';
-  html += '<div class="drill-stat-card"><div class="value">' + totalHC + '</div><div class="label">إجمالي HC</div></div>';
+  html += '<div class="drill-stat-card"><div class="value">' + totalActive + '</div><div class="label">الموظفون النشطون</div></div>';
   html += '<div class="drill-stat-card"><div class="value">' + totalCap + '%</div><div class="label">السعة (' + drillFilterLabel + ')</div></div>';
   html += '<div class="drill-stat-card"><div class="value">' + totalUsed.toFixed(0) + '%</div><div class="label">الاستخدام الفعلي</div></div>';
-  html += '<div class="drill-stat-card"><div class="value">' + util + '%</div><div class="label">نسبة الاستغلال</div></div>';
+  html += '<div class="drill-stat-card"><div class="value" style="color:' + getOccColor(util) + '">' + util + '% (' + getOccLabel(util) + ')</div><div class="label">نسبة الاستغلال</div></div>';
   html += '</div>';
 
   html += '<div class="drill-chart-container" style="height:350px;"><canvas id="drillCapacity"></canvas></div>';
 
-  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;"><table class="drill-table"><thead><tr><th>الإدارة</th><th>HC</th><th>السعة (' + drillFilterLabel + ')</th><th>الإشغال الفعلي</th><th>نسبة الاستغلال</th></tr></thead><tbody>';
+  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:20px;"><table class="drill-table"><thead><tr><th>الإدارة</th><th>النشطون</th><th>السعة (' + drillFilterLabel + ')</th><th>الإشغال الفعلي</th><th>الاستغلال</th><th>التقييم</th></tr></thead><tbody>';
 
   var deptStats = {};
   Object.entries(capData).forEach(function(entry) {
@@ -4592,15 +4603,16 @@ function showCapacityDrill() {
     var cap = d.totalCapacity;
     var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
     var color = getOccColor(pct);
-    deptStats[dept] = { used: used, cap: cap, pct: pct, hc: d.totalHeadCount };
-    html += '<tr><td style="font-weight:600">' + escapeHtml(dept) + '</td><td>' + d.totalHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
-    html += '<td><span style="color:' + color + ';font-weight:700">' + pct + '%</span><div class="capacity-bar"><div class="capacity-fill" style="width:' + Math.min(pct,100) + '%;background:' + color + '"></div></div></td></tr>';
+    deptStats[dept] = { used: used, cap: cap, pct: pct, active: d.totalActiveEmployees };
+    html += '<tr><td style="font-weight:600">' + escapeHtml(dept) + '</td><td>' + d.totalActiveEmployees + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td>';
+    html += '<td><span style="color:' + color + ';font-weight:700">' + pct + '%</span><div class="capacity-bar"><div class="capacity-fill" style="width:' + Math.min(pct,100) + '%;background:' + color + '"></div></div></td>';
+    html += '<td><span style="color:' + color + ';font-weight:600;font-size:12px;">' + getOccLabel(pct) + '</span></td></tr>';
   });
   html += '</tbody></table></div>';
 
   // Sections detail
   html += '<h3 style="font-size:15px;font-weight:700;margin:24px 0 12px;">📂 تفاصيل الأقسام</h3>';
-  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);"><table class="drill-table"><thead><tr><th>الإدارة</th><th>القسم</th><th>HC</th><th>السعة (' + drillFilterLabel + ')</th><th>الاستخدام</th><th>الاستغلال</th></tr></thead><tbody>';
+  html += '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);"><table class="drill-table"><thead><tr><th>الإدارة</th><th>القسم</th><th>النشطون</th><th>السعة (' + drillFilterLabel + ')</th><th>الاستخدام</th><th>الاستغلال</th><th>التقييم</th></tr></thead><tbody>';
   Object.entries(capData).forEach(function(entry) {
     var dept = entry[0], d = entry[1];
     Object.entries(d.sections).forEach(function(secEntry) {
@@ -4609,7 +4621,8 @@ function showCapacityDrill() {
       var cap = s.totalCapacity;
       var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
       var color = getOccColor(pct);
-      html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.avgHeadCount + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td></tr>';
+      html += '<tr><td>' + escapeHtml(dept) + '</td><td>' + escapeHtml(sec) + '</td><td>' + s.activeEmployees + '</td><td>' + cap + '%</td><td>' + used.toFixed(0) + '%</td><td><span style="color:' + color + ';font-weight:700">' + pct + '%</span></td>';
+      html += '<td><span style="color:' + color + ';font-weight:600;font-size:12px;">' + getOccLabel(pct) + '</span></td></tr>';
     });
   });
   html += '</tbody></table></div>';
