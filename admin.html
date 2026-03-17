@@ -407,6 +407,26 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .section-hc-input { width:60px; padding:4px 8px; border:1.5px solid var(--border); border-radius:6px; font-family:inherit; font-size:12px; text-align:center; direction:ltr; }
 .section-hc-input:focus { border-color:var(--accent); outline:none; }
 .mgmt-emp-info { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+/* Employee card grid layout */
+.emp-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; margin-bottom:12px; }
+.emp-card {
+  background:var(--bg-card-dark); border-radius:12px; padding:14px 16px;
+  border:1px solid var(--border); transition:all 0.2s; position:relative;
+}
+.emp-card:hover { border-color:var(--accent); box-shadow:0 2px 8px rgba(99,102,241,0.08); }
+.emp-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.emp-card-name { font-weight:700; font-size:14px; color:var(--text); }
+.emp-card-status { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+.emp-card-status.active { background:#dcfce7; color:#166534; }
+.emp-card-status.inactive { background:#fef2f2; color:#991b1b; }
+.emp-card-meta { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+.emp-card-meta-row { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-light); }
+.emp-card-meta-row .meta-icon { width:16px; text-align:center; flex-shrink:0; }
+.emp-card-badges { display:flex; gap:4px; flex-wrap:wrap; }
+.emp-card-actions { display:flex; gap:4px; justify-content:flex-end; border-top:1px solid var(--border); padding-top:8px; margin-top:4px; }
+.emp-card-actions button { opacity:0.6; transition:opacity 0.15s; }
+.emp-card:hover .emp-card-actions button { opacity:1; }
+.emp-absence-tag { font-size:10px; padding:2px 8px; border-radius:8px; background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; cursor:pointer; }
 .mgmt-add-emp-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
 .mgmt-add-emp-row select, .mgmt-add-emp-row input { padding:8px 10px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:12px; }
 .capacity-bar { height:8px; background:#e2e8f0; border-radius:4px; margin-top:6px; overflow:hidden; }
@@ -1126,7 +1146,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 
 <script>
 // ==================== CONFIG ====================
-const ADMIN_VERSION = 'v20260317.8';
+const ADMIN_VERSION = 'v20260317.9';
 console.log('🔧 Admin Panel ' + ADMIN_VERSION);
 const STORAGE_PREFIX = 'qplan_admin_';
 
@@ -3181,10 +3201,10 @@ var CSV_EMPLOYEES = [
 ];
 
 var MGMT_CATEGORIES = [
-  { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...', custom: true },
   { key: 'departments', title: 'الإدارات', icon: '🏢', placeholder: 'أضف إدارة جديدة...' },
   { key: 'sections', title: 'الأقسام', icon: '📂', placeholder: '', custom: true },
   { key: 'platforms', title: 'المنصات / المنتجات', icon: '💻', placeholder: 'أضف منصة جديدة...' },
+  { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...', custom: true },
   { key: 'taskTypes', title: 'أنواع المهام', icon: '📋', placeholder: 'أضف نوع مهمة جديد...' }
 ];
 
@@ -3467,16 +3487,22 @@ function renderDataManagement() {
 
   MGMT_CATEGORIES.forEach(cat => {
     if (cat.key === 'employees') {
-      // Custom employees card
+      // Custom employees card — full width with card grid
       const items = data.employees;
       const depts = data.departments || [];
       const secs = data.sections || {};
-      html += `<div class="mgmt-card" id="mgmt-card-employees">
+      const activeCount = items.filter(function(e) { return typeof e === 'string' || !e.endDate; }).length;
+      const inactiveCount = items.length - activeCount;
+      html += `<div class="mgmt-card" id="mgmt-card-employees" style="grid-column: 1 / -1;">
         <div class="mgmt-card-header">
           <div class="mgmt-card-title">${cat.icon} ${cat.title}</div>
-          <span class="mgmt-card-count">${items.length} عنصر</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="emp-card-status active">${activeCount} نشط</span>
+            ${inactiveCount > 0 ? '<span class="emp-card-status inactive">' + inactiveCount + ' غير نشط</span>' : ''}
+            <span class="mgmt-card-count">${items.length} إجمالي</span>
+          </div>
         </div>
-        <div class="mgmt-list" id="mgmt-list-employees">
+        <div class="emp-grid" id="mgmt-list-employees">
           ${items.map((emp, i) => {
             const name = typeof emp === 'string' ? emp : emp.name;
             const dept = typeof emp === 'string' ? '' : (emp.department || '');
@@ -3485,30 +3511,36 @@ function renderDataManagement() {
             const endDate = (typeof emp === 'object' ? emp.endDate : '') || '';
             const absences = (typeof emp === 'object' && Array.isArray(emp.absences)) ? emp.absences : [];
             const isActive = !endDate;
-            const statusBadge = isActive
-              ? '<span class="badge" style="background:#dcfce7;color:#166534;font-size:10px;">نشط</span>'
-              : '<span class="badge" style="background:#fef2f2;color:#991b1b;font-size:10px;">غير نشط</span>';
-            const dateInfo = startDate ? '<span style="font-size:11px;color:var(--text-light);">📅 ' + escapeHtml(startDate) + (endDate ? ' → ' + escapeHtml(endDate) : ' → الآن') + '</span>' : '';
-            const absInfo = absences.length > 0 ? '<span style="font-size:11px;color:#f59e0b;" title="' + absences.map(a => escapeAttr(a.from + ' → ' + a.to + (a.reason ? ' (' + a.reason + ')' : ''))).join('&#10;') + '">🔴 ' + absences.length + ' فترة غياب</span>' : '';
-            return `<div class="mgmt-item" id="mgmt-item-employees-${i}" style="flex-wrap:wrap;">
-              <div class="mgmt-emp-info" style="flex:1;min-width:200px;">
-                <span class="mgmt-item-name" id="mgmt-name-employees-${i}">${escapeHtml(name)}</span>
-                ${statusBadge}
-                ${dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : ''}
-                ${sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : ''}
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                ${dateInfo}
-                ${absInfo}
-                <div class="mgmt-item-actions">
-                  <button class="mgmt-action-btn" title="غياب" onclick="manageAbsences(${i})" style="font-size:14px;">🔴</button>
-                  <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',${i})">✏️</button>
-                  <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',${i})">🗑️</button>
+            return `<div class="emp-card" id="mgmt-item-employees-${i}">
+              <div class="emp-card-top">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="emp-card-name" id="mgmt-name-employees-${i}">${escapeHtml(name)}</span>
+                  <span class="emp-card-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : 'غير نشط'}</span>
                 </div>
+              </div>
+              <div class="emp-card-meta">
+                ${dept || sec ? '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><div class="emp-card-badges">' +
+                  (dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : '') +
+                  (sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : '') +
+                '</div></div>' : '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><span style="color:#f59e0b;font-size:11px;">لم يتم تعيين الإدارة</span></div>'}
+                <div class="emp-card-meta-row">
+                  <span class="meta-icon">📅</span>
+                  <span>${startDate ? escapeHtml(startDate) + (endDate ? ' ← ' + escapeHtml(endDate) : ' ← الآن') : '<span style="color:#f59e0b;">لم يحدد تاريخ البدء</span>'}</span>
+                </div>
+                ${absences.length > 0 ? '<div class="emp-card-meta-row"><span class="meta-icon">🔴</span><div class="emp-card-badges">' +
+                  absences.map(function(a) {
+                    return '<span class="emp-absence-tag" onclick="manageAbsences(' + i + ')" title="' + escapeAttr((a.reason || 'غياب') + ': ' + a.from + ' → ' + a.to) + '">' + escapeHtml(a.from) + ' → ' + escapeHtml(a.to) + '</span>';
+                  }).join('') +
+                '</div></div>' : ''}
+              </div>
+              <div class="emp-card-actions">
+                <button class="mgmt-action-btn" title="إدارة الغياب" onclick="manageAbsences(${i})" style="font-size:14px;">🔴</button>
+                <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',${i})">✏️</button>
+                <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',${i})">🗑️</button>
               </div>
             </div>`;
           }).join('')}
-          ${items.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px;">لا توجد عناصر</div>' : ''}
+          ${items.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--text-light);font-size:13px;grid-column:1/-1;">لا يوجد موظفون — أضف موظف جديد أدناه</div>' : ''}
         </div>
         <div class="mgmt-add-emp-row">
           <input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="flex:1;" onkeydown="if(event.key==='Enter')addMgmtItem('employees')">
@@ -3729,38 +3761,46 @@ function editMgmtItem(key, index) {
     if (!itemEl) return;
     // Build month options for date selects
     var monthOpts = '<option value="">— اختر —</option>';
-    var years = ['2025','2026','2027','2028'];
+    var years = ['2025','2026','2027','2028','2029','2030'];
     years.forEach(function(y) {
       MONTHS.forEach(function(m) {
         var val = m + ' ' + y;
         monthOpts += '<option value="' + escapeAttr(val) + '">' + escapeHtml(val) + '</option>';
       });
     });
-    var editHtml = '<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding:8px 0;">';
-    editHtml += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
-    editHtml += '<input class="mgmt-edit-input" style="flex:1;min-width:140px;" value="' + escapeAttr(currentName) + '" id="mgmt-edit-employees-' + index + '" placeholder="اسم الموظف">';
-    editHtml += '<select id="mgmt-edit-dept-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:120px;padding:8px;" onchange="updateEditSectionDropdown(' + index + ')">';
-    editHtml += '<option value="">الإدارة</option>';
+    itemEl.className = 'emp-card';
+    itemEl.style.borderColor = 'var(--accent)';
+    itemEl.style.boxShadow = '0 0 0 2px rgba(99,102,241,0.15)';
+    var editHtml = '<div style="display:flex;flex-direction:column;gap:10px;width:100%;">';
+    editHtml += '<div style="font-weight:700;font-size:13px;color:var(--accent);margin-bottom:2px;">✏️ تعديل بيانات الموظف</div>';
+    // Row 1: Name
+    editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">الاسم</label>';
+    editHtml += '<input class="mgmt-edit-input" style="width:100%;" value="' + escapeAttr(currentName) + '" id="mgmt-edit-employees-' + index + '" placeholder="اسم الموظف"></div>';
+    // Row 2: Department + Section
+    editHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+    editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">الإدارة</label>';
+    editHtml += '<select id="mgmt-edit-dept-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;" onchange="updateEditSectionDropdown(' + index + ')"><option value="">— اختر —</option>';
     depts.forEach(function(d) {
       editHtml += '<option value="' + escapeAttr(d) + '"' + (d === currentDept ? ' selected' : '') + '>' + escapeHtml(d) + '</option>';
     });
-    editHtml += '</select>';
-    editHtml += '<select id="mgmt-edit-section-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:120px;padding:8px;">';
-    editHtml += '<option value="">القسم</option>';
+    editHtml += '</select></div>';
+    editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">القسم</label>';
+    editHtml += '<select id="mgmt-edit-section-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;"><option value="">— اختر —</option>';
     secs.forEach(function(s) {
       editHtml += '<option value="' + escapeAttr(s) + '"' + (s === currentSec ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
     });
-    editHtml += '</select>';
+    editHtml += '</select></div></div>';
+    // Row 3: Start Date + End Date
+    editHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+    editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">📅 تاريخ البدء</label>';
+    editHtml += '<select id="mgmt-edit-start-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;">' + monthOpts.replace('value="' + escapeAttr(currentStart) + '"', 'value="' + escapeAttr(currentStart) + '" selected') + '</select></div>';
+    editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">📅 تاريخ الانتهاء</label>';
+    editHtml += '<select id="mgmt-edit-end-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;"><option value="">نشط (بدون تاريخ انتهاء)</option>' + monthOpts.replace('value="' + escapeAttr(currentEnd) + '"', 'value="' + escapeAttr(currentEnd) + '" selected') + '</select></div>';
     editHtml += '</div>';
-    editHtml += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
-    editHtml += '<label style="font-size:12px;color:var(--text-light);min-width:70px;">تاريخ البدء:</label>';
-    editHtml += '<select id="mgmt-edit-start-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:140px;padding:8px;">' + monthOpts.replace('value="' + escapeAttr(currentStart) + '"', 'value="' + escapeAttr(currentStart) + '" selected') + '</select>';
-    editHtml += '<label style="font-size:12px;color:var(--text-light);min-width:80px;">تاريخ الانتهاء:</label>';
-    editHtml += '<select id="mgmt-edit-end-' + index + '" class="mgmt-edit-input" style="flex:1;min-width:140px;padding:8px;"><option value="">نشط (بدون تاريخ)</option>' + monthOpts.replace('value="' + escapeAttr(currentEnd) + '"', 'value="' + escapeAttr(currentEnd) + '" selected') + '</select>';
-    editHtml += '</div>';
-    editHtml += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+    // Actions
+    editHtml += '<div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px;">';
+    editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 16px;font-size:12px;" onclick="renderDataManagement()">❌ إلغاء</button>';
     editHtml += '<button class="mgmt-add-btn" style="padding:6px 16px;" onclick="saveEditMgmt(\'employees\',' + index + ')">✅ حفظ</button>';
-    editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 16px;" onclick="renderDataManagement()">❌ إلغاء</button>';
     editHtml += '</div></div>';
     itemEl.innerHTML = editHtml;
     document.getElementById('mgmt-edit-employees-' + index).focus();
