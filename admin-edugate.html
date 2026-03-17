@@ -2928,7 +2928,7 @@ function showEmployeeDrill(name) {
   <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;">📈 الإشغال الشهري</h3>
   <div class="drill-chart-container"><canvas id="drillEmpMonthly"></canvas></div>
   <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📊 توزيع المنصات</h3>
-  <div class="drill-chart-container" style="height:220px;"><canvas id="drillEmpPlatforms"></canvas></div>
+  <div class="drill-chart-container" style="height:220px;"><canvas id="drillEmpPlatforms"></canvas></div>`;
   // Status counts for bulk bar
   const statusCounts = {pending:0, approved:0, rejected:0};
   empData.forEach(r => { statusCounts[r.status||'pending']++; });
