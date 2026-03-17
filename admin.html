@@ -2072,6 +2072,13 @@ function renderPlatformsSection() {
   data.forEach(function(r) { activeMonths.add((r.month||'') + '|' + (r.year||'')); });
   var monthCount = activeMonths.size || 1;
 
+  // Build global employee-month occupancy map (across ALL platforms) for avgOcc
+  var globalEmpMonthOcc = {};
+  data.forEach(function(r) {
+    var key = (r.name||'') + '|' + (r.month||'') + '|' + (r.year||'');
+    globalEmpMonthOcc[key] = (globalEmpMonthOcc[key]||0) + (parseFloat(r.occupancy)||0);
+  });
+
   const platMap = {};
   data.forEach(r => {
     if (!platMap[r.platform]) platMap[r.platform] = { name: r.platform, tasks: 0, employees: new Set(), departments: new Set(), totalOcc: 0, _tasks: [] };
@@ -2092,7 +2099,12 @@ function renderPlatformsSection() {
     const icon = Object.entries(PLATFORM_ICONS).find(([k]) => p.name.includes(k));
     // FTE = total occupancy / (100 * number of months)
     var fte = (p.totalOcc / (100 * monthCount)).toFixed(1);
-    var avgOcc = calcAvgOccPerMonth(p._tasks).toFixed(0);
+    // Average TOTAL occupancy of employees on this platform (across all their platforms)
+    var empMonthKeys = new Set();
+    p._tasks.forEach(function(r) { empMonthKeys.add((r.name||'') + '|' + (r.month||'') + '|' + (r.year||'')); });
+    var totalEmpOcc = 0;
+    empMonthKeys.forEach(function(key) { totalEmpOcc += (globalEmpMonthOcc[key] || 0); });
+    var avgOcc = empMonthKeys.size > 0 ? (totalEmpOcc / empMonthKeys.size).toFixed(0) : '0';
     return `<div class="detail-card platform-card" onclick="showPlatformDrill('` + escapeJS(p.name) + `')">
       <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
       <div class="detail-card-header">
