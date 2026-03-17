@@ -915,7 +915,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
         </div>
         <div class="task-modal-field">
           <label>نسبة الإشغال %</label>
-          <input type="number" id="taskField_occupancy" min="25" max="120" step="5" placeholder="25 - 120">
+          <input type="number" id="taskField_occupancy" min="20" max="120" step="5" placeholder="20 - 120">
         </div>
         <div class="task-modal-field full-width">
           <label>وصف المهمة</label>
@@ -1155,7 +1155,7 @@ function fixPlatformValues(data) {
 }
 
 function cleanOccupancyData(data) {
-  const MIN_OCC = 25;  // 25%
+  const MIN_OCC = 20;  // 20%
   const MAX_OCC = 120; // 120%
 
   // Fix platform values (clean up old swapped data)
@@ -1181,7 +1181,7 @@ function cleanOccupancyData(data) {
     // Current total of OK records
     let okTotal = okRecords.reduce((s, r) => s + r.occupancy, 0);
 
-    // Try to adjust low records up to 25%, drop if would exceed 120%
+    // Try to adjust low records up to 20%, drop if would exceed 120%
     lowRecords.forEach(r => {
       if (okTotal + MIN_OCC <= MAX_OCC) {
         r.occupancy = MIN_OCC;
@@ -1878,7 +1878,7 @@ function saveTask() {
   if (!fields.month) { showMgmtToast('يرجى اختيار الشهر', 'error'); return; }
   if (!fields.quarter) { showMgmtToast('يرجى اختيار الربع', 'error'); return; }
   if (!fields.year) { showMgmtToast('يرجى اختيار السنة', 'error'); return; }
-  if (fields.occupancy < 25) { showMgmtToast('الحد الأدنى للإشغال 25%', 'error'); return; }
+  if (fields.occupancy < 20) { showMgmtToast('الحد الأدنى للإشغال 20%', 'error'); return; }
   if (fields.occupancy > 120) { showMgmtToast('الحد الأقصى للإشغال 120%', 'error'); return; }
 
   const editIdx = parseInt(document.getElementById('taskEditIdx').value);
@@ -2760,7 +2760,7 @@ function generateSampleTasks(taskCount, employeeCount, filterQuarter, filterYear
     monthList = Object.keys(quarters);
   }
   var taskYear = filterYear || '2026';
-  const occupancies = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+  const occupancies = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
   const descriptions = [
     'تطوير واجهة المستخدم','تحليل متطلبات النظام','اختبار الأداء','تصميم قاعدة البيانات',
     'تكامل الخدمات','مراجعة الكود','إصلاح الأخطاء','تحسين الأداء','توثيق النظام',
@@ -2794,11 +2794,11 @@ function generateSampleTasks(taskCount, employeeCount, filterQuarter, filterYear
     var month = monthList[Math.floor(Math.random() * monthList.length)];
     var remaining = getRemainingCapacity(emp.name, month);
 
-    if (remaining < 25) continue; // No room for a task (min 25%)
+    if (remaining < 20) continue; // No room for a task (min 20%)
 
     // Pick occupancy: random valid value between 25 and min(remaining, 100)
     var maxOcc = Math.min(remaining, 100);
-    var possibleOccs = occupancies.filter(function(o) { return o >= 25 && o <= maxOcc; });
+    var possibleOccs = occupancies.filter(function(o) { return o >= 20 && o <= maxOcc; });
     if (possibleOccs.length === 0) continue;
 
     var occ = possibleOccs[Math.floor(Math.random() * possibleOccs.length)];
