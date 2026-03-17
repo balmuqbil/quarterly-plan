@@ -952,6 +952,16 @@ tr:hover td { background:rgba(99,102,241,0.03); }
           <option value="الثالث">الربع الثالث</option>
           <option value="الرابع">الربع الرابع</option>
         </select>
+        <span style="border-right:1px solid var(--border);height:24px;margin:0 4px;"></span>
+        <select class="quarter-filter" id="platSortBy" onchange="renderPlatformsSection()">
+          <option value="tasks">ترتيب: عدد المهام</option>
+          <option value="fte">ترتيب: FTEs</option>
+          <option value="employees">ترتيب: عدد الموظفين</option>
+          <option value="avgOcc">ترتيب: متوسط إشغال</option>
+          <option value="departments">ترتيب: عدد الإدارات</option>
+          <option value="name">ترتيب: الاسم</option>
+        </select>
+        <button class="export-btn" id="platSortDir" style="font-size:14px;padding:6px 10px;min-width:36px;" onclick="togglePlatSortDir()" title="تنازلي — اضغط للتبديل">⬇</button>
         <span id="platCount" style="font-size:12px;color:var(--text-light);"></span>
       </div>
     </div>
@@ -2059,6 +2069,14 @@ function renderEmployeesSection() {
 }
 
 // ==================== PLATFORMS SECTION ====================
+var platSortDir = 'desc';
+function togglePlatSortDir() {
+  platSortDir = platSortDir === 'asc' ? 'desc' : 'asc';
+  document.getElementById('platSortDir').textContent = platSortDir === 'asc' ? '⬆' : '⬇';
+  document.getElementById('platSortDir').title = platSortDir === 'asc' ? 'تصاعدي — اضغط للتبديل' : 'تنازلي — اضغط للتبديل';
+  renderPlatformsSection();
+}
+
 function renderPlatformsSection() {
   // Apply local year/quarter filters
   var yearVal = (document.getElementById('platYearFilter')?.value) || 'all';
@@ -2088,7 +2106,32 @@ function renderPlatformsSection() {
     platMap[r.platform].totalOcc += parseFloat(r.occupancy) || 0;
     platMap[r.platform]._tasks.push(r);
   });
-  const platforms = Object.values(platMap).sort((a,b) => b.tasks - a.tasks);
+  var platforms = Object.values(platMap);
+
+  // Pre-compute FTE and avgOcc for sorting
+  platforms.forEach(function(p) {
+    p._fte = p.totalOcc / (100 * monthCount);
+    var empMonthKeys = new Set();
+    p._tasks.forEach(function(r) { empMonthKeys.add((r.name||'') + '|' + (r.month||'') + '|' + (r.year||'')); });
+    var totalEmpOcc = 0;
+    empMonthKeys.forEach(function(key) { totalEmpOcc += (globalEmpMonthOcc[key] || 0); });
+    p._avgOcc = empMonthKeys.size > 0 ? totalEmpOcc / empMonthKeys.size : 0;
+  });
+
+  // Sort platforms
+  var sortBy = (document.getElementById('platSortBy')?.value) || 'tasks';
+  var dir = platSortDir === 'asc' ? 1 : -1;
+  platforms.sort(function(a, b) {
+    switch (sortBy) {
+      case 'name': return dir * a.name.localeCompare(b.name, 'ar');
+      case 'tasks': return dir * (a.tasks - b.tasks);
+      case 'fte': return dir * (a._fte - b._fte);
+      case 'employees': return dir * (a.employees.size - b.employees.size);
+      case 'avgOcc': return dir * (a._avgOcc - b._avgOcc);
+      case 'departments': return dir * (a.departments.size - b.departments.size);
+      default: return dir * (a.tasks - b.tasks);
+    }
+  });
 
   // Update count
   var countEl = document.getElementById('platCount');
@@ -2097,14 +2140,8 @@ function renderPlatformsSection() {
   const grid = document.getElementById('platformsGrid');
   grid.innerHTML = platforms.map((p,i) => {
     const icon = Object.entries(PLATFORM_ICONS).find(([k]) => p.name.includes(k));
-    // FTE = total occupancy / (100 * number of months)
-    var fte = (p.totalOcc / (100 * monthCount)).toFixed(1);
-    // Average TOTAL occupancy of employees on this platform (across all their platforms)
-    var empMonthKeys = new Set();
-    p._tasks.forEach(function(r) { empMonthKeys.add((r.name||'') + '|' + (r.month||'') + '|' + (r.year||'')); });
-    var totalEmpOcc = 0;
-    empMonthKeys.forEach(function(key) { totalEmpOcc += (globalEmpMonthOcc[key] || 0); });
-    var avgOcc = empMonthKeys.size > 0 ? (totalEmpOcc / empMonthKeys.size).toFixed(0) : '0';
+    var fte = p._fte.toFixed(1);
+    var avgOcc = p._avgOcc.toFixed(0);
     return `<div class="detail-card platform-card" onclick="showPlatformDrill('` + escapeJS(p.name) + `')">
       <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
       <div class="detail-card-header">
