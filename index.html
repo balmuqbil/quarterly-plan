@@ -568,6 +568,43 @@
     .task-grid { grid-template-columns: 1fr; }
     .info-row { grid-template-columns: 1fr; }
   }
+
+/* ========== DARK MODE ========== */
+html.dark-mode body { background:#11111b; color:#e0e0e0; }
+html.dark-mode .header { background:linear-gradient(135deg, #11111b 0%, #1a1a2e 50%, #1e1e2e 100%); }
+html.dark-mode .info-card, html.dark-mode .tasks-card, html.dark-mode .month-meters { background:#1e1e2e; color:#e0e0e0; box-shadow:0 2px 12px rgba(0,0,0,0.2); }
+html.dark-mode .info-card h2, html.dark-mode .tasks-card h2, html.dark-mode .month-meters h2 { color:#e0e0e0; }
+html.dark-mode .field input, html.dark-mode .field select { background:#181825; color:#e0e0e0; border-color:#2e2e3e; }
+html.dark-mode .field input:focus, html.dark-mode .field select:focus { border-color:var(--primary, #0f3460); box-shadow:0 0 0 3px rgba(99,102,241,0.15); background:#1e1e2e; }
+html.dark-mode .field label { color:#a0a0b0; }
+html.dark-mode .task-entry { background:#181825; border-color:#2e2e3e; }
+html.dark-mode .task-entry:hover { border-color:#3e3e4e; }
+html.dark-mode .task-grid .field select, html.dark-mode .task-grid .field input { background:#1e1e2e; }
+html.dark-mode .meter-item { background:#181825; border-color:#2e2e3e; }
+html.dark-mode .meter-item.active { border-color:var(--primary, #0f3460); background:#1e1e2e; }
+html.dark-mode .meter-label { color:#6c6c80; }
+html.dark-mode .meter-value { color:#e0e0e0; }
+html.dark-mode .meter-bar { background:#2e2e3e; }
+html.dark-mode .add-row-btn { border-color:#2e2e3e; color:#6c6c80; }
+html.dark-mode .add-row-btn:hover { border-color:var(--primary, #0f3460); color:var(--primary, #0f3460); background:#181825; }
+html.dark-mode .btn-secondary { background:#1e1e2e; color:#e0e0e0; border-color:#2e2e3e; }
+html.dark-mode .btn-danger { background:#1e1e2e; border-color:#3e2020; }
+html.dark-mode .timeoff-btn { background:#2e2a1a; border-color:#4e4020; color:#DBA102; }
+html.dark-mode .task-entry.is-timeoff { background:#2e2a1a; border-color:#4e4020; }
+html.dark-mode .modal-box { background:#1e1e2e; color:#e0e0e0; }
+html.dark-mode .modal-box h3 { color:#e0e0e0; }
+html.dark-mode .success-box { background:#1e1e2e; }
+html.dark-mode .success-msg { color:#a0a0b0; }
+html.dark-mode .toast { background:#2e2e3e; }
+html.dark-mode .autocomplete-list { background:#1e1e2e; border-color:#2e2e3e; }
+html.dark-mode .autocomplete-item { border-color:#2e2e3e; }
+html.dark-mode .autocomplete-item:hover, html.dark-mode .autocomplete-item.highlighted { background:#2e2e3e; }
+html.dark-mode .desc-field textarea { background:#181825; color:#e0e0e0; border-color:#2e2e3e; }
+html.dark-mode .setup-step { background:#181825; border-color:#2e2e3e; }
+html.dark-mode .code-block { background:#0a0a15; }
+.dark-toggle-btn { background:rgba(255,255,255,0.15); color:white; border:none; padding:8px 16px; border-radius:8px; font-size:16px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+.dark-toggle-btn:hover { background:rgba(255,255,255,0.25); }
+.dark-toggle-btn .btn-text { font-size:12px; font-family:inherit; }
 </style>
 </head>
 <body>
@@ -576,6 +613,7 @@
   <h1>نموذج خطة العمل الربعية</h1>
   <p>يرجى تعبئة بيانات المهام المخطط لها خلال الربع — الحد الأدنى للإشغال 20% لكل مهمة، والحد الأقصى 120% لكل شهر</p>
   <div class="header-actions">
+      <button class="dark-toggle-btn" id="darkModeBtn" onclick="toggleDarkMode()"><span id="darkModeIcon">🌙</span><span class="btn-text" id="darkModeLabel">الوضع الداكن</span></button>
   </div>
 </div>
 
@@ -698,6 +736,23 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ========== DARK MODE ==========
+function toggleDarkMode() {
+  document.documentElement.classList.toggle('dark-mode');
+  var isDark = document.documentElement.classList.contains('dark-mode');
+  localStorage.setItem('qplan_darkMode', isDark ? 'true' : 'false');
+  var icon = document.getElementById('darkModeIcon');
+  var label = document.getElementById('darkModeLabel');
+  if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+  if (label) label.textContent = isDark ? 'الوضع الفاتح' : 'الوضع الداكن';
+}
+(function() {
+  var saved = localStorage.getItem('qplan_darkMode');
+  if (saved === 'true' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark-mode');
+  }
+})();
+
 // ===== CONFIG =====
 const STORAGE_PREFIX = 'qplan_';
 const ADMIN_PREFIX = 'qplan_admin_';
