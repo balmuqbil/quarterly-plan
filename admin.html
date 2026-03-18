@@ -1627,6 +1627,10 @@ function setDefaultFilters() {
   if (platQuarterFilter) {
     platQuarterFilter.value = currentQuarter;
   }
+  var platMonthFilter = document.getElementById('platMonthFilter');
+  if (platMonthFilter && currentMonthName) {
+    platMonthFilter.value = currentMonthName;
+  }
 }
 const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
 const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','إجازة':'🏖️','بدون منصة':'📌','Other':'💻'};
