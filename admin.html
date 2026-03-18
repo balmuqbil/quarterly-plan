@@ -2809,7 +2809,10 @@ function openTaskModal(editIdx) {
       document.getElementById('taskField_section').innerHTML = '<option value="">— يتم تعبئته تلقائياً —</option>' + secs.map(function(s) { return '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
       if (r.section) document.getElementById('taskField_section').value = r.section;
     }
-    document.getElementById('taskField_platform').value = r.platform || '';
+    // Set platform — skip virtual platforms like "بدون منصة" / "إجازة"
+    var editPlatform = r.platform || '';
+    if (editPlatform === 'بدون منصة' || editPlatform === 'إجازة') editPlatform = '';
+    document.getElementById('taskField_platform').value = editPlatform;
     document.getElementById('taskField_taskType').value = r.taskType || '';
     document.getElementById('taskField_quarter').value = r.quarter || '';
     filterTaskMonthsByQuarter();
@@ -2887,6 +2890,11 @@ function saveTask() {
   if (existingTotal + fields.occupancy > 120) {
     showMgmtToast('⚠️ إجمالي الإشغال للموظف "' + fields.name + '" في شهر ' + fields.month + ' سيتجاوز 120% (الحالي: ' + existingTotal + '% + ' + fields.occupancy + '% = ' + (existingTotal + fields.occupancy) + '%)', 'error');
     return;
+  }
+
+  // Normalize platform for no-platform task types
+  if (!fields.platform && noPlatMap[fields.taskType]) {
+    fields.platform = 'بدون منصة';
   }
 
   fields.timestamp = new Date().toISOString();
