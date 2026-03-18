@@ -3920,6 +3920,10 @@ function renderResourcePlanner() {
       // Build squad move buttons
       var moveHtml = '';
       if (totalSquads > 1) {
+        // Add move-to-pool button if card is in a numbered squad
+        if (squadNum !== 0) {
+          moveHtml += '<button class="rp-squad-move" onclick="event.stopPropagation();rpMoveToSquad(' + idx + ',0)" title="نقل إلى غير مخصص" style="color:var(--warning);">📥</button>';
+        }
         for (var s = 1; s <= totalSquads; s++) {
           if (s !== squadNum) {
             moveHtml += '<button class="rp-squad-move" onclick="event.stopPropagation();rpMoveToSquad(' + idx + ',' + s + ')" title="نقل إلى فريق ' + s + '">' + s + '</button>';
