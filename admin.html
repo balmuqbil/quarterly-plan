@@ -3734,6 +3734,8 @@ function showPlatformDrill(platform) {
   </div>
   <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;">📈 الإشغال الشهري للمنصة</h3>
   <div class="drill-chart-container"><canvas id="drillPlatMonthly"></canvas></div>
+  <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📊 توزيع الجهد حسب نوع المهمة (FTEs)</h3>
+  <div class="drill-chart-container" style="height:220px;"><canvas id="drillPlatTaskTypeFTE"></canvas></div>
   <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">👥 الموظفون على هذه المنصة</h3>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>القسم</th><th>نوع المهمة</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
@@ -3755,8 +3757,11 @@ function showPlatformDrill(platform) {
   });
   html += '</tbody></table></div>';
 
-  // Task details with actions
-  html += `<h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📋 تفاصيل المهام</h3>`;
+  // Task details with actions — collapsible
+  html += `<details style="margin-top:20px;">
+  <summary style="font-size:15px;font-weight:700;cursor:pointer;padding:12px 0;display:flex;align-items:center;gap:8px;user-select:none;">
+    <span style="transition:transform 0.2s;display:inline-block;">▶</span> 📋 إدارة المهام <span style="font-size:12px;color:var(--text-light);font-weight:400;">(${pData.length} مهمة)</span>
+  </summary>`;
   html += `<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
   <table class="drill-table"><thead><tr><th>الموظف</th><th>القسم</th><th>الشهر</th><th>نوع المهمة</th><th>الإشغال</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>`;
   pData.forEach(r => {
@@ -3781,19 +3786,68 @@ function showPlatformDrill(platform) {
         <button class="task-crud-btn delete-btn" title="حذف" onclick="deleteTaskAndRefreshPlatDrill(${idx},'${escapeJS(platform)}')">🗑️</button>
       </div></td></tr>`;
   });
-  html += '</tbody></table></div>';
+  html += '</tbody></table></div></details>';
 
   document.getElementById('drillBody').innerHTML = html;
   openDrill(platform, 'تفاصيل المنصة');
+
+  // Rotate summary arrow on toggle
+  document.querySelectorAll('#drillBody details').forEach(function(d) {
+    d.addEventListener('toggle', function() {
+      var arrow = d.querySelector('summary span:first-child');
+      if (arrow) arrow.style.transform = d.open ? 'rotate(90deg)' : '';
+    });
+  });
+
   setTimeout(() => {
     const mLabels = MONTHS.filter(m => monthOcc[m]);
     drillCharts.platMonthly = new Chart(document.getElementById('drillPlatMonthly'), {
       type:'bar', data:{ labels:mLabels, datasets:[
         {type:'line',label:'متوسط إشغال %',data:mLabels.map(m=>(monthOcc[m].sum/monthOcc[m].count).toFixed(1)),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#ef4444'},
-        {label:'عدد المهام',data:mLabels.map(m=>monthOcc[m].count),backgroundColor:'rgba(99,102,241,0.7)',borderRadius:6}
+        {label:'عدد المهام',data:mLabels.map(m=>monthOcc[m].count),backgroundColor:'rgba(27,131,84,0.7)',borderRadius:6}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Tajawal'}}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'IBM Plex Sans Arabic'}}}},scales:{x:{grid:{display:false},ticks:{font:{family:'IBM Plex Sans Arabic'}}},y:{grid:{color:'#E5E7EB'},ticks:{font:{family:'IBM Plex Sans Arabic'}}}}}
     });
+
+    // Task Type FTE chart
+    var ttStats = {};
+    var numMonths = new Set(pData.map(function(r){return (r.month||'')+'|'+(r.year||'');})).size || 1;
+    pData.forEach(function(r) {
+      var tt = r.taskType || 'أخرى';
+      if (!ttStats[tt]) ttStats[tt] = { occ: 0, count: 0 };
+      ttStats[tt].occ += parseFloat(r.occupancy) || 0;
+      ttStats[tt].count++;
+    });
+    var ttLabels = Object.keys(ttStats).sort(function(a,b) { return ttStats[b].occ - ttStats[a].occ; });
+    var ttFTEs = ttLabels.map(function(t) { return (ttStats[t].occ / (100 * numMonths)).toFixed(1); });
+    var ttCanvas = document.getElementById('drillPlatTaskTypeFTE');
+    if (ttCanvas) {
+      drillCharts.platTaskTypeFTE = new Chart(ttCanvas, {
+        type: 'bar',
+        data: {
+          labels: ttLabels,
+          datasets: [{
+            label: 'FTEs',
+            data: ttFTEs.map(Number),
+            backgroundColor: COLORS.slice(0, ttLabels.length),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function(c) { return c.parsed.x + ' FTEs (' + ttStats[ttLabels[c.dataIndex]].count + ' مهمة)'; } } }
+          },
+          scales: {
+            x: { grid: { color: '#E5E7EB' }, ticks: { font: { family: 'IBM Plex Sans Arabic' } }, title: { display: true, text: 'FTEs', font: { family: 'IBM Plex Sans Arabic', size: 12 } } },
+            y: { grid: { display: false }, ticks: { font: { family: 'IBM Plex Sans Arabic', size: 11 } } }
+          }
+        }
+      });
+    }
   }, 100);
 }
 
