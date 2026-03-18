@@ -709,7 +709,7 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-expand-all:hover { border-color:var(--accent); color:var(--accent); }
 .rp-plat-name { font-size:16px; font-weight:700; }
 .rp-plat-stats { font-size:12px; color:var(--text-light); }
-.rp-drop-zone { min-height:36px; border:2px dashed var(--border); border-radius:8px; padding:8px; text-align:center; color:var(--text-light); font-size:12px; transition:all 0.2s; margin-top:8px; }
+.rp-drop-zone { min-height:48px; border:2px dashed var(--border); border-radius:8px; padding:12px 8px; text-align:center; color:var(--text-light); font-size:12px; transition:all 0.2s; margin-top:8px; display:flex; align-items:center; justify-content:center; }
 .rp-drop-zone.drag-over { border-color:var(--accent); background:var(--accent-glow); color:var(--accent); }
 .rp-cards-flow { display:flex; flex-direction:column; gap:8px; }
 .rp-role-group { display:flex; flex-direction:column; gap:4px; }
@@ -743,8 +743,8 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-squad-controls { display:flex; gap:6px; margin-bottom:8px; align-items:center; }
 .rp-squad-add { padding:3px 10px; border:1.5px dashed var(--border); border-radius:6px; background:none; color:var(--text-light); font-family:inherit; font-size:11px; cursor:pointer; transition:all 0.2s; }
 .rp-squad-add:hover { border-color:var(--accent); color:var(--accent); }
-.rp-squad-section { border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; background:rgba(0,0,0,0.01); }
-.rp-squad-section.squad-drag-over { border-color:var(--accent); background:rgba(27,131,84,0.03); }
+.rp-squad-section { border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; background:rgba(0,0,0,0.01); min-height:80px; }
+.rp-squad-section.squad-drag-over { border-color:var(--accent); background:rgba(27,131,84,0.06); box-shadow:0 0 0 2px var(--accent-glow); }
 .rp-squad-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-secondary); }
 .rp-squad-header .squad-name { display:flex; align-items:center; gap:6px; }
 .rp-squad-header .squad-stats { font-size:11px; font-weight:500; color:var(--text-light); }
@@ -3991,12 +3991,13 @@ function renderResourcePlanner() {
       '<span style="font-size:11px;color:var(--text-light);">' + numSquads + ' فريق</span>' +
     '</div>';
 
+    var bodyDropHandler = numSquads > 1 ? '' : ' ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',1)"';
     return '<div class="rp-plat-card">' +
       '<div class="rp-plat-header" onclick="rpTogglePlat(this)">' +
         '<div style="display:flex;align-items:center;gap:6px;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span></div>' +
         '<div class="rp-plat-stats">' + empCount + ' موظف · ' + fte + ' FTEs · ' + tasks.length + ' مهمة · ' + numSquads + ' فريق</div>' +
       '</div>' +
-      '<div class="rp-plat-body">' +
+      '<div class="rp-plat-body"' + bodyDropHandler + '>' +
       squadControls +
       squadsHtml +
       (tasks.length > 0 ? '<div style="margin-top:8px;text-align:left;"><button class="rp-copy-btn" onclick="event.stopPropagation();rpCopyToNextMonth(\'' + escapeJS(platform) + '\')" title="نسخ تخصيصات هذه المنصة إلى الشهر التالي">📋 نسخ إلى الشهر التالي</button></div>' : '') +
