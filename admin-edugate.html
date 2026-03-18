@@ -4047,7 +4047,10 @@ function renderResourcePlanner() {
       '<div class="rp-plat-body"' + bodyDropHandler + '>' +
       squadControls +
       squadsHtml +
-      (tasks.length > 0 ? '<div style="margin-top:8px;text-align:left;"><button class="rp-copy-btn" onclick="event.stopPropagation();rpCopyToNextMonth(\'' + escapeJS(platform) + '\')" title="نسخ تخصيصات هذه المنصة إلى الشهر التالي">📋 نسخ إلى الشهر التالي</button></div>' : '') +
+      (tasks.length > 0 ? '<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;">' +
+        '<button class="rp-copy-btn" onclick="event.stopPropagation();rpCopyToNextMonth(\'' + escapeJS(platform) + '\')" title="نسخ تخصيصات هذه المنصة إلى الشهر التالي">📋 نسخ إلى الشهر التالي</button>' +
+        '<button class="rp-copy-btn" onclick="event.stopPropagation();rpReleasePlatform(\'' + escapeJS(platform) + '\')" title="إزالة جميع الموظفين من هذه المنصة لهذا الشهر" style="color:var(--danger);border-color:var(--danger);">🗑️ إزالة الكل</button>' +
+      '</div>' : '') +
       '</div></div>';
   }).join('');
   if (!platNames.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
@@ -4186,6 +4189,32 @@ function rpMoveToSquad(idx, newSquad) {
     firebaseDb.ref('tasks/' + task._firebaseKey + '/squad').set(newSquad);
   }
   renderResourcePlanner();
+}
+
+function rpReleasePlatform(platform) {
+  var month = document.getElementById('rpMonth')?.value;
+  var year = document.getElementById('rpYear')?.value;
+  var toRemove = [];
+  allData.forEach(function(r, i) {
+    if ((r.status||'pending') === 'approved' && r.platform === platform &&
+        r.month === month && String(r.year) === String(year)) {
+      toRemove.push(i);
+    }
+  });
+  if (!toRemove.length) { showMgmtToast('لا يوجد موظفين في هذه المنصة', 'error'); return; }
+  if (!confirm('هل تريد إزالة جميع الموظفين (' + toRemove.length + ') من منصة ' + platform + ' لشهر ' + month + '؟\n\n⚠️ سيتم حذف ' + toRemove.length + ' مهمة نهائياً من جميع الفرق.')) return;
+  toRemove.sort(function(a,b){return b-a;});
+  toRemove.forEach(function(idx) {
+    var task = allData[idx];
+    if (task && firebaseReady && task._firebaseKey) {
+      firebaseDb.ref('tasks/' + task._firebaseKey).remove().catch(function(err){console.error(err);});
+    }
+    allData.splice(idx, 1);
+  });
+  syncTestData();
+  applyFilters();
+  renderResourcePlanner();
+  showMgmtToast('تم إزالة ' + toRemove.length + ' موظف من ' + platform + ' لشهر ' + month, 'success');
 }
 
 // Inter-squad card dragging
