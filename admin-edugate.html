@@ -712,9 +712,8 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-plat-stats { font-size:12px; color:var(--text-light); }
 .rp-drop-zone { min-height:36px; border:2px dashed var(--border); border-radius:8px; padding:8px; text-align:center; color:var(--text-light); font-size:12px; transition:all 0.2s; margin-top:8px; }
 .rp-drop-zone.drag-over { border-color:var(--accent); background:var(--accent-glow); color:var(--accent); }
-.rp-role-group { margin-bottom:8px; }
-.rp-role-label { font-size:11px; font-weight:700; color:var(--text-secondary); padding:4px 10px; margin-bottom:4px; background:var(--bg-card-dark); border-radius:6px; display:inline-block; border:1px solid var(--border); }
-.rp-assigned-grid { display:flex; flex-wrap:wrap; gap:6px; }
+.rp-cards-flow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.rp-role-label { font-size:10px; font-weight:700; color:#fff; padding:3px 8px; background:var(--accent); border-radius:5px; white-space:nowrap; align-self:center; }
 .rp-assigned { display:inline-flex; flex-direction:column; align-items:center; padding:10px 14px; border-radius:10px; background:var(--bg-card-dark); font-size:12px; border:1px solid var(--border); min-width:100px; text-align:center; transition:all 0.2s; }
 .rp-assigned:hover { border-color:var(--accent); box-shadow:0 2px 8px rgba(0,0,0,0.06); }
 .rp-assigned-info { display:flex; flex-direction:column; align-items:center; gap:2px; }
@@ -3805,16 +3804,13 @@ function renderResourcePlanner() {
     var totalOcc = tasks.reduce(function(s,r) { return s + (parseFloat(r.occupancy)||0); }, 0);
     var fte = (totalOcc / 100).toFixed(1);
     var empCount = new Set(tasks.map(function(r) { return r.name; })).size;
-    var assignedCards = '';
+    var assignedCards = '<div class="rp-cards-flow">';
     var lastTaskType = '';
     tasks.forEach(function(r) {
       var idx = allData.indexOf(r);
       var tt = r.taskType || 'أخرى';
       if (tt !== lastTaskType) {
-        if (lastTaskType) assignedCards += '</div>';
-        assignedCards += '<div class="rp-role-group">' +
-          '<div class="rp-role-label">' + escapeHtml(tt) + '</div>' +
-          '<div class="rp-assigned-grid">';
+        assignedCards += '<span class="rp-role-label">' + escapeHtml(tt) + '</span>';
         lastTaskType = tt;
       }
       assignedCards += '<div class="rp-assigned">' +
@@ -3827,7 +3823,7 @@ function renderResourcePlanner() {
           '<button class="rp-remove-btn" onclick="rpRemoveAssignment(' + idx + ')" title="إزالة" style="font-size:12px;">✕</button>' +
         '</div></div>';
     });
-    if (lastTaskType) assignedCards += '</div></div>';
+    assignedCards += '</div>';
 
     return '<div class="rp-plat-card" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">' +
       '<div class="rp-plat-header" onclick="rpTogglePlat(this)">' +
