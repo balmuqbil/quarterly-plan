@@ -3708,6 +3708,31 @@ function renderResourcePlanner() {
     });
   }
 
+  // Sort available employees by task type priority
+  var RP_TASK_TYPE_PRIORITY = [
+    'إدارة تسليم تقني', 'هيكلية الحلول', 'تحليل أعمال', 'تجربة مستخدم',
+    'تطوير واجهات', 'تطوير حلول', 'تطوير تكاملات', 'جودة'
+  ];
+  var sectionTaskTypes = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'sectionTaskTypes') || '{}');
+  function rpEmpPriority(emp) {
+    var sec = typeof emp === 'object' ? (emp.section || '') : '';
+    var types = sectionTaskTypes[sec] || [];
+    var best = RP_TASK_TYPE_PRIORITY.length;
+    types.forEach(function(t) {
+      var idx = RP_TASK_TYPE_PRIORITY.indexOf(t);
+      if (idx !== -1 && idx < best) best = idx;
+    });
+    return best;
+  }
+  available.sort(function(a, b) {
+    var pa = rpEmpPriority(a);
+    var pb = rpEmpPriority(b);
+    if (pa !== pb) return pa - pb;
+    var na = typeof a === 'string' ? a : a.name;
+    var nb = typeof b === 'string' ? b : b.name;
+    return na.localeCompare(nb, 'ar');
+  });
+
   // Render left panel
   var countEl = document.getElementById('rpAvailCount');
   if (countEl) countEl.textContent = '(' + available.length + ')';
