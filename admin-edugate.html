@@ -731,6 +731,10 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-assign-field label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
 .rp-assign-field select, .rp-assign-field input { width:100%; padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; }
 .rp-assign-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+.rp-conflict-item { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; background:var(--bg-card-dark); margin-bottom:4px; border:1px solid var(--border); font-size:12px; transition:all 0.2s; }
+.rp-conflict-item:hover { border-color:var(--danger); }
+.rp-conflict-item label { display:flex; align-items:center; gap:6px; cursor:pointer; flex:1; }
+.rp-conflict-item .conflict-occ { font-weight:700; color:var(--danger); white-space:nowrap; }
 .rp-no-data { text-align:center; padding:40px; color:var(--text-light); font-size:14px; }
 @media(max-width:900px) { .rp-container { flex-direction:column; } .rp-left { width:100%; } }
 </style>
@@ -1359,6 +1363,13 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
       <div class="rp-assign-field">
         <label>وصف المهمة (اختياري)</label>
         <input type="text" id="rpAssignDesc" placeholder="وصف مختصر...">
+      </div>
+      <div id="rpConflictArea" style="display:none;margin-top:12px;">
+        <div style="background:#fff3e0;border:1.5px solid #ffcc80;border-radius:10px;padding:12px 16px;margin-bottom:10px;">
+          <div style="font-size:13px;font-weight:700;color:#e65100;margin-bottom:6px;">⚠️ الإشغال المطلوب يتجاوز المتاح — اختر مهام لحذفها لتوفير المساحة:</div>
+          <div style="font-size:12px;color:#bf360c;" id="rpConflictInfo"></div>
+        </div>
+        <div id="rpConflictTasks" style="max-height:200px;overflow-y:auto;"></div>
       </div>
       <div class="rp-assign-actions">
         <button class="bulk-paste-cancel" onclick="closeRpAssign()">إلغاء</button>
@@ -3825,8 +3836,10 @@ function openRpAssignDialog(empName, platform, maxAvail) {
   document.getElementById('rpAssignPlatform').value = platform;
   document.getElementById('rpAssignTitle').textContent = '📋 تخصيص ' + empName + ' → ' + platform;
   document.getElementById('rpAssignMaxHint').textContent = '(المتاح: ' + maxAvail + '%)';
-  document.getElementById('rpAssignOcc').max = maxAvail;
+  document.getElementById('rpAssignOcc').max = 120;
   document.getElementById('rpAssignOcc').value = Math.min(50, maxAvail);
+  // Store maxAvail for later check
+  document.getElementById('rpAssignDialog').dataset.maxAvail = maxAvail;
   document.getElementById('rpAssignDesc').value = '';
   // Populate task types based on employee's section
   var mgmt = getMgmtData();
@@ -3837,11 +3850,70 @@ function openRpAssignDialog(empName, platform, maxAvail) {
   types = types.filter(function(t) { return !noPlatMap[t]; }); // exclude no-platform types
   var sel = document.getElementById('rpAssignTaskType');
   sel.innerHTML = types.map(function(t) { return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>'; }).join('');
+  document.getElementById('rpConflictArea').style.display = 'none';
   document.getElementById('rpAssignDialog').classList.add('show');
 }
 
 function closeRpAssign() {
   document.getElementById('rpAssignDialog').classList.remove('show');
+}
+
+function rpShowConflict(empName, month, year, requestedOcc) {
+  // Find existing tasks for this employee in this month
+  var existing = [];
+  allData.forEach(function(r, idx) {
+    if (r.name === empName && r.month === month && (r.year||'') === year && (r.status||'pending') === 'approved') {
+      existing.push({ task: r, idx: idx });
+    }
+  });
+  var currentTotal = existing.reduce(function(s, e) { return s + (parseFloat(e.task.occupancy)||0); }, 0);
+  var totalAfter = currentTotal + requestedOcc;
+  var excess = totalAfter - 120;
+
+  var conflictArea = document.getElementById('rpConflictArea');
+  var conflictInfo = document.getElementById('rpConflictInfo');
+  var conflictTasks = document.getElementById('rpConflictTasks');
+
+  if (totalAfter <= 120) {
+    conflictArea.style.display = 'none';
+    return true; // No conflict
+  }
+
+  conflictInfo.textContent = 'الإشغال الحالي: ' + currentTotal + '% + المطلوب: ' + requestedOcc + '% = ' + totalAfter + '% (يتجاوز 120% بـ ' + excess + '%)';
+  conflictTasks.innerHTML = existing.map(function(e) {
+    return '<div class="rp-conflict-item">' +
+      '<label><input type="checkbox" class="rp-conflict-check" data-idx="' + e.idx + '" data-occ="' + e.task.occupancy + '" onchange="rpUpdateConflictStatus()"> ' +
+      '<span>' + escapeHtml(e.task.platform || 'بدون منصة') + ' — ' + escapeHtml(e.task.taskType) + '</span></label>' +
+      '<span class="conflict-occ">' + e.task.occupancy + '%</span>' +
+      '</div>';
+  }).join('');
+  conflictArea.style.display = 'block';
+  return false; // Has conflict
+}
+
+function rpUpdateConflictStatus() {
+  var checks = document.querySelectorAll('.rp-conflict-check:checked');
+  var freed = 0;
+  checks.forEach(function(cb) { freed += parseInt(cb.dataset.occ) || 0; });
+  var requestedOcc = parseInt(document.getElementById('rpAssignOcc').value) || 0;
+  var empName = document.getElementById('rpAssignEmp').value;
+  var month = document.getElementById('rpMonth').value;
+  var year = document.getElementById('rpYear').value;
+
+  var currentTotal = 0;
+  allData.forEach(function(r) {
+    if (r.name === empName && r.month === month && (r.year||'') === year && (r.status||'pending') === 'approved') {
+      currentTotal += parseFloat(r.occupancy) || 0;
+    }
+  });
+  var remaining = currentTotal - freed;
+  var totalAfter = remaining + requestedOcc;
+  var info = document.getElementById('rpConflictInfo');
+  if (totalAfter <= 120) {
+    info.innerHTML = '✅ بعد الحذف: ' + remaining + '% + ' + requestedOcc + '% = ' + totalAfter + '% — <span style="color:#2e7d32;font-weight:700;">ضمن الحد المسموح</span>';
+  } else {
+    info.textContent = 'بعد الحذف: ' + remaining + '% + ' + requestedOcc + '% = ' + totalAfter + '% (لا يزال يتجاوز 120% بـ ' + (totalAfter - 120) + '%)';
+  }
 }
 
 function confirmRpAssign() {
@@ -3857,6 +3929,43 @@ function confirmRpAssign() {
   if (occ < 20) { showMgmtToast('الحد الأدنى للإشغال 20%', 'error'); return; }
   if (!taskType) { showMgmtToast('يرجى اختيار نوع المهمة', 'error'); return; }
 
+  // Check if there's a conflict
+  var conflictArea = document.getElementById('rpConflictArea');
+  if (conflictArea.style.display === 'none' || conflictArea.style.display === '') {
+    // First check — show conflict if needed
+    var noConflict = rpShowConflict(empName, month, year, occ);
+    if (!noConflict) return; // Wait for user to select tasks to delete
+  }
+
+  // Validate that selected deletions resolve the conflict
+  var checks = document.querySelectorAll('.rp-conflict-check:checked');
+  var freed = 0;
+  checks.forEach(function(cb) { freed += parseInt(cb.dataset.occ) || 0; });
+
+  var currentTotal = 0;
+  allData.forEach(function(r) {
+    if (r.name === empName && r.month === month && (r.year||'') === year && (r.status||'pending') === 'approved') {
+      currentTotal += parseFloat(r.occupancy) || 0;
+    }
+  });
+  var totalAfter = (currentTotal - freed) + occ;
+  if (totalAfter > 120) {
+    showMgmtToast('لا يزال الإشغال يتجاوز 120% — يرجى اختيار مهام إضافية للحذف', 'error');
+    return;
+  }
+
+  // Delete selected tasks first (in reverse index order to avoid shifting)
+  var toDelete = [];
+  checks.forEach(function(cb) { toDelete.push(parseInt(cb.dataset.idx)); });
+  toDelete.sort(function(a, b) { return b - a; }); // reverse order
+  toDelete.forEach(function(idx) {
+    var task = allData[idx];
+    if (task && firebaseReady && task._firebaseKey) {
+      firebaseDb.ref('tasks/' + task._firebaseKey).remove().catch(function(err) { console.error(err); });
+    }
+    allData.splice(idx, 1);
+  });
+
   var mgmt = getMgmtData();
   var emp = mgmt.employees.find(function(e) { return (typeof e === 'string' ? e : e.name) === empName; });
   var department = emp && typeof emp === 'object' ? (emp.department || '') : '';
@@ -3870,11 +3979,15 @@ function confirmRpAssign() {
   };
 
   allData.push(task);
+  conflictArea.style.display = 'none';
   closeRpAssign();
   applyFilters();
   syncTaskToFirebase(task, -1, null);
   renderResourcePlanner();
-  showMgmtToast('تم تخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%', 'success');
+  var msg = toDelete.length > 0 ?
+    'تم حذف ' + toDelete.length + ' مهمة وتخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%' :
+    'تم تخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%';
+  showMgmtToast(msg, 'success');
 }
 
 function rpRemoveAssignment(idx) {
