@@ -735,6 +735,8 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-conflict-item:hover { border-color:var(--danger); }
 .rp-conflict-item label { display:flex; align-items:center; gap:6px; cursor:pointer; flex:1; }
 .rp-conflict-item .conflict-occ { font-weight:700; color:var(--danger); white-space:nowrap; }
+.rp-copy-btn { padding:5px 12px; border:1.5px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text-secondary); font-family:inherit; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+.rp-copy-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(27,131,84,0.04); }
 .rp-no-data { text-align:center; padding:40px; color:var(--text-light); font-size:14px; }
 @media(max-width:900px) { .rp-container { flex-direction:column; } .rp-left { width:100%; } }
 </style>
@@ -1557,6 +1559,14 @@ function setDefaultFilters() {
   var quarterFilter = document.getElementById('quarterFilter');
   if (quarterFilter) {
     quarterFilter.value = currentQuarter;
+  }
+
+  // Set month filter to current month
+  var MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  var currentMonthName = MONTH_NAMES[currentMonth];
+  var monthFilterEl = document.getElementById('monthFilter');
+  if (monthFilterEl && currentMonthName) {
+    monthFilterEl.value = currentMonthName;
   }
 
   // Also set department page filters
@@ -3804,6 +3814,7 @@ function renderResourcePlanner() {
       '<div class="rp-plat-body">' +
       '<div class="rp-assigned-grid">' + assignedCards + '</div>' +
       '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">اسحب موظف هنا للتخصيص</div>' +
+      (tasks.length > 0 ? '<div style="margin-top:8px;text-align:left;"><button class="rp-copy-btn" onclick="event.stopPropagation();rpCopyToNextMonth(\'' + escapeJS(platform) + '\')" title="نسخ تخصيصات هذه المنصة إلى الشهر التالي">📋 نسخ إلى الشهر التالي</button></div>' : '') +
       '</div></div>';
   }).join('');
   if (!platNames.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
@@ -4056,6 +4067,100 @@ function rpChangeOcc(idx, newVal) {
   applyFilters();
   renderResourcePlanner();
   showMgmtToast('تم تعديل الإشغال إلى ' + occ + '%', 'success');
+}
+
+function rpCopyToNextMonth(platform) {
+  var year = document.getElementById('rpYear')?.value || '2026';
+  var quarter = document.getElementById('rpQuarter')?.value || 'الأول';
+  var month = document.getElementById('rpMonth')?.value || 'يناير';
+  var months = QUARTER_MONTHS[quarter] || [];
+  var curIdx = months.indexOf(month);
+
+  // Determine next month (and possibly next quarter)
+  var nextMonth, nextQuarter, nextYear;
+  nextYear = year;
+  if (curIdx < months.length - 1) {
+    nextMonth = months[curIdx + 1];
+    nextQuarter = quarter;
+  } else {
+    // Move to next quarter
+    var qKeys = Object.keys(QUARTER_MONTHS);
+    var qIdx = qKeys.indexOf(quarter);
+    if (qIdx < qKeys.length - 1) {
+      nextQuarter = qKeys[qIdx + 1];
+      nextMonth = QUARTER_MONTHS[nextQuarter][0];
+    } else {
+      // Next year Q1
+      nextQuarter = qKeys[0];
+      nextMonth = QUARTER_MONTHS[nextQuarter][0];
+      nextYear = String(parseInt(year) + 1);
+    }
+  }
+
+  // Get current tasks for this platform in this month
+  var currentTasks = allData.filter(function(r) {
+    return (r.status || 'pending') === 'approved' && r.platform === platform && r.month === month && String(r.year) === year;
+  });
+
+  if (currentTasks.length === 0) {
+    showMgmtToast('لا يوجد تخصيصات لنسخها', 'error');
+    return;
+  }
+
+  // Check which employees already have tasks in the next month for this platform
+  var existingNext = {};
+  allData.forEach(function(r) {
+    if ((r.status || 'pending') === 'approved' && r.platform === platform && r.month === nextMonth && String(r.year) === nextYear) {
+      existingNext[r.name] = true;
+    }
+  });
+
+  var skipped = 0;
+  var copied = 0;
+  var exceeded = 0;
+
+  currentTasks.forEach(function(t) {
+    if (existingNext[t.name]) { skipped++; return; }
+
+    // Check if employee would exceed 120% in next month
+    var empTotal = 0;
+    allData.forEach(function(r) {
+      if ((r.status || 'pending') === 'approved' && r.name === t.name && r.month === nextMonth && String(r.year) === nextYear) {
+        empTotal += parseFloat(r.occupancy) || 0;
+      }
+    });
+    if (empTotal + (parseFloat(t.occupancy) || 0) > 120) { exceeded++; return; }
+
+    var newTask = {
+      name: t.name, department: t.department, section: t.section,
+      platform: platform, taskType: t.taskType,
+      month: nextMonth, quarter: nextQuarter, year: nextYear,
+      occupancy: t.occupancy, description: t.description || 'تخطيط موارد',
+      service: t.service || '', status: 'approved',
+      timestamp: new Date().toISOString()
+    };
+    allData.push(newTask);
+    syncTaskToFirebase(newTask, -1, null);
+    copied++;
+  });
+
+  applyFilters();
+
+  var msg = 'تم نسخ ' + copied + ' تخصيص من ' + month + ' → ' + nextMonth;
+  if (skipped > 0) msg += ' (تم تخطي ' + skipped + ' موجود مسبقاً)';
+  if (exceeded > 0) msg += ' (تم تخطي ' + exceeded + ' لتجاوز 120%)';
+  showMgmtToast(msg, copied > 0 ? 'success' : 'error');
+
+  // Switch view to next month
+  if (copied > 0) {
+    var monthSel = document.getElementById('rpMonth');
+    var quarterSel = document.getElementById('rpQuarter');
+    var yearSel = document.getElementById('rpYear');
+    if (nextQuarter !== quarter) { quarterSel.value = nextQuarter; updateRpMonths(); }
+    if (nextYear !== year) yearSel.value = nextYear;
+    monthSel.value = nextMonth;
+    renderResourcePlanner();
+  }
 }
 
 // ---- Task Type Drill ----
