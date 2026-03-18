@@ -746,12 +746,18 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-squad-add:hover { border-color:var(--accent); color:var(--accent); }
 .rp-squad-section { border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; background:rgba(0,0,0,0.01); min-height:80px; }
 .rp-squad-section.squad-drag-over { border-color:var(--accent); background:rgba(27,131,84,0.06); box-shadow:0 0 0 2px var(--accent-glow); }
-.rp-pool-section { border-style:dashed; background:rgba(219,161,2,0.03); margin-bottom:10px; }
+.rp-pool-section { border-style:dashed; background:rgba(219,161,2,0.03); margin-bottom:10px; min-height:auto; }
 .rp-pool-section .rp-pool-header .squad-name { color:var(--warning); }
-.rp-pool-section .rp-drop-zone { border-color:rgba(219,161,2,0.3); color:var(--warning); }
+.rp-pool-section .rp-drop-zone { border-color:rgba(219,161,2,0.3); color:var(--warning); min-height:32px; padding:6px; }
+.rp-pool-section .rp-assigned { min-width:80px; padding:6px 10px; font-size:11px; }
+.rp-pool-section .rp-assigned-info span { font-size:12px !important; }
+.rp-pool-section .rp-role-label { font-size:10px; padding:1px 6px; }
 .rp-pool-section.squad-drag-over { border-color:var(--warning); background:rgba(219,161,2,0.08); box-shadow:0 0 0 2px rgba(219,161,2,0.2); }
-.rp-squad-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-secondary); }
+.rp-squad-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-secondary); cursor:pointer; user-select:none; }
 .rp-squad-header .squad-name { display:flex; align-items:center; gap:6px; }
+.rp-squad-header .squad-toggle { transition:transform 0.2s; display:inline-block; font-size:10px; }
+.rp-squad-section.sq-collapsed .rp-squad-header .squad-toggle { transform:rotate(-90deg); }
+.rp-squad-section.sq-collapsed .rp-cards-flow, .rp-squad-section.sq-collapsed .rp-drop-zone { display:none; }
 .rp-squad-header .squad-stats { font-size:11px; font-weight:500; color:var(--text-light); }
 .rp-squad-remove { border:none; background:none; color:var(--text-light); cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; transition:all 0.15s; }
 .rp-squad-remove:hover { color:var(--danger); background:rgba(239,68,68,0.1); }
@@ -4137,8 +4143,8 @@ function renderResourcePlanner() {
       var poolEmpCount = new Set(poolTasks.map(function(r) { return r.name; })).size;
       poolHtml = '<div class="rp-squad-section rp-pool-section" data-squad="0" data-platform="' + escapeAttr(platform) + '" ' +
         'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',0)">' +
-        '<div class="rp-squad-header rp-pool-header">' +
-          '<div class="squad-name">📥 موارد غير مخصصة لفريق</div>' +
+        '<div class="rp-squad-header rp-pool-header" onclick="rpToggleSquadSection(this)">' +
+          '<div class="squad-name"><span class="squad-toggle">▼</span> 📥 موارد غير مخصصة لفريق</div>' +
           '<div class="squad-stats">' + poolEmpCount + ' موظف · ' + poolFte + ' FTEs' +
             (poolTasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',0)" title="إزالة جميع الموظفين غير المخصصين" style="color:var(--warning);">🗑️</button>' : '') +
             (poolTasks.length === 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpDisablePool(\'' + escapeJS(platform) + '\')" title="إزالة قسم الموارد غير المخصصة">✕</button>' : '') +
@@ -4161,8 +4167,8 @@ function renderResourcePlanner() {
         var canRemove = sqTasks.length === 0 && numSquads > 1;
         squadsHtml += '<div class="rp-squad-section" data-squad="' + s + '" data-platform="' + escapeAttr(platform) + '" ' +
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">' +
-          '<div class="rp-squad-header">' +
-            '<div class="squad-name">🏷️ ' + escapeHtml(platform) + ' ' + s + '</div>' +
+          '<div class="rp-squad-header" onclick="rpToggleSquadSection(this)">' +
+            '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ ' + escapeHtml(platform) + ' ' + s + '</div>' +
             '<div class="squad-stats">' + sqEmpCount + ' موظف · ' + sqFte + ' FTEs ' +
               (sqTasks.length > 0 ? '<button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
               (canRemove ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpRemoveSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="حذف الفريق">✕</button>' : '') +
@@ -4182,8 +4188,8 @@ function renderResourcePlanner() {
       squadsHtml = poolHtml +
         '<div class="rp-squad-section" data-squad="1" data-platform="' + escapeAttr(platform) + '" ' +
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',1)">' +
-          '<div class="rp-squad-header">' +
-            '<div class="squad-name">🏷️ ' + escapeHtml(platform) + ' 1</div>' +
+          '<div class="rp-squad-header" onclick="rpToggleSquadSection(this)">' +
+            '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ ' + escapeHtml(platform) + ' 1</div>' +
             '<div class="squad-stats">' + sq1EmpCount + ' موظف · ' + sq1Fte + ' FTEs' +
               (sq1Tasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',1)" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
             '</div>' +
@@ -4284,6 +4290,10 @@ function rpToggleSortDir() {
 function rpTogglePlat(headerEl) {
   var card = headerEl.closest('.rp-plat-card');
   if (card) card.classList.toggle('collapsed');
+}
+function rpToggleSquadSection(headerEl) {
+  var section = headerEl.closest('.rp-squad-section');
+  if (section) section.classList.toggle('sq-collapsed');
 }
 function rpExpandAll() {
   document.querySelectorAll('.rp-plat-card.collapsed').forEach(function(c) { c.classList.remove('collapsed'); });
