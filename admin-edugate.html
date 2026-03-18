@@ -954,6 +954,13 @@ tr:hover td { background:rgba(27,131,84,0.03); }
           <option value="الثالث">الربع الثالث</option>
           <option value="الرابع">الربع الرابع</option>
         </select>
+        <select class="quarter-filter" id="platMonthFilter" onchange="renderPlatformsSection()">
+          <option value="all">جميع الأشهر</option>
+          <option value="يناير">يناير</option><option value="فبراير">فبراير</option><option value="مارس">مارس</option>
+          <option value="أبريل">أبريل</option><option value="مايو">مايو</option><option value="يونيو">يونيو</option>
+          <option value="يوليو">يوليو</option><option value="أغسطس">أغسطس</option><option value="سبتمبر">سبتمبر</option>
+          <option value="أكتوبر">أكتوبر</option><option value="نوفمبر">نوفمبر</option><option value="ديسمبر">ديسمبر</option>
+        </select>
         <span style="border-right:1px solid var(--border);height:24px;margin:0 4px;"></span>
         <select class="quarter-filter" id="platSortBy" onchange="renderPlatformsSection()">
           <option value="tasks">ترتيب: عدد المهام</option>
@@ -2098,12 +2105,14 @@ function togglePlatSortDir() {
 }
 
 function renderPlatformsSection() {
-  // Apply local year/quarter filters
+  // Apply local year/quarter/month filters
   var yearVal = (document.getElementById('platYearFilter')?.value) || 'all';
   var qtrVal = (document.getElementById('platQuarterFilter')?.value) || 'all';
+  var monthVal = (document.getElementById('platMonthFilter')?.value) || 'all';
   var data = approvedData;
   if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
   if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
+  if (monthVal !== 'all') data = data.filter(function(r) { return r.month === monthVal; });
 
   // Count distinct months in filtered data for FTE calculation
   var activeMonths = new Set();
