@@ -2530,12 +2530,14 @@ function renderPlatformsSection() {
     const icon = Object.entries(PLATFORM_ICONS).find(([k]) => p.name.includes(k));
     var fte = p._fte.toFixed(1);
     var avgOcc = p._avgOcc.toFixed(0);
+    var projBadges = renderProjectBadges(p.name);
     return `<div class="detail-card platform-card" onclick="showPlatformDrill('` + escapeJS(p.name) + `')">
       <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
       <div class="detail-card-header">
         <div class="detail-card-name">${escapeHtml(p.name)}</div>
         <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${p.tasks} مهمة</span>
       </div>
+      ${projBadges ? '<div style="margin-bottom:8px;">' + projBadges + '</div>' : ''}
       <div class="detail-card-stats">
         <div class="detail-stat"><div class="detail-stat-value">${p.employees.size}</div><div class="detail-stat-label">موظف</div></div>
         <div class="detail-stat"><div class="detail-stat-value">${fte}</div><div class="detail-stat-label">FTEs</div></div>
@@ -3629,7 +3631,9 @@ function showPlatformDrill(platform) {
     monthOcc[r.month].count++;
   });
 
-  let html = `<div class="drill-stats-row">
+  var drillProjBadges = renderProjectBadges(platform);
+  let html = (drillProjBadges ? '<div style="margin-bottom:12px;">' + drillProjBadges + '</div>' : '') +
+  `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${pData.length}</div><div class="label">مهام</div></div>
     <div class="drill-stat-card"><div class="value">${empNames.length}</div><div class="label">موظف</div></div>
     <div class="drill-stat-card"><div class="value">${fte}</div><div class="label">FTEs</div></div>
@@ -4060,9 +4064,10 @@ function renderResourcePlanner() {
 
     var hasPoolActive = numSquads > 1 || rpHasPool(platform) || poolTasks.length > 0;
     var bodyDropHandler = hasPoolActive ? '' : ' ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',1)"';
+    var rpProjBadges = renderProjectBadges(platform);
     return '<div class="rp-plat-card">' +
       '<div class="rp-plat-header" onclick="rpTogglePlat(this)">' +
-        '<div style="display:flex;align-items:center;gap:6px;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span></div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span>' + (rpProjBadges ? '<span style="margin-right:4px;">' + rpProjBadges + '</span>' : '') + '</div>' +
         '<div class="rp-plat-stats">' + empCount + ' موظف · ' + fte + ' FTEs · ' + tasks.length + ' مهمة · ' + numSquads + ' فريق</div>' +
       '</div>' +
       '<div class="rp-plat-body"' + bodyDropHandler + '>' +
@@ -5555,7 +5560,33 @@ function getMgmtData() {
       data.employees = [];
     }
   } catch(e) { data.employees = []; }
+  // Projects
+  try {
+    const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + 'projects');
+    data.projects = stored ? JSON.parse(stored) : [];
+  } catch(e) { data.projects = []; }
   return data;
+}
+
+function getProjectsForPlatform(platformName) {
+  var mgmt = getMgmtData();
+  return (mgmt.projects || []).filter(function(p) {
+    return p.platforms && p.platforms.indexOf(platformName) !== -1;
+  });
+}
+
+function renderProjectBadges(platformName) {
+  var projects = getProjectsForPlatform(platformName);
+  if (!projects.length) return '';
+  return projects.map(function(p) {
+    var typeColor = p.type === 'تشغيلي' ? 'var(--success)' : 'var(--info)';
+    var typeBg = p.type === 'تشغيلي' ? 'rgba(16,185,129,0.1)' : 'rgba(6,182,212,0.1)';
+    return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:6px;background:' + typeBg + ';color:' + typeColor + ';font-weight:600;">' +
+      '📁 ' + escapeHtml(p.name) +
+      '<span style="font-size:9px;opacity:0.8;">(' + escapeHtml(p.type || '') + ')</span>' +
+      (p.endDate ? '<span style="font-size:9px;opacity:0.7;">← ' + escapeHtml(p.endDate) + '</span>' : '') +
+    '</span>';
+  }).join(' ');
 }
 
 function saveMgmtList(key, list) {
@@ -6198,7 +6229,151 @@ function renderDataManagement() {
     }
   });
 
+  // Projects management card
+  var projects = data.projects || [];
+  var allPlats = data.platforms || [];
+  html += '<div class="mgmt-card" id="mgmt-card-projects" style="grid-column:1/-1;">';
+  html += '<div class="mgmt-card-header"><div class="mgmt-card-title">📁 المشاريع</div><span class="mgmt-card-count">' + projects.length + ' مشروع</span></div>';
+  html += '<div class="mgmt-list" id="mgmt-list-projects" style="max-height:none;">';
+  if (projects.length === 0) {
+    html += '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px;">لا توجد مشاريع</div>';
+  } else {
+    projects.forEach(function(proj, pi) {
+      var typeColor = proj.type === 'تشغيلي' ? 'var(--success)' : 'var(--info)';
+      var typeBg = proj.type === 'تشغيلي' ? 'rgba(16,185,129,0.1)' : 'rgba(6,182,212,0.1)';
+      var platBadges = (proj.platforms || []).map(function(p) {
+        return '<span class="badge badge-platform" style="font-size:10px;margin:1px;">' + escapeHtml(p) + '</span>';
+      }).join('');
+      html += '<div class="mgmt-item" style="flex-wrap:wrap;gap:8px;padding:12px;" id="mgmt-proj-' + pi + '">' +
+        '<div style="flex:1;min-width:200px;">' +
+          '<div style="font-weight:700;font-size:14px;">' + escapeHtml(proj.name) + '</div>' +
+          '<div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">' +
+            '<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:' + typeBg + ';color:' + typeColor + ';font-weight:600;">' + escapeHtml(proj.type || 'غير محدد') + '</span>' +
+            (proj.endDate ? '<span style="font-size:11px;color:var(--text-light);">ينتهي: ' + escapeHtml(proj.endDate) + '</span>' : '') +
+          '</div>' +
+          (platBadges ? '<div style="margin-top:6px;">' + platBadges + '</div>' : '<div style="margin-top:6px;font-size:11px;color:var(--text-light);">لا توجد منصات مرتبطة</div>') +
+        '</div>' +
+        '<div class="mgmt-item-actions" style="opacity:1;">' +
+          '<button class="mgmt-action-btn edit" title="تعديل" onclick="editProject(' + pi + ')">✏️</button>' +
+          '<button class="mgmt-action-btn delete" title="حذف" onclick="deleteProject(' + pi + ')">🗑️</button>' +
+        '</div>' +
+      '</div>';
+    });
+  }
+  html += '</div>';
+  // Add project form
+  var monthOpts = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'].map(function(m) {
+    return '<option value="' + m + '">' + m + '</option>';
+  }).join('');
+  var yearOpts = '<option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option>';
+  var platChecks = allPlats.map(function(p) {
+    return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--bg-card-dark);">' +
+      '<input type="checkbox" class="proj-plat-check" value="' + escapeAttr(p) + '"> ' + escapeHtml(p) + '</label>';
+  }).join(' ');
+  html += '<div style="padding:12px;border-top:1px solid var(--border);">' +
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">' +
+      '<div style="flex:1;min-width:180px;"><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">اسم المشروع</label>' +
+        '<input class="mgmt-add-input" id="proj-name-input" placeholder="اسم المشروع..." style="width:100%;"></div>' +
+      '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">النوع</label>' +
+        '<select class="mgmt-add-input" id="proj-type-input" style="min-width:100px;"><option value="تشغيلي">تشغيلي</option><option value="تطوير">تطوير</option></select></div>' +
+      '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">تاريخ النهاية</label>' +
+        '<div style="display:flex;gap:4px;"><select class="mgmt-add-input" id="proj-endmonth" style="min-width:80px;">' + monthOpts + '</select>' +
+        '<select class="mgmt-add-input" id="proj-endyear" style="min-width:70px;">' + yearOpts + '</select></div></div>' +
+      '<button class="mgmt-add-btn" onclick="addProject()">+ إضافة مشروع</button>' +
+    '</div>' +
+    '<div style="margin-top:8px;"><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">المنصات المرتبطة</label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;" id="proj-plats-area">' + platChecks + '</div>' +
+    '</div>' +
+  '</div>';
+  html += '</div>';
+
   grid.innerHTML = html;
+}
+
+function addProject() {
+  var name = sanitizeInput(document.getElementById('proj-name-input').value);
+  if (!name) { showMgmtToast('يرجى إدخال اسم المشروع', 'error'); return; }
+  var type = document.getElementById('proj-type-input').value;
+  var endMonth = document.getElementById('proj-endmonth').value;
+  var endYear = document.getElementById('proj-endyear').value;
+  var endDate = endMonth + ' ' + endYear;
+  var platforms = [];
+  document.querySelectorAll('.proj-plat-check:checked').forEach(function(cb) { platforms.push(cb.value); });
+  var data = getMgmtData();
+  var projects = data.projects || [];
+  if (projects.some(function(p) { return p.name === name; })) {
+    showMgmtToast('مشروع بهذا الاسم موجود بالفعل', 'error'); return;
+  }
+  projects.push({ name: name, type: type, endDate: endDate, platforms: platforms });
+  saveMgmtList('projects', projects);
+  renderDataManagement();
+  showMgmtToast('تم إضافة المشروع "' + name + '"', 'success');
+}
+
+function deleteProject(index) {
+  var data = getMgmtData();
+  var projects = data.projects || [];
+  var proj = projects[index];
+  if (!proj) return;
+  if (!confirm('هل تريد حذف المشروع "' + proj.name + '"؟')) return;
+  projects.splice(index, 1);
+  saveMgmtList('projects', projects);
+  renderDataManagement();
+  showMgmtToast('تم حذف المشروع', 'success');
+}
+
+function editProject(index) {
+  var data = getMgmtData();
+  var projects = data.projects || [];
+  var proj = projects[index];
+  if (!proj) return;
+  var allPlats = data.platforms || [];
+  var el = document.getElementById('mgmt-proj-' + index);
+  if (!el) return;
+  var monthOpts = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'].map(function(m) {
+    return '<option value="' + m + '"' + (proj.endDate && proj.endDate.indexOf(m) !== -1 ? ' selected' : '') + '>' + m + '</option>';
+  }).join('');
+  var endParts = (proj.endDate || '').split(/\s+/);
+  var endYear = endParts.length > 1 ? endParts[1] : '2026';
+  var yearOpts = ['2026','2027','2028'].map(function(y) {
+    return '<option value="' + y + '"' + (y === endYear ? ' selected' : '') + '>' + y + '</option>';
+  }).join('');
+  var platChecks = allPlats.map(function(p) {
+    var checked = proj.platforms && proj.platforms.indexOf(p) !== -1 ? ' checked' : '';
+    return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--bg-card-dark);">' +
+      '<input type="checkbox" class="proj-edit-plat" value="' + escapeAttr(p) + '"' + checked + '> ' + escapeHtml(p) + '</label>';
+  }).join(' ');
+  el.innerHTML = '<div style="width:100%;">' +
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:8px;">' +
+      '<div style="flex:1;min-width:180px;"><label style="font-size:11px;color:var(--text-light);">الاسم</label>' +
+        '<input class="mgmt-edit-input" id="proj-edit-name" value="' + escapeAttr(proj.name) + '"></div>' +
+      '<div><label style="font-size:11px;color:var(--text-light);">النوع</label>' +
+        '<select class="mgmt-edit-input" id="proj-edit-type"><option value="تشغيلي"' + (proj.type === 'تشغيلي' ? ' selected' : '') + '>تشغيلي</option><option value="تطوير"' + (proj.type === 'تطوير' ? ' selected' : '') + '>تطوير</option></select></div>' +
+      '<div><label style="font-size:11px;color:var(--text-light);">تاريخ النهاية</label>' +
+        '<div style="display:flex;gap:4px;"><select class="mgmt-edit-input" id="proj-edit-endmonth">' + monthOpts + '</select>' +
+        '<select class="mgmt-edit-input" id="proj-edit-endyear">' + yearOpts + '</select></div></div>' +
+    '</div>' +
+    '<div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--text-light);">المنصات</label><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">' + platChecks + '</div></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button class="mgmt-action-btn" style="padding:6px 16px;font-size:12px;background:var(--bg-card-dark);border:1px solid var(--border);border-radius:6px;cursor:pointer;" onclick="renderDataManagement()">إلغاء</button>' +
+      '<button class="mgmt-add-btn" style="padding:6px 16px;font-size:12px;" onclick="saveEditProject(' + index + ')">💾 حفظ</button>' +
+    '</div></div>';
+}
+
+function saveEditProject(index) {
+  var name = sanitizeInput(document.getElementById('proj-edit-name').value);
+  if (!name) { showMgmtToast('يرجى إدخال اسم المشروع', 'error'); return; }
+  var type = document.getElementById('proj-edit-type').value;
+  var endMonth = document.getElementById('proj-edit-endmonth').value;
+  var endYear = document.getElementById('proj-edit-endyear').value;
+  var platforms = [];
+  document.querySelectorAll('.proj-edit-plat:checked').forEach(function(cb) { platforms.push(cb.value); });
+  var data = getMgmtData();
+  var projects = data.projects || [];
+  projects[index] = { name: name, type: type, endDate: endMonth + ' ' + endYear, platforms: platforms };
+  saveMgmtList('projects', projects);
+  renderDataManagement();
+  showMgmtToast('تم تحديث المشروع "' + name + '"', 'success');
 }
 
 function updateEmpSectionDropdown() {
