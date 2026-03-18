@@ -3691,6 +3691,11 @@ function initRpDefaults() {
 
 function renderResourcePlanner() {
   var scrollY = window.scrollY || window.pageYOffset;
+  var collapsedPlatforms = {};
+  document.querySelectorAll('.rp-plat-card.collapsed').forEach(function(card) {
+    var nameEl = card.querySelector('.rp-plat-name');
+    if (nameEl) collapsedPlatforms[nameEl.textContent.trim()] = true;
+  });
   var year = document.getElementById('rpYear')?.value || '2026';
   var quarter = document.getElementById('rpQuarter')?.value || 'الأول';
   var month = document.getElementById('rpMonth')?.value || 'يناير';
@@ -3940,7 +3945,13 @@ function renderResourcePlanner() {
       '</div></div>';
   }).join('');
   if (!platNames.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
-  // Restore scroll position after re-render
+  // Restore collapse states and scroll position after re-render
+  document.querySelectorAll('.rp-plat-card').forEach(function(card) {
+    var nameEl = card.querySelector('.rp-plat-name');
+    if (nameEl && collapsedPlatforms[nameEl.textContent.trim()]) {
+      card.classList.add('collapsed');
+    }
+  });
   requestAnimationFrame(function() { window.scrollTo(0, scrollY); });
 }
 
