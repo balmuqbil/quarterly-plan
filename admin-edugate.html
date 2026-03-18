@@ -1598,13 +1598,10 @@ function setDefaultFilters() {
     quarterFilter.value = currentQuarter;
   }
 
-  // Set month filter to current month
+  // Define month names for use by sub-page filters (dashboard month filter stays on "all"
+  // so approvedData contains all months — each sub-page filters locally)
   var MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   var currentMonthName = MONTH_NAMES[currentMonth];
-  var monthFilterEl = document.getElementById('monthFilter');
-  if (monthFilterEl && currentMonthName) {
-    monthFilterEl.value = currentMonthName;
-  }
 
   // Also set department page filters
   var deptYearFilter = document.getElementById('deptYearFilter');
