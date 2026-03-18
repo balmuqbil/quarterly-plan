@@ -2664,11 +2664,12 @@ function updateTaskOccInfo() {
     }
   }
 
-  // Calculate existing occupancy for this employee+month+year
+  // Calculate existing occupancy for this employee+month+year (approved tasks only)
   var existingTotal = 0;
   for (var j = 0; j < allData.length; j++) {
     if (j === editIdx) continue;
-    if (allData[j].name === empName && allData[j].month === month && String(allData[j].year) === year) {
+    var jStatus = allData[j].status || 'pending';
+    if (jStatus === 'approved' && allData[j].name === empName && allData[j].month === month && String(allData[j].year) === year) {
       existingTotal += parseFloat(allData[j].occupancy) || 0;
     }
   }
