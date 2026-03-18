@@ -1354,8 +1354,15 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
         </div>
       </div>
       <div class="rp-right">
-        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
-          <input type="text" class="rp-search" id="rpPlatSearch" placeholder="🔍 بحث في المنصات والموظفين المخصصين..." oninput="renderResourcePlanner()" style="margin-bottom:0;flex:1;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" class="rp-search" id="rpPlatSearch" placeholder="🔍 بحث في المنصات والموظفين المخصصين..." oninput="renderResourcePlanner()" style="margin-bottom:0;flex:1;min-width:200px;">
+          <select class="quarter-filter" id="rpSortBy" onchange="renderResourcePlanner()" style="font-size:12px;padding:6px 10px;">
+            <option value="name">ترتيب: الاسم</option>
+            <option value="employees">ترتيب: عدد الموظفين</option>
+            <option value="fte">ترتيب: FTEs</option>
+            <option value="tasks">ترتيب: عدد المهام</option>
+          </select>
+          <button class="rp-expand-all" id="rpSortDirBtn" onclick="rpToggleSortDir()" title="تصاعدي">⬆</button>
           <button class="rp-expand-all" onclick="rpExpandAll()" title="توسيع الكل">▼ توسيع</button>
           <button class="rp-expand-all" onclick="rpCollapseAll()" title="طي الكل">▲ طي</button>
         </div>
@@ -3776,7 +3783,22 @@ function renderResourcePlanner() {
   platforms.forEach(function(p) { if (!platTasks[p]) platTasks[p] = []; });
 
   var platEl = document.getElementById('rpPlatforms');
-  var platNames = Object.keys(platTasks).sort(function(a,b) { return platTasks[b].length - platTasks[a].length; });
+  var rpSort = (document.getElementById('rpSortBy')?.value) || 'name';
+  var rpDir = rpSortDir === 'asc' ? 1 : -1;
+  var platNames = Object.keys(platTasks).sort(function(a, b) {
+    var va, vb;
+    if (rpSort === 'name') { return rpDir * a.localeCompare(b, 'ar'); }
+    if (rpSort === 'employees') {
+      va = new Set(platTasks[a].map(function(r){return r.name;})).size;
+      vb = new Set(platTasks[b].map(function(r){return r.name;})).size;
+    } else if (rpSort === 'fte') {
+      va = platTasks[a].reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+      vb = platTasks[b].reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+    } else { // tasks
+      va = platTasks[a].length; vb = platTasks[b].length;
+    }
+    return rpDir * (va - vb);
+  });
 
   // Apply platform filter
   if (platFilter !== 'all') {
@@ -3908,6 +3930,14 @@ function renderResourcePlanner() {
   if (!platNames.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
   // Restore scroll position after re-render
   requestAnimationFrame(function() { window.scrollTo(0, scrollY); });
+}
+
+var rpSortDir = 'asc';
+function rpToggleSortDir() {
+  rpSortDir = rpSortDir === 'asc' ? 'desc' : 'asc';
+  var btn = document.getElementById('rpSortDirBtn');
+  if (btn) { btn.textContent = rpSortDir === 'asc' ? '⬆' : '⬇'; btn.title = rpSortDir === 'asc' ? 'تصاعدي' : 'تنازلي'; }
+  renderResourcePlanner();
 }
 
 // Expand/Collapse
