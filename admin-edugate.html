@@ -2426,9 +2426,10 @@ function renderTasksSection() {
   if (tasksPage > totalPages) tasksPage = totalPages;
   const start = (tasksPage - 1) * PAGE_SIZE;
   const pageData = data.slice(start, start + PAGE_SIZE);
-  // Pre-compute employee/month/year total occupancy for warning highlights
+  // Pre-compute employee/month/year total occupancy for warning highlights (approved only)
   var empMonthTotals = {};
   allData.forEach(function(r) {
+    if ((r.status || 'pending') !== 'approved') return;
     var key = (r.name||'') + '|' + (r.month||'') + '|' + (r.year||'');
     empMonthTotals[key] = (empMonthTotals[key] || 0) + (parseFloat(r.occupancy) || 0);
   });
