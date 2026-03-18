@@ -3869,8 +3869,13 @@ function renderResourcePlanner() {
 
   // Render right panel — platform cards
   var platTasks = {};
+  var noPlatformTasks = [];
   monthTasks.forEach(function(r) {
-    if (!r.platform || r.platform === 'بدون منصة' || r.platform === 'إجازة') return;
+    if (r.platform === 'إجازة') return;
+    if (!r.platform || r.platform === 'بدون منصة') {
+      noPlatformTasks.push(r);
+      return;
+    }
     if (!platTasks[r.platform]) platTasks[r.platform] = [];
     platTasks[r.platform].push(r);
   });
@@ -4074,7 +4079,47 @@ function renderResourcePlanner() {
       '</div>' : '') +
       '</div></div>';
   }).join('');
-  if (!platNames.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
+  if (!platNames.length && !noPlatformTasks.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
+
+  // Render "أعمال بدون منصة" section
+  if (noPlatformTasks.length > 0 && (platFilter === 'all' || platFilter === 'بدون منصة')) {
+    var npByType = {};
+    noPlatformTasks.forEach(function(r) {
+      var tt = r.taskType || 'أخرى';
+      if (!npByType[tt]) npByType[tt] = [];
+      npByType[tt].push(r);
+    });
+    var npTotalOcc = noPlatformTasks.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+    var npFte = (npTotalOcc / 100).toFixed(1);
+    var npEmpCount = new Set(noPlatformTasks.map(function(r){return r.name;})).size;
+    var npCards = '';
+    Object.keys(npByType).forEach(function(tt) {
+      npCards += '<div style="margin-bottom:8px;">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--text-light);padding:4px 8px;background:var(--bg-card-dark);border-radius:6px;display:inline-block;margin-bottom:4px;">📂 ' + escapeHtml(tt) + ' (' + npByType[tt].length + ')</div>' +
+        '<div class="rp-assigned-grid">';
+      npByType[tt].forEach(function(r) {
+        var idx = allData.indexOf(r);
+        npCards += '<div class="rp-assigned">' +
+          '<div class="rp-assigned-info">' +
+            '<span style="font-weight:700;font-size:13px;">' + escapeHtml(r.name) + '</span>' +
+            '<span class="badge badge-task" style="font-size:9px;margin-top:2px;">' + escapeHtml(tt) + '</span>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;">' +
+            '<input type="number" class="rp-occ-edit" value="' + r.occupancy + '" min="20" max="120" step="5" ' +
+              'onchange="rpChangeOcc(' + idx + ',this.value)" onfocus="this.select()" title="انقر لتعديل النسبة">%' +
+            '<button class="rp-remove-btn" onclick="rpRemoveAssignment(' + idx + ')" title="إزالة" style="font-size:12px;">✕</button>' +
+          '</div></div>';
+      });
+      npCards += '</div></div>';
+    });
+    var isCollapsed = collapsedPlatforms['أعمال بدون منصة'] ? ' collapsed' : '';
+    platEl.innerHTML += '<div class="rp-plat-card' + isCollapsed + '" style="border-color:var(--warning);border-style:dashed;">' +
+      '<div class="rp-plat-header" onclick="rpTogglePlat(this)" style="background:rgba(219,161,2,0.05);">' +
+        '<div style="display:flex;align-items:center;gap:6px;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name" style="color:var(--warning);">📋 أعمال بدون منصة</span></div>' +
+        '<div class="rp-plat-stats">' + npEmpCount + ' موظف · ' + npFte + ' FTEs · ' + noPlatformTasks.length + ' مهمة · ' + Object.keys(npByType).length + ' نوع</div>' +
+      '</div>' +
+      '<div class="rp-plat-body">' + npCards + '</div></div>';
+  }
   // Restore collapse states and scroll position after re-render
   document.querySelectorAll('.rp-plat-card').forEach(function(card) {
     var nameEl = card.querySelector('.rp-plat-name');
