@@ -1145,6 +1145,19 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center;">
       <input type="text" class="search-box" id="taskSearch" placeholder="🔍 بحث بالاسم، الإدارة، القسم، المنصة..." oninput="tasksPage=1;renderTasksSection()" style="min-width:260px;">
+      <select class="quarter-filter" id="taskFilterYear" onchange="tasksPage=1;renderTasksSection()">
+        <option value="all">جميع السنوات</option>
+        <option value="2025">2025</option>
+        <option value="2026">2026</option>
+        <option value="2027">2027</option>
+      </select>
+      <select class="quarter-filter" id="taskFilterQuarter" onchange="tasksPage=1;renderTasksSection()">
+        <option value="all">جميع الأرباع</option>
+        <option value="الأول">الربع الأول</option>
+        <option value="الثاني">الربع الثاني</option>
+        <option value="الثالث">الربع الثالث</option>
+        <option value="الرابع">الربع الرابع</option>
+      </select>
       <select class="quarter-filter" id="taskFilterType" onchange="tasksPage=1;renderTasksSection()">
         <option value="all">جميع أنواع المهام</option>
       </select>
@@ -1644,6 +1657,23 @@ function setDefaultFilters() {
   var empQuarterFilter = document.getElementById('empQuarterFilter');
   if (empQuarterFilter) empQuarterFilter.value = currentQuarter;
   // empMonthFilter defaults to "all" — user can narrow down
+
+  // Also set tasks page filters
+  var taskYearFilter = document.getElementById('taskFilterYear');
+  if (taskYearFilter) {
+    var hasTaskYear = false;
+    for (var ty = 0; ty < taskYearFilter.options.length; ty++) {
+      if (taskYearFilter.options[ty].value === currentYear) { hasTaskYear = true; break; }
+    }
+    if (!hasTaskYear) {
+      var optTy = document.createElement('option');
+      optTy.value = currentYear; optTy.textContent = currentYear;
+      taskYearFilter.appendChild(optTy);
+    }
+    taskYearFilter.value = currentYear;
+  }
+  var taskQuarterFilter = document.getElementById('taskFilterQuarter');
+  if (taskQuarterFilter) taskQuarterFilter.value = currentQuarter;
 
   // Also set platform page filters
   var platYearFilter = document.getElementById('platYearFilter');
@@ -2607,6 +2637,8 @@ function populateTaskFilters() {
 
 function resetTaskFilters() {
   document.getElementById('taskSearch').value = '';
+  document.getElementById('taskFilterYear').value = 'all';
+  document.getElementById('taskFilterQuarter').value = 'all';
   document.getElementById('taskFilterType').value = 'all';
   document.getElementById('taskFilterOcc').value = 'all';
   document.getElementById('taskFilterMonth').value = 'all';
@@ -2621,8 +2653,12 @@ function getTaskFilteredData() {
   var typeVal = (document.getElementById('taskFilterType')?.value) || 'all';
   var occVal = (document.getElementById('taskFilterOcc')?.value) || 'all';
   var monthVal = (document.getElementById('taskFilterMonth')?.value) || 'all';
+  var yearVal = (document.getElementById('taskFilterYear')?.value) || 'all';
+  var qtrVal = (document.getElementById('taskFilterQuarter')?.value) || 'all';
 
-  var data = filteredData;
+  var data = allData.slice();
+  if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
+  if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
 
   // Text search: name, department, section, platform
   if (search) {
