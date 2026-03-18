@@ -1943,37 +1943,21 @@ function seedEmployeesFromData(data) {
 }
 
 function remapEmployeeNames(data) {
-  // Replace task employee names with names from the employee table
-  // Also sets department/section for ALL tasks from the employee mapping
-  var empList = (CSV_EMPLOYEES && CSV_EMPLOYEES.length) ? CSV_EMPLOYEES : [];
-  if (!empList.length) {
-    try { var mgmt = getMgmtData(); empList = mgmt.employees || []; } catch(e) {}
-  }
+  // Set department/section for ALL tasks from the employee mapping (source of truth)
+  // Uses getMgmtData() which includes user-added employees, NOT just CSV_EMPLOYEES
+  var empList = [];
+  try { var mgmt = getMgmtData(); empList = mgmt.employees || []; } catch(e) {}
+  if (!empList.length && CSV_EMPLOYEES && CSV_EMPLOYEES.length) empList = CSV_EMPLOYEES;
   if (!empList.length) return;
 
   // Build lookup from employee list
   var empByName = {};
   empList.forEach(function(e) { if (e.name) empByName[e.name] = e; });
 
-  // Find tasks whose name is NOT in the employee table
-  var unmapped = [];
-  data.forEach(function(r, i) {
-    var name = (r.name || '').trim();
-    if (!name || !empByName[name]) unmapped.push(i);
-  });
-
-  // Remap unknown names round-robin from the employee list
-  if (unmapped.length > 0) {
-    unmapped.forEach(function(idx, i) {
-      var emp = empList[i % empList.length];
-      data[idx].name = emp.name;
-    });
-    console.log('🔄 Remapped', unmapped.length, 'task names to employee table names');
-  }
-
-  // Set department/section for ALL tasks from the employee mapping
+  // Set department/section for tasks whose employee is in the mapping
+  // Do NOT remap unknown names — they may be real employees added after CSV import
   data.forEach(function(r) {
-    var emp = empByName[r.name];
+    var emp = empByName[(r.name || '').trim()];
     if (emp) {
       r.department = emp.department || '';
       r.section = emp.section || '';
@@ -1984,10 +1968,10 @@ function remapEmployeeNames(data) {
 function resolveEmployeeDepartments(data) {
   // Resolve department/section from the employee mapping (source of truth)
   // Uses CSV_EMPLOYEES directly as primary source to avoid localStorage timing issues
-  var empList = (CSV_EMPLOYEES && CSV_EMPLOYEES.length) ? CSV_EMPLOYEES : [];
-  if (!empList.length) {
-    try { var mgmt = getMgmtData(); empList = mgmt.employees || []; } catch(e) {}
-  }
+  // Use getMgmtData() as primary source (includes user-added employees)
+  var empList = [];
+  try { var mgmt = getMgmtData(); empList = mgmt.employees || []; } catch(e) {}
+  if (!empList.length && CSV_EMPLOYEES && CSV_EMPLOYEES.length) empList = CSV_EMPLOYEES;
   var empMap = {};
   empList.forEach(function(e) {
     if (e.name) empMap[e.name] = { department: e.department || '', section: e.section || '' };
