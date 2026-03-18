@@ -2201,14 +2201,15 @@ function renderPlatformsSection() {
   });
   var platforms = Object.values(platMap);
 
-  // Pre-compute FTE and avgOcc for sorting
+  // Compute total occupancy across all platforms for % share calculation
+  var grandTotalOcc = 0;
+  platforms.forEach(function(p) { grandTotalOcc += p.totalOcc; });
+
+  // Pre-compute FTE and share% for sorting
   platforms.forEach(function(p) {
     p._fte = p.totalOcc / (100 * monthCount);
-    var empMonthKeys = new Set();
-    p._tasks.forEach(function(r) { empMonthKeys.add((r.name||'') + '|' + (r.month||'') + '|' + (r.year||'')); });
-    var totalEmpOcc = 0;
-    empMonthKeys.forEach(function(key) { totalEmpOcc += (globalEmpMonthOcc[key] || 0); });
-    p._avgOcc = empMonthKeys.size > 0 ? totalEmpOcc / empMonthKeys.size : 0;
+    // % of total time spent on this platform
+    p._avgOcc = grandTotalOcc > 0 ? (p.totalOcc / grandTotalOcc * 100) : 0;
   });
 
   // Sort platforms
@@ -2245,7 +2246,7 @@ function renderPlatformsSection() {
         <div class="detail-stat"><div class="detail-stat-value">${p.employees.size}</div><div class="detail-stat-label">موظف</div></div>
         <div class="detail-stat"><div class="detail-stat-value">${fte}</div><div class="detail-stat-label">FTEs</div></div>
         <div class="detail-stat"><div class="detail-stat-value">${p.departments.size}</div><div class="detail-stat-label">إدارات</div></div>
-        <div class="detail-stat"><div class="detail-stat-value">${avgOcc}%</div><div class="detail-stat-label">متوسط إشغال</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${avgOcc}%</div><div class="detail-stat-label">نسبة الإشغال</div></div>
       </div>
     </div>`;
   }).join('');
@@ -3317,7 +3318,11 @@ function showPlatformDrill(platform) {
   if (!pData.length) return;
   const empNames = [...new Set(pData.map(r => r.name))];
   const departments = [...new Set(pData.map(r => r.department))];
-  const avgOcc = calcAvgOccPerMonth(pData).toFixed(1);
+  // Calculate % share of total occupancy
+  var platTotalOcc = pData.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+  var allTotalOcc = pBase.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+  var sharePercent = allTotalOcc > 0 ? (platTotalOcc / allTotalOcc * 100).toFixed(1) : '0';
+  var fte = (platTotalOcc / (100 * (new Set(pData.map(function(r){return (r.month||'')+'|'+(r.year||'');})).size || 1))).toFixed(1);
 
   const monthOcc = {};
   pData.forEach(r => {
@@ -3329,24 +3334,55 @@ function showPlatformDrill(platform) {
   let html = `<div class="drill-stats-row">
     <div class="drill-stat-card"><div class="value">${pData.length}</div><div class="label">مهام</div></div>
     <div class="drill-stat-card"><div class="value">${empNames.length}</div><div class="label">موظف</div></div>
-    <div class="drill-stat-card"><div class="value">${avgOcc}%</div><div class="label">متوسط إشغال</div></div>
+    <div class="drill-stat-card"><div class="value">${fte}</div><div class="label">FTEs</div></div>
+    <div class="drill-stat-card"><div class="value">${sharePercent}%</div><div class="label">نسبة الإشغال</div></div>
     <div class="drill-stat-card"><div class="value">${departments.length}</div><div class="label">إدارات</div></div>
   </div>
   <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;">📈 الإشغال الشهري للمنصة</h3>
   <div class="drill-chart-container"><canvas id="drillPlatMonthly"></canvas></div>
   <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">👥 الموظفون على هذه المنصة</h3>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>القسم</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
   const empStats = {};
   pData.forEach(r => {
-    if (!empStats[r.name]) empStats[r.name] = {department:r.department,count:0,occ:0};
+    if (!empStats[r.name]) empStats[r.name] = {department:r.department, section:r.section||'', count:0, occ:0};
     empStats[r.name].count++;
     empStats[r.name].occ += parseFloat(r.occupancy)||0;
   });
   Object.entries(empStats).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,s]) => {
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
-      <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(s.department)}</span></td><td>${s.count}</td>
+      <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(s.department)}</span></td>
+      <td>${s.section ? '<span class="badge badge-section">' + escapeHtml(s.section) + '</span>' : '—'}</td>
+      <td>${s.count}</td>
       <td><span style="color:${getOccColor(s.occ)};font-weight:700">${s.occ.toFixed(0)}%</span></td></tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  // Task details with actions
+  html += `<h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">📋 تفاصيل المهام</h3>`;
+  html += `<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>القسم</th><th>الشهر</th><th>نوع المهمة</th><th>الإشغال</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>`;
+  pData.forEach(r => {
+    const idx = allData.indexOf(r);
+    const status = r.status || 'pending';
+    const statusBadge = status === 'approved' ? '<span class="badge badge-status-approved">✅ معتمدة</span>' :
+                        status === 'rejected' ? '<span class="badge badge-status-rejected">❌ مرفوضة</span>' :
+                        '<span class="badge badge-status-pending">⏳ بانتظار</span>';
+    const approveDisabled = status === 'approved' ? ' disabled style="opacity:0.3"' : '';
+    const rejectDisabled = status === 'rejected' ? ' disabled style="opacity:0.3"' : '';
+    html += `<tr>
+      <td style="font-weight:600;cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('${escapeJS(r.name)}'),200)"><u>${escapeHtml(r.name)}</u></td>
+      <td>${r.section ? '<span class="badge badge-section">' + escapeHtml(r.section) + '</span>' : '—'}</td>
+      <td>${escapeHtml(r.month)}</td>
+      <td><span class="badge badge-task">${escapeHtml(r.taskType)}</span></td>
+      <td><span style="color:${getOccColor(parseFloat(r.occupancy)||0)};font-weight:700">${r.occupancy}%</span></td>
+      <td>${statusBadge}</td>
+      <td><div class="task-crud-actions">
+        <button class="task-crud-btn approve-btn" title="اعتماد" onclick="updateTaskStatusAndRefreshPlatDrill(${idx},'approved','${escapeJS(platform)}')"${approveDisabled}>✅</button>
+        <button class="task-crud-btn reject-btn" title="رفض" onclick="updateTaskStatusAndRefreshPlatDrill(${idx},'rejected','${escapeJS(platform)}')"${rejectDisabled}>❌</button>
+        <button class="task-crud-btn edit-btn" title="تعديل" onclick="closeDrill();openTaskModal(${idx})">✏️</button>
+        <button class="task-crud-btn delete-btn" title="حذف" onclick="deleteTaskAndRefreshPlatDrill(${idx},'${escapeJS(platform)}')">🗑️</button>
+      </div></td></tr>`;
   });
   html += '</tbody></table></div>';
 
@@ -3362,6 +3398,30 @@ function showPlatformDrill(platform) {
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Tajawal'}}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
     });
   }, 100);
+}
+
+function updateTaskStatusAndRefreshPlatDrill(idx, newStatus, platform) {
+  var task = allData[idx];
+  if (!task) return;
+  if ((task.status || 'pending') === newStatus) return;
+  task.status = newStatus;
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey + '/status').set(newStatus).catch(function(err) { console.error(err); });
+  }
+  syncTestData(); applyFilters(); showPlatformDrill(platform);
+  showMgmtToast((newStatus === 'approved' ? 'تم اعتماد' : 'تم رفض') + ' المهمة', 'success');
+}
+
+function deleteTaskAndRefreshPlatDrill(idx, platform) {
+  var task = allData[idx];
+  if (!task) return;
+  if (!confirm('هل تريد حذف مهمة "' + (task.taskType || '') + '" — ' + (task.month || '') + '؟')) return;
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey).remove().catch(function(err) { console.error(err); });
+  }
+  allData.splice(idx, 1);
+  syncTestData(); applyFilters(); showPlatformDrill(platform);
+  showMgmtToast('تم حذف المهمة', 'success');
 }
 
 // ---- Task Type Drill ----
