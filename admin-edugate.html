@@ -1009,6 +1009,9 @@ tr:hover td { background:rgba(27,131,84,0.03); }
         <option value="يوليو">يوليو</option><option value="أغسطس">أغسطس</option><option value="سبتمبر">سبتمبر</option>
         <option value="أكتوبر">أكتوبر</option><option value="نوفمبر">نوفمبر</option><option value="ديسمبر">ديسمبر</option>
       </select>
+      <select class="quarter-filter" id="taskFilterPlatform" onchange="tasksPage=1;renderTasksSection()">
+        <option value="all">جميع المنصات</option>
+      </select>
       <select class="quarter-filter" id="taskFilterStatus" onchange="tasksPage=1;renderTasksSection()">
         <option value="all">جميع الحالات</option>
         <option value="pending">⏳ بانتظار الموافقة</option>
@@ -2264,6 +2267,16 @@ function populateTaskFilters() {
     return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>';
   }).join('');
   typeFilter.value = currentType;
+
+  var platFilter = document.getElementById('taskFilterPlatform');
+  if (platFilter) {
+    var currentPlat = platFilter.value;
+    var platforms = [...new Set(filteredData.map(function(r) { return r.platform; }).filter(Boolean))].sort();
+    platFilter.innerHTML = '<option value="all">جميع المنصات</option>' + platforms.map(function(p) {
+      return '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>';
+    }).join('');
+    platFilter.value = currentPlat;
+  }
 }
 
 function resetTaskFilters() {
@@ -2272,6 +2285,7 @@ function resetTaskFilters() {
   document.getElementById('taskFilterOcc').value = 'all';
   document.getElementById('taskFilterMonth').value = 'all';
   document.getElementById('taskFilterStatus').value = 'all';
+  document.getElementById('taskFilterPlatform').value = 'all';
   tasksPage = 1;
   renderTasksSection();
 }
@@ -2314,6 +2328,12 @@ function getTaskFilteredData() {
   // Month filter
   if (monthVal !== 'all') {
     data = data.filter(function(r) { return r.month === monthVal; });
+  }
+
+  // Platform filter
+  var platVal = (document.getElementById('taskFilterPlatform')?.value) || 'all';
+  if (platVal !== 'all') {
+    data = data.filter(function(r) { return r.platform === platVal; });
   }
 
   // Status filter
