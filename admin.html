@@ -3980,7 +3980,7 @@ function renderResourcePlanner() {
             (poolTasks.length === 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpDisablePool(\'' + escapeJS(platform) + '\')" title="إزالة قسم الموارد غير المخصصة">✕</button>' : '') +
           '</div>' +
         '</div>' +
-        buildSquadCards(poolTasks, platform, 0, numSquads) +
+        buildSquadCards(poolTasks, platform, 0, Math.max(numSquads, 2)) +
         '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',0)">اسحب موظف هنا (غير مخصص)</div>' +
       '</div>';
     }
@@ -4009,8 +4009,24 @@ function renderResourcePlanner() {
         '</div>';
       }
       squadsHtml += '</div>';
+    } else if (hasPool) {
+      // Single squad WITH pool — wrap in squad section for proper drop handling
+      var sq1Tasks = squads[1] || [];
+      var sq1Occ = sq1Tasks.reduce(function(sum,r) { return sum + (parseFloat(r.occupancy)||0); }, 0);
+      var sq1Fte = (sq1Occ / 100).toFixed(1);
+      var sq1EmpCount = new Set(sq1Tasks.map(function(r) { return r.name; })).size;
+      squadsHtml = poolHtml +
+        '<div class="rp-squad-section" data-squad="1" data-platform="' + escapeAttr(platform) + '" ' +
+          'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',1)">' +
+          '<div class="rp-squad-header">' +
+            '<div class="squad-name">🏷️ ' + escapeHtml(platform) + ' 1</div>' +
+            '<div class="squad-stats">' + sq1EmpCount + ' موظف · ' + sq1Fte + ' FTEs</div>' +
+          '</div>' +
+          buildSquadCards(sq1Tasks, platform, 1, 2) +
+          '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',1)">اسحب موظف هنا</div>' +
+        '</div>';
     } else {
-      // Single squad — render flat like before (no squad header)
+      // Single squad, no pool — render flat like before
       squadsHtml = buildSquadCards(tasks, platform, 1, 1) +
         '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',1)">اسحب موظف هنا للتخصيص</div>';
     }
@@ -4023,7 +4039,8 @@ function renderResourcePlanner() {
       '<span style="font-size:11px;color:var(--text-light);">' + numSquads + ' فريق</span>' +
     '</div>';
 
-    var bodyDropHandler = numSquads > 1 ? '' : ' ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',1)"';
+    var hasPoolActive = numSquads > 1 || rpHasPool(platform) || poolTasks.length > 0;
+    var bodyDropHandler = hasPoolActive ? '' : ' ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',1)"';
     return '<div class="rp-plat-card">' +
       '<div class="rp-plat-header" onclick="rpTogglePlat(this)">' +
         '<div style="display:flex;align-items:center;gap:6px;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span></div>' +
