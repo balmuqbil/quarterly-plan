@@ -3967,7 +3967,7 @@ function renderResourcePlanner() {
     // Build unassigned pool section (squad 0)
     var poolTasks = squads[0] || [];
     var poolHtml = '';
-    if (numSquads > 1 || poolTasks.length > 0) {
+    if (numSquads > 1 || poolTasks.length > 0 || rpHasPool(platform)) {
       var poolOcc = poolTasks.reduce(function(sum,r) { return sum + (parseFloat(r.occupancy)||0); }, 0);
       var poolFte = (poolOcc / 100).toFixed(1);
       var poolEmpCount = new Set(poolTasks.map(function(r) { return r.name; })).size;
@@ -3977,6 +3977,7 @@ function renderResourcePlanner() {
           '<div class="squad-name">📥 موارد غير مخصصة لفريق</div>' +
           '<div class="squad-stats">' + poolEmpCount + ' موظف · ' + poolFte + ' FTEs' +
             (poolTasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',0)" title="إزالة جميع الموظفين غير المخصصين" style="color:var(--warning);">🗑️</button>' : '') +
+            (poolTasks.length === 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpDisablePool(\'' + escapeJS(platform) + '\')" title="إزالة قسم الموارد غير المخصصة">✕</button>' : '') +
           '</div>' +
         '</div>' +
         buildSquadCards(poolTasks, platform, 0, numSquads) +
@@ -4015,7 +4016,9 @@ function renderResourcePlanner() {
     }
 
     // Squad controls
+    var hasPool = rpHasPool(platform) || poolTasks.length > 0;
     var squadControls = '<div class="rp-squad-controls">' +
+      (!hasPool ? '<button class="rp-squad-add" onclick="event.stopPropagation();rpEnablePool(\'' + escapeJS(platform) + '\')" style="color:var(--warning);border-color:var(--warning);">📥 موارد غير مخصصة</button>' : '') +
       (numSquads < 4 ? '<button class="rp-squad-add" onclick="event.stopPropagation();rpAddSquad(\'' + escapeJS(platform) + '\')">+ فريق جديد</button>' : '') +
       '<span style="font-size:11px;color:var(--text-light);">' + numSquads + ' فريق</span>' +
     '</div>';
@@ -4066,6 +4069,23 @@ function rpCollapseAll() {
   document.querySelectorAll('.rp-plat-card').forEach(function(c) { c.classList.add('collapsed'); });
 }
 function rpGetSquad(r) { var s = r.squad; return (s === 0 || s === '0') ? 0 : (s || 1); }
+function rpGetPoolPlatforms() {
+  try { return JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'poolPlatforms') || '{}'); } catch(e) { return {}; }
+}
+function rpHasPool(platform) { return !!rpGetPoolPlatforms()[platform]; }
+function rpEnablePool(platform) {
+  var pools = rpGetPoolPlatforms();
+  pools[platform] = true;
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'poolPlatforms', JSON.stringify(pools));
+  renderResourcePlanner();
+  showMgmtToast('تم إضافة قسم الموارد غير المخصصة لـ ' + platform, 'success');
+}
+function rpDisablePool(platform) {
+  var pools = rpGetPoolPlatforms();
+  delete pools[platform];
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'poolPlatforms', JSON.stringify(pools));
+  renderResourcePlanner();
+}
 
 function rpGetSquadCounts() {
   return JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'platformSquads') || '{}');
