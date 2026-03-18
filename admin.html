@@ -739,10 +739,12 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-conflict-item .conflict-occ { font-weight:700; color:var(--danger); white-space:nowrap; }
 .rp-copy-btn { padding:5px 12px; border:1.5px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text-secondary); font-family:inherit; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.2s; }
 .rp-copy-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(27,131,84,0.04); }
+.rp-squads-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px; }
 .rp-squad-controls { display:flex; gap:6px; margin-bottom:8px; align-items:center; }
 .rp-squad-add { padding:3px 10px; border:1.5px dashed var(--border); border-radius:6px; background:none; color:var(--text-light); font-family:inherit; font-size:11px; cursor:pointer; transition:all 0.2s; }
 .rp-squad-add:hover { border-color:var(--accent); color:var(--accent); }
-.rp-squad-section { border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px; background:rgba(0,0,0,0.01); }
+.rp-squad-section { border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; background:rgba(0,0,0,0.01); }
+.rp-squad-section.squad-drag-over { border-color:var(--accent); background:rgba(27,131,84,0.03); }
 .rp-squad-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-secondary); }
 .rp-squad-header .squad-name { display:flex; align-items:center; gap:6px; }
 .rp-squad-header .squad-stats { font-size:11px; font-weight:500; color:var(--text-light); }
@@ -3822,7 +3824,7 @@ function renderResourcePlanner() {
           }
         }
       }
-      html += '<div class="rp-assigned">' +
+      html += '<div class="rp-assigned" draggable="true" ondragstart="rpCardDragStart(event,' + idx + ')" data-idx="' + idx + '">' +
         '<div class="rp-assigned-info">' +
           '<span style="font-weight:700;font-size:13px;">' + escapeHtml(r.name) + '</span>' +
         '</div>' +
@@ -3858,13 +3860,15 @@ function renderResourcePlanner() {
     // Build squad sections
     var squadsHtml = '';
     if (numSquads > 1) {
+      squadsHtml = '<div class="rp-squads-grid">';
       for (var s = 1; s <= numSquads; s++) {
         var sqTasks = squads[s] || [];
         var sqOcc = sqTasks.reduce(function(sum,r) { return sum + (parseFloat(r.occupancy)||0); }, 0);
         var sqFte = (sqOcc / 100).toFixed(1);
         var sqEmpCount = new Set(sqTasks.map(function(r) { return r.name; })).size;
         var canRemove = sqTasks.length === 0 && numSquads > 1;
-        squadsHtml += '<div class="rp-squad-section" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">' +
+        squadsHtml += '<div class="rp-squad-section" data-squad="' + s + '" data-platform="' + escapeAttr(platform) + '" ' +
+          'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">' +
           '<div class="rp-squad-header">' +
             '<div class="squad-name">🏷️ ' + escapeHtml(platform) + ' ' + s + '</div>' +
             '<div class="squad-stats">' + sqEmpCount + ' موظف · ' + sqFte + ' FTEs' +
@@ -3872,9 +3876,10 @@ function renderResourcePlanner() {
             '</div>' +
           '</div>' +
           buildSquadCards(sqTasks, platform, s, numSquads) +
-          '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">اسحب موظف هنا</div>' +
+          '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">اسحب موظف هنا</div>' +
         '</div>';
       }
+      squadsHtml += '</div>';
     } else {
       // Single squad — render flat like before (no squad header)
       squadsHtml = buildSquadCards(tasks, platform, 1, 1) +
@@ -3967,7 +3972,50 @@ function rpMoveToSquad(idx, newSquad) {
   renderResourcePlanner();
 }
 
+// Inter-squad card dragging
+var rpCardDragIdx = null;
+function rpCardDragStart(e, idx) {
+  rpCardDragIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', 'card-' + idx);
+  e.target.style.opacity = '0.4';
+  setTimeout(function() { if (e.target) e.target.style.opacity = ''; }, 200);
+}
+function rpSquadDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var section = e.target.closest('.rp-squad-section');
+  if (section) section.classList.add('squad-drag-over');
+}
+function rpSquadDragLeave(e) {
+  var section = e.target.closest('.rp-squad-section');
+  if (section && !section.contains(e.relatedTarget)) section.classList.remove('squad-drag-over');
+}
+function rpSquadDrop(e, platform, squadNum) {
+  e.preventDefault();
+  e.stopPropagation();
+  var section = e.target.closest('.rp-squad-section');
+  if (section) section.classList.remove('squad-drag-over');
+  var zone = e.target.closest('.rp-drop-zone');
+  if (zone) zone.classList.remove('drag-over');
+  // Check if this is an inter-squad card move
+  if (rpCardDragIdx !== null) {
+    var task = allData[rpCardDragIdx];
+    if (task && (task.squad || 1) !== squadNum) {
+      rpMoveToSquad(rpCardDragIdx, squadNum);
+      showMgmtToast('تم نقل ' + (task.name || '') + ' إلى فريق ' + squadNum, 'success');
+    }
+    rpCardDragIdx = null;
+    return;
+  }
+  // Otherwise it's a new employee drop from left panel
+  if (!rpDragEmp) return;
+  openRpAssignDialog(rpDragEmp, platform, rpDragAvail, squadNum);
+  rpDragEmp = null;
+}
+
 function rpDragStart(e, empName, avail) {
+  rpCardDragIdx = null; // clear any card drag
   rpDragEmp = empName;
   rpDragAvail = avail;
   e.dataTransfer.effectAllowed = 'move';
@@ -3993,8 +4041,8 @@ function rpDrop(e, platform, squadNum) {
   if (card) card.classList.remove('drag-over');
   var zone = e.target.closest('.rp-drop-zone');
   if (zone) zone.classList.remove('drag-over');
-  var section = e.target.closest('.rp-squad-section');
-  if (section) section.style.borderColor = '';
+  // Ignore card drags in single-squad mode
+  if (rpCardDragIdx !== null) { rpCardDragIdx = null; return; }
   if (!rpDragEmp) return;
   openRpAssignDialog(rpDragEmp, platform, rpDragAvail, squadNum || 1);
   rpDragEmp = null;
