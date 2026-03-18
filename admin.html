@@ -682,6 +682,45 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .dark-mode-btn { background:transparent; border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.7); padding:6px 12px; border-radius:8px; font-size:18px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
 .dark-mode-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
 .dark-mode-btn .btn-label { font-size:12px; }
+
+/* ========== RESOURCE PLANNER ========== */
+.rp-container { display:flex; gap:20px; min-height:500px; }
+.rp-left { width:320px; flex-shrink:0; }
+.rp-right { flex:1; }
+.rp-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:16px; }
+.rp-panel-title { font-size:15px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+.rp-emp-list { max-height:600px; overflow-y:auto; padding:4px; }
+.rp-emp-item { padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; margin-bottom:6px; cursor:grab; background:var(--bg-card); transition:all 0.2s; display:flex; align-items:center; justify-content:space-between; }
+.rp-emp-item:hover { border-color:var(--accent); box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+.rp-emp-item:active { cursor:grabbing; }
+.rp-emp-item.dragging { opacity:0.4; transform:scale(0.95); }
+.rp-emp-name { font-weight:600; font-size:13px; }
+.rp-emp-meta { font-size:11px; color:var(--text-light); margin-top:2px; }
+.rp-emp-avail { font-size:14px; font-weight:700; color:var(--success); white-space:nowrap; }
+.rp-emp-avail.low { color:var(--warning); }
+.rp-plat-card { background:var(--bg-card); border:1.5px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px; transition:all 0.2s; }
+.rp-plat-card.drag-over { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+.rp-plat-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.rp-plat-name { font-size:16px; font-weight:700; }
+.rp-plat-stats { font-size:12px; color:var(--text-light); }
+.rp-drop-zone { min-height:36px; border:2px dashed var(--border); border-radius:8px; padding:8px; text-align:center; color:var(--text-light); font-size:12px; transition:all 0.2s; margin-top:8px; }
+.rp-drop-zone.drag-over { border-color:var(--accent); background:var(--accent-glow); color:var(--accent); }
+.rp-assigned { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-radius:8px; background:var(--bg-card-dark); margin-bottom:4px; font-size:13px; border:1px solid var(--border); }
+.rp-assigned-info { display:flex; align-items:center; gap:8px; }
+.rp-assigned-occ { font-weight:700; color:var(--accent); font-size:14px; }
+.rp-remove-btn { color:var(--danger); cursor:pointer; border:none; background:none; font-size:16px; padding:4px; border-radius:4px; transition:all 0.15s; }
+.rp-remove-btn:hover { background:rgba(239,68,68,0.1); }
+.rp-search { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; margin-bottom:10px; }
+.rp-assign-dialog { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:3000; display:none; align-items:center; justify-content:center; }
+.rp-assign-dialog.show { display:flex; }
+.rp-assign-box { background:var(--bg-card); border-radius:16px; padding:24px; width:400px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+.rp-assign-box h3 { font-size:16px; font-weight:700; margin-bottom:16px; }
+.rp-assign-field { margin-bottom:12px; }
+.rp-assign-field label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
+.rp-assign-field select, .rp-assign-field input { width:100%; padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; }
+.rp-assign-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+.rp-no-data { text-align:center; padding:40px; color:var(--text-light); font-size:14px; }
+@media(max-width:900px) { .rp-container { flex-direction:column; } .rp-left { width:100%; } }
 </style>
 </head>
 <body>
@@ -736,6 +775,9 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     </div>
     <div class="nav-item" data-section="dataManagement">
       <span class="icon">🗂️</span> إدارة البيانات
+    </div>
+    <div class="nav-item" data-section="resourcePlanner">
+      <span class="icon">📋</span> تخطيط الموارد
     </div>
     <div class="nav-item" data-section="settings">
       <span class="icon">⚙️</span> الإعدادات
@@ -1217,6 +1259,69 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div id="deptsAndSectionsContent"></div>
   </div>
 
+  <!-- ===== RESOURCE PLANNER SECTION ===== -->
+  <div class="section-view" id="section-resourcePlanner">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>📋 تخطيط الموارد</h1>
+        <div class="subtitle">تخصيص الموظفين للمنصات — اسحب الموظف وأفلته على المنصة المطلوبة</div>
+      </div>
+      <div class="top-actions">
+        <select class="quarter-filter" id="rpYear" onchange="renderResourcePlanner()">
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+        </select>
+        <select class="quarter-filter" id="rpQuarter" onchange="updateRpMonths();renderResourcePlanner()">
+          <option value="الأول">الربع الأول</option>
+          <option value="الثاني">الربع الثاني</option>
+          <option value="الثالث">الربع الثالث</option>
+          <option value="الرابع">الربع الرابع</option>
+        </select>
+        <select class="quarter-filter" id="rpMonth" onchange="renderResourcePlanner()">
+          <option value="يناير">يناير</option>
+          <option value="فبراير">فبراير</option>
+          <option value="مارس">مارس</option>
+        </select>
+      </div>
+    </div>
+    <div class="rp-container">
+      <div class="rp-left">
+        <div class="rp-panel">
+          <div class="rp-panel-title">👥 الموظفون المتاحون <span id="rpAvailCount" style="font-size:12px;color:var(--text-light);font-weight:400;"></span></div>
+          <input type="text" class="rp-search" id="rpEmpSearch" placeholder="🔍 بحث..." oninput="renderResourcePlanner()">
+          <div class="rp-emp-list" id="rpEmpList"></div>
+        </div>
+      </div>
+      <div class="rp-right" id="rpPlatforms"></div>
+    </div>
+  </div>
+
+  <!-- Resource Planner Assignment Dialog -->
+  <div class="rp-assign-dialog" id="rpAssignDialog">
+    <div class="rp-assign-box">
+      <h3 id="rpAssignTitle">تخصيص موظف</h3>
+      <input type="hidden" id="rpAssignEmp">
+      <input type="hidden" id="rpAssignPlatform">
+      <div class="rp-assign-field">
+        <label>نوع المهمة</label>
+        <select id="rpAssignTaskType"></select>
+      </div>
+      <div class="rp-assign-field">
+        <label>نسبة الإشغال % <span id="rpAssignMaxHint" style="color:var(--text-light);"></span></label>
+        <input type="number" id="rpAssignOcc" min="20" max="100" step="5" value="50">
+      </div>
+      <div class="rp-assign-field">
+        <label>وصف المهمة (اختياري)</label>
+        <input type="text" id="rpAssignDesc" placeholder="وصف مختصر...">
+      </div>
+      <div class="rp-assign-actions">
+        <button class="bulk-paste-cancel" onclick="closeRpAssign()">إلغاء</button>
+        <button class="bulk-paste-submit" onclick="confirmRpAssign()">✅ تخصيص</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== DATA MANAGEMENT SECTION ===== -->
   <div class="section-view" id="section-dataManagement">
     <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
@@ -1570,6 +1675,7 @@ function navigateTo(section) {
   if (section === 'platforms') renderPlatformsSection();
   if (section === 'tasks') renderTasksSection();
   if (section === 'deptsAndSections') renderDeptsAndSections();
+  if (section === 'resourcePlanner') { initRpDefaults(); renderResourcePlanner(); }
   if (section === 'dataManagement') renderDataManagement();
   if (section === 'settings') openSettings();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3425,6 +3531,229 @@ function deleteTaskAndRefreshPlatDrill(idx, platform) {
   allData.splice(idx, 1);
   syncTestData(); applyFilters(); showPlatformDrill(platform);
   showMgmtToast('تم حذف المهمة', 'success');
+}
+
+// ==================== RESOURCE PLANNER ====================
+var RP_QUARTERS = {'الأول':['يناير','فبراير','مارس'],'الثاني':['أبريل','مايو','يونيو'],'الثالث':['يوليو','أغسطس','سبتمبر'],'الرابع':['أكتوبر','نوفمبر','ديسمبر']};
+
+function updateRpMonths() {
+  var q = document.getElementById('rpQuarter').value;
+  var monthSel = document.getElementById('rpMonth');
+  var months = RP_QUARTERS[q] || ['يناير','فبراير','مارس'];
+  monthSel.innerHTML = months.map(function(m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+}
+
+function initRpDefaults() {
+  var now = new Date();
+  var y = String(now.getFullYear());
+  var m = now.getMonth();
+  var q = m < 3 ? 'الأول' : m < 6 ? 'الثاني' : m < 9 ? 'الثالث' : 'الرابع';
+  var yEl = document.getElementById('rpYear'); if (yEl) yEl.value = y;
+  var qEl = document.getElementById('rpQuarter'); if (qEl) qEl.value = q;
+  updateRpMonths();
+}
+
+function renderResourcePlanner() {
+  var year = document.getElementById('rpYear')?.value || '2026';
+  var quarter = document.getElementById('rpQuarter')?.value || 'الأول';
+  var month = document.getElementById('rpMonth')?.value || 'يناير';
+  var search = (document.getElementById('rpEmpSearch')?.value || '').trim().toLowerCase();
+  var mgmt = getMgmtData();
+  var employees = mgmt.employees || [];
+  var platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+
+  // Get approved tasks for selected month/year
+  var monthTasks = allData.filter(function(r) {
+    return (r.status || 'pending') === 'approved' && r.month === month && String(r.year) === year;
+  });
+
+  // Calculate employee occupancy for this month
+  var empOcc = {};
+  monthTasks.forEach(function(r) {
+    empOcc[r.name] = (empOcc[r.name] || 0) + (parseFloat(r.occupancy) || 0);
+  });
+
+  // Available employees (occ < 100%)
+  var available = employees.filter(function(emp) {
+    var name = typeof emp === 'string' ? emp : emp.name;
+    if (!name) return false;
+    if (emp.endDate && emp.endDate !== '') return false; // inactive
+    var used = empOcc[name] || 0;
+    return used < 100;
+  });
+  if (search) {
+    available = available.filter(function(emp) {
+      var name = typeof emp === 'string' ? emp : emp.name;
+      var dept = typeof emp === 'object' ? (emp.department || '') : '';
+      return name.toLowerCase().indexOf(search) !== -1 || dept.toLowerCase().indexOf(search) !== -1;
+    });
+  }
+
+  // Render left panel — available employees
+  var countEl = document.getElementById('rpAvailCount');
+  if (countEl) countEl.textContent = '(' + available.length + ')';
+  var empListEl = document.getElementById('rpEmpList');
+  if (available.length === 0) {
+    empListEl.innerHTML = '<div class="rp-no-data">لا يوجد موظفون متاحون في هذه الفترة</div>';
+  } else {
+    empListEl.innerHTML = available.map(function(emp) {
+      var name = typeof emp === 'string' ? emp : emp.name;
+      var dept = typeof emp === 'object' ? (emp.department || '') : '';
+      var sec = typeof emp === 'object' ? (emp.section || '') : '';
+      var used = empOcc[name] || 0;
+      var avail = 100 - used;
+      var availClass = avail <= 30 ? ' low' : '';
+      return '<div class="rp-emp-item" draggable="true" ondragstart="rpDragStart(event,\'' + escapeJS(name) + '\',' + avail + ')">' +
+        '<div><div class="rp-emp-name">' + escapeHtml(name) + '</div>' +
+        '<div class="rp-emp-meta">' + escapeHtml(dept) + (sec ? ' / ' + escapeHtml(sec) : '') + '</div></div>' +
+        '<div class="rp-emp-avail' + availClass + '">' + avail + '%</div></div>';
+    }).join('');
+  }
+
+  // Render right panel — platform cards
+  var platTasks = {};
+  monthTasks.forEach(function(r) {
+    if (!r.platform || r.platform === 'بدون منصة' || r.platform === 'إجازة') return;
+    if (!platTasks[r.platform]) platTasks[r.platform] = [];
+    platTasks[r.platform].push(r);
+  });
+  // Add empty platforms
+  platforms.forEach(function(p) { if (!platTasks[p]) platTasks[p] = []; });
+
+  var platEl = document.getElementById('rpPlatforms');
+  var platNames = Object.keys(platTasks).sort(function(a,b) { return platTasks[b].length - platTasks[a].length; });
+  platEl.innerHTML = platNames.map(function(platform) {
+    var tasks = platTasks[platform];
+    var totalOcc = tasks.reduce(function(s,r) { return s + (parseFloat(r.occupancy)||0); }, 0);
+    var fte = (totalOcc / 100).toFixed(1);
+    var empCount = new Set(tasks.map(function(r) { return r.name; })).size;
+    var assignedHtml = tasks.map(function(r) {
+      var idx = allData.indexOf(r);
+      return '<div class="rp-assigned">' +
+        '<div class="rp-assigned-info">' +
+          '<span style="font-weight:600;">' + escapeHtml(r.name) + '</span>' +
+          '<span class="badge badge-task" style="font-size:10px;">' + escapeHtml(r.taskType) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span class="rp-assigned-occ">' + r.occupancy + '%</span>' +
+          '<button class="rp-remove-btn" onclick="rpRemoveAssignment(' + idx + ')" title="إزالة">🗑️</button>' +
+        '</div></div>';
+    }).join('');
+
+    return '<div class="rp-plat-card" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">' +
+      '<div class="rp-plat-header">' +
+        '<div class="rp-plat-name">' + escapeHtml(platform) + '</div>' +
+        '<div class="rp-plat-stats">' + empCount + ' موظف · ' + fte + ' FTEs · ' + tasks.length + ' مهمة</div>' +
+      '</div>' +
+      assignedHtml +
+      '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">اسحب موظف هنا للتخصيص</div>' +
+    '</div>';
+  }).join('');
+}
+
+// Drag & Drop
+var rpDragEmp = null;
+var rpDragAvail = 0;
+
+function rpDragStart(e, empName, avail) {
+  rpDragEmp = empName;
+  rpDragAvail = avail;
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.classList.add('dragging');
+  setTimeout(function() { if (e.target) e.target.classList.remove('dragging'); }, 200);
+}
+
+function rpDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var card = e.target.closest('.rp-plat-card') || e.target.closest('.rp-drop-zone');
+  if (card) card.classList.add('drag-over');
+}
+
+function rpDragLeave(e) {
+  var card = e.target.closest('.rp-plat-card') || e.target.closest('.rp-drop-zone');
+  if (card) card.classList.remove('drag-over');
+}
+
+function rpDrop(e, platform) {
+  e.preventDefault();
+  var card = e.target.closest('.rp-plat-card');
+  if (card) card.classList.remove('drag-over');
+  var zone = e.target.closest('.rp-drop-zone');
+  if (zone) zone.classList.remove('drag-over');
+  if (!rpDragEmp) return;
+  openRpAssignDialog(rpDragEmp, platform, rpDragAvail);
+  rpDragEmp = null;
+}
+
+function openRpAssignDialog(empName, platform, maxAvail) {
+  document.getElementById('rpAssignEmp').value = empName;
+  document.getElementById('rpAssignPlatform').value = platform;
+  document.getElementById('rpAssignTitle').textContent = '📋 تخصيص ' + empName + ' → ' + platform;
+  document.getElementById('rpAssignMaxHint').textContent = '(المتاح: ' + maxAvail + '%)';
+  document.getElementById('rpAssignOcc').max = maxAvail;
+  document.getElementById('rpAssignOcc').value = Math.min(50, maxAvail);
+  document.getElementById('rpAssignDesc').value = '';
+  // Populate task types based on employee's section
+  var mgmt = getMgmtData();
+  var emp = mgmt.employees.find(function(e) { return (typeof e === 'string' ? e : e.name) === empName; });
+  var section = emp && typeof emp === 'object' ? (emp.section || '') : '';
+  var types = getTaskTypesForSection(section);
+  var noPlatMap = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'taskTypeNoPlatform') || '{}');
+  types = types.filter(function(t) { return !noPlatMap[t]; }); // exclude no-platform types
+  var sel = document.getElementById('rpAssignTaskType');
+  sel.innerHTML = types.map(function(t) { return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>'; }).join('');
+  document.getElementById('rpAssignDialog').classList.add('show');
+}
+
+function closeRpAssign() {
+  document.getElementById('rpAssignDialog').classList.remove('show');
+}
+
+function confirmRpAssign() {
+  var empName = document.getElementById('rpAssignEmp').value;
+  var platform = document.getElementById('rpAssignPlatform').value;
+  var taskType = document.getElementById('rpAssignTaskType').value;
+  var occ = parseInt(document.getElementById('rpAssignOcc').value) || 0;
+  var desc = document.getElementById('rpAssignDesc').value.trim();
+  var month = document.getElementById('rpMonth').value;
+  var quarter = document.getElementById('rpQuarter').value;
+  var year = document.getElementById('rpYear').value;
+
+  if (occ < 20) { showMgmtToast('الحد الأدنى للإشغال 20%', 'error'); return; }
+  if (!taskType) { showMgmtToast('يرجى اختيار نوع المهمة', 'error'); return; }
+
+  var mgmt = getMgmtData();
+  var emp = mgmt.employees.find(function(e) { return (typeof e === 'string' ? e : e.name) === empName; });
+  var department = emp && typeof emp === 'object' ? (emp.department || '') : '';
+  var section = emp && typeof emp === 'object' ? (emp.section || '') : '';
+
+  var task = {
+    name: empName, department: department, section: section,
+    platform: platform, taskType: taskType, month: month, quarter: quarter, year: year,
+    occupancy: occ, description: desc || 'تخطيط موارد', service: '',
+    status: 'approved', timestamp: new Date().toISOString()
+  };
+
+  allData.push(task);
+  closeRpAssign();
+  applyFilters();
+  syncTaskToFirebase(task, -1, null);
+  renderResourcePlanner();
+  showMgmtToast('تم تخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%', 'success');
+}
+
+function rpRemoveAssignment(idx) {
+  var task = allData[idx];
+  if (!task) return;
+  if (!confirm('إزالة ' + (task.name||'') + ' من ' + (task.platform||'') + ' — ' + (task.month||'') + '؟')) return;
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey).remove().catch(function(err) { console.error(err); });
+  }
+  allData.splice(idx, 1);
+  applyFilters();
+  renderResourcePlanner();
+  showMgmtToast('تم إزالة التخصيص', 'success');
 }
 
 // ---- Task Type Drill ----
