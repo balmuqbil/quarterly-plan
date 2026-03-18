@@ -685,11 +685,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
 /* ========== RESOURCE PLANNER ========== */
 .rp-container { display:flex; gap:20px; min-height:500px; }
-.rp-left { width:320px; flex-shrink:0; }
+.rp-left { width:320px; flex-shrink:0; position:sticky; top:16px; align-self:flex-start; max-height:calc(100vh - 32px); display:flex; flex-direction:column; }
 .rp-right { flex:1; }
-.rp-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:16px; }
+.rp-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:16px; flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
 .rp-panel-title { font-size:15px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
-.rp-emp-list { max-height:600px; overflow-y:auto; padding:4px; }
+.rp-emp-list { flex:1; overflow-y:auto; padding:4px; min-height:0; }
 .rp-emp-item { padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; margin-bottom:6px; cursor:grab; background:var(--bg-card); transition:all 0.2s; display:flex; align-items:center; justify-content:space-between; }
 .rp-emp-item:hover { border-color:var(--accent); box-shadow:0 2px 8px rgba(0,0,0,0.06); }
 .rp-emp-item:active { cursor:grabbing; }
