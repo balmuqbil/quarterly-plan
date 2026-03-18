@@ -746,6 +746,10 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-squad-add:hover { border-color:var(--accent); color:var(--accent); }
 .rp-squad-section { border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; background:rgba(0,0,0,0.01); min-height:80px; }
 .rp-squad-section.squad-drag-over { border-color:var(--accent); background:rgba(27,131,84,0.06); box-shadow:0 0 0 2px var(--accent-glow); }
+.rp-pool-section { border-style:dashed; background:rgba(219,161,2,0.03); margin-bottom:10px; }
+.rp-pool-section .rp-pool-header .squad-name { color:var(--warning); }
+.rp-pool-section .rp-drop-zone { border-color:rgba(219,161,2,0.3); color:var(--warning); }
+.rp-pool-section.squad-drag-over { border-color:var(--warning); background:rgba(219,161,2,0.08); box-shadow:0 0 0 2px rgba(219,161,2,0.2); }
 .rp-squad-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-secondary); }
 .rp-squad-header .squad-name { display:flex; align-items:center; gap:6px; }
 .rp-squad-header .squad-stats { font-size:11px; font-weight:500; color:var(--text-light); }
@@ -3940,20 +3944,41 @@ function renderResourcePlanner() {
     var empCount = new Set(tasks.map(function(r) { return r.name; })).size;
     var numSquads = squadCounts[platform] || 1;
 
-    // Group tasks by squad
-    var squads = {};
+    // Group tasks by squad (0 = unassigned pool)
+    var squads = { 0: [] };
     for (var s = 1; s <= numSquads; s++) squads[s] = [];
     tasks.forEach(function(r) {
-      var sq = r.squad || 1;
-      if (sq > numSquads) sq = 1; // fallback if squad removed
+      var sq = r.squad;
+      if (sq === 0 || sq === '0') sq = 0;
+      else if (!sq || sq > numSquads) sq = (numSquads > 1) ? 0 : 1; // unassigned goes to pool if multi-squad
       if (!squads[sq]) squads[sq] = [];
       squads[sq].push(r);
     });
 
+    // Build unassigned pool section (squad 0)
+    var poolTasks = squads[0] || [];
+    var poolHtml = '';
+    if (numSquads > 1 || poolTasks.length > 0) {
+      var poolOcc = poolTasks.reduce(function(sum,r) { return sum + (parseFloat(r.occupancy)||0); }, 0);
+      var poolFte = (poolOcc / 100).toFixed(1);
+      var poolEmpCount = new Set(poolTasks.map(function(r) { return r.name; })).size;
+      poolHtml = '<div class="rp-squad-section rp-pool-section" data-squad="0" data-platform="' + escapeAttr(platform) + '" ' +
+        'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',0)">' +
+        '<div class="rp-squad-header rp-pool-header">' +
+          '<div class="squad-name">📥 موارد غير مخصصة لفريق</div>' +
+          '<div class="squad-stats">' + poolEmpCount + ' موظف · ' + poolFte + ' FTEs' +
+            (poolTasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',0)" title="إزالة جميع الموظفين غير المخصصين" style="color:var(--warning);">🗑️</button>' : '') +
+          '</div>' +
+        '</div>' +
+        buildSquadCards(poolTasks, platform, 0, numSquads) +
+        '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',0)">اسحب موظف هنا (غير مخصص)</div>' +
+      '</div>';
+    }
+
     // Build squad sections
     var squadsHtml = '';
     if (numSquads > 1) {
-      squadsHtml = '<div class="rp-squads-grid">';
+      squadsHtml = poolHtml + '<div class="rp-squads-grid">';
       for (var s = 1; s <= numSquads; s++) {
         var sqTasks = squads[s] || [];
         var sqOcc = sqTasks.reduce(function(sum,r) { return sum + (parseFloat(r.occupancy)||0); }, 0);
@@ -4028,6 +4053,7 @@ function rpExpandAll() {
 function rpCollapseAll() {
   document.querySelectorAll('.rp-plat-card').forEach(function(c) { c.classList.add('collapsed'); });
 }
+function rpGetSquad(r) { var s = r.squad; return (s === 0 || s === '0') ? 0 : (s || 1); }
 
 function rpGetSquadCounts() {
   return JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'platformSquads') || '{}');
@@ -4050,7 +4076,7 @@ function rpRemoveSquad(platform, squadNum) {
   var year = document.getElementById('rpYear').value;
   var hasTask = allData.some(function(r) {
     return (r.status || 'pending') === 'approved' && r.platform === platform &&
-      r.month === month && r.year === year && (r.squad || 1) === squadNum;
+      r.month === month && r.year === year && rpGetSquad(r) === squadNum;
   });
   if (hasTask) { showMgmtToast('لا يمكن حذف فريق يحتوي على موظفين — انقل الموظفين أولاً', 'error'); return; }
   var counts = rpGetSquadCounts();
@@ -4058,8 +4084,8 @@ function rpRemoveSquad(platform, squadNum) {
   if (current <= 1) return;
   // Shift tasks in higher squads down
   allData.forEach(function(r) {
-    if (r.platform === platform && r.month === month && r.year === year && (r.squad || 1) > squadNum) {
-      r.squad = (r.squad || 1) - 1;
+    if (r.platform === platform && r.month === month && r.year === year && rpGetSquad(r) > squadNum) {
+      r.squad = rpGetSquad(r) - 1;
       if (firebaseReady && r._firebaseKey) {
         firebaseDb.ref('tasks/' + r._firebaseKey + '/squad').set(r.squad);
       }
@@ -4076,12 +4102,14 @@ function rpReleaseSquad(platform, squadNum) {
   var toRemove = [];
   allData.forEach(function(r, i) {
     if ((r.status||'pending') === 'approved' && r.platform === platform &&
-        r.month === month && String(r.year) === String(year) && (r.squad||1) === squadNum) {
+        r.month === month && String(r.year) === String(year) && rpGetSquad(r) === squadNum) {
       toRemove.push(i);
     }
   });
   if (!toRemove.length) { showMgmtToast('لا يوجد موظفين في هذا الفريق', 'error'); return; }
-  if (!confirm('هل تريد إزالة جميع الموظفين (' + toRemove.length + ') من فريق ' + platform + ' ' + squadNum + ' لشهر ' + month + '؟\n\nسيتم حذف ' + toRemove.length + ' مهمة نهائياً.')) return;
+  var squadLabel = squadNum === 0 ? 'الموارد غير المخصصة في ' + platform : 'فريق ' + platform + ' ' + squadNum;
+  if (!confirm('هل تريد إزالة جميع الموظفين (' + toRemove.length + ') من ' + squadLabel + ' لشهر ' + month + '؟\n\nسيتم حذف ' + toRemove.length + ' مهمة نهائياً.')) return;
+  // Delete in reverse order
   toRemove.sort(function(a,b){return b-a;});
   toRemove.forEach(function(idx) {
     var task = allData[idx];
@@ -4093,7 +4121,7 @@ function rpReleaseSquad(platform, squadNum) {
   syncTestData();
   applyFilters();
   renderResourcePlanner();
-  showMgmtToast('تم إزالة ' + toRemove.length + ' موظف من ' + platform + ' ' + squadNum, 'success');
+  showMgmtToast('تم إزالة ' + toRemove.length + ' موظف من ' + squadLabel, 'success');
 }
 
 function rpMoveToSquad(idx, newSquad) {
@@ -4135,9 +4163,9 @@ function rpSquadDrop(e, platform, squadNum) {
   // Check if this is an inter-squad card move
   if (rpCardDragIdx !== null) {
     var task = allData[rpCardDragIdx];
-    if (task && (task.squad || 1) !== squadNum) {
+    if (task && rpGetSquad(task) !== squadNum) {
       rpMoveToSquad(rpCardDragIdx, squadNum);
-      showMgmtToast('تم نقل ' + (task.name || '') + ' إلى فريق ' + squadNum, 'success');
+      showMgmtToast('تم نقل ' + (task.name || '') + (squadNum === 0 ? ' إلى الموارد غير المخصصة' : ' إلى فريق ' + squadNum), 'success');
     }
     rpCardDragIdx = null;
     return;
@@ -4190,14 +4218,15 @@ function rpDrop(e, platform, squadNum) {
 function openRpAssignDialog(empName, platform, maxAvail, squadNum) {
   document.getElementById('rpAssignEmp').value = empName;
   document.getElementById('rpAssignPlatform').value = platform;
-  var squadLabel = (rpGetSquadCounts()[platform] || 1) > 1 ? ' (فريق ' + squadNum + ')' : '';
+  var numSquads = rpGetSquadCounts()[platform] || 1;
+  var squadLabel = numSquads > 1 ? (squadNum === 0 ? ' (غير مخصص)' : ' (فريق ' + squadNum + ')') : '';
   document.getElementById('rpAssignTitle').textContent = '📋 تخصيص ' + empName + ' → ' + platform + squadLabel;
   document.getElementById('rpAssignMaxHint').textContent = '(المتاح: ' + maxAvail + '%)';
   document.getElementById('rpAssignOcc').max = 120;
   document.getElementById('rpAssignOcc').value = Math.min(100, maxAvail);
   // Store maxAvail and squad for later use
   document.getElementById('rpAssignDialog').dataset.maxAvail = maxAvail;
-  document.getElementById('rpAssignDialog').dataset.squad = squadNum || 1;
+  document.getElementById('rpAssignDialog').dataset.squad = squadNum;
   document.getElementById('rpAssignDesc').value = '';
   // Populate task types based on employee's section
   var mgmt = getMgmtData();
@@ -4329,7 +4358,8 @@ function confirmRpAssign() {
   var department = emp && typeof emp === 'object' ? (emp.department || '') : '';
   var section = emp && typeof emp === 'object' ? (emp.section || '') : '';
 
-  var squadNum = parseInt(document.getElementById('rpAssignDialog').dataset.squad) || 1;
+  var rawSquad = document.getElementById('rpAssignDialog').dataset.squad;
+  var squadNum = rawSquad === '0' ? 0 : (parseInt(rawSquad) || 1);
   var task = {
     name: empName, department: department, section: section,
     platform: platform, taskType: taskType, month: month, quarter: quarter, year: year,
@@ -4462,7 +4492,7 @@ function rpCopyToNextMonth(platform) {
       occupancy: t.occupancy, description: t.description || 'تخطيط موارد',
       service: t.service || '', status: 'approved',
       timestamp: new Date().toISOString(),
-      squad: t.squad || 1
+      squad: rpGetSquad(t)
     };
     allData.push(newTask);
     syncTaskToFirebase(newTask, -1, null);
