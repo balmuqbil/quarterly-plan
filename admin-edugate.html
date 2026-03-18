@@ -1311,6 +1311,13 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
           <option value="الثالث">الربع الثالث</option>
           <option value="الرابع">الربع الرابع</option>
         </select>
+        <select class="quarter-filter" id="deptMonthFilter" onchange="renderDeptsAndSections()">
+          <option value="all">جميع الأشهر</option>
+          <option value="يناير">يناير</option><option value="فبراير">فبراير</option><option value="مارس">مارس</option>
+          <option value="أبريل">أبريل</option><option value="مايو">مايو</option><option value="يونيو">يونيو</option>
+          <option value="يوليو">يوليو</option><option value="أغسطس">أغسطس</option><option value="سبتمبر">سبتمبر</option>
+          <option value="أكتوبر">أكتوبر</option><option value="نوفمبر">نوفمبر</option><option value="ديسمبر">ديسمبر</option>
+        </select>
       </div>
     </div>
     <div id="deptsAndSectionsContent"></div>
@@ -1611,6 +1618,11 @@ function setDefaultFilters() {
   var deptQuarterFilter = document.getElementById('deptQuarterFilter');
   if (deptQuarterFilter) {
     deptQuarterFilter.value = currentQuarter;
+  }
+
+  var deptMonthFilter = document.getElementById('deptMonthFilter');
+  if (deptMonthFilter && currentMonthName) {
+    deptMonthFilter.value = currentMonthName;
   }
 
   // Also set platform page filters
@@ -6300,10 +6312,13 @@ function renderDeptsAndSections() {
   // Use local filters from this page
   var deptYearVal = (document.getElementById('deptYearFilter')?.value) || 'all';
   var deptQtrVal = (document.getElementById('deptQuarterFilter')?.value) || 'all';
+  var deptMonthVal = (document.getElementById('deptMonthFilter')?.value) || 'all';
 
   // Determine months list based on quarter filter
   var filterMonths;
-  if (deptQtrVal === 'all') {
+  if (deptMonthVal !== 'all') {
+    filterMonths = [deptMonthVal];
+  } else if (deptQtrVal === 'all') {
     filterMonths = MONTHS.slice();
   } else {
     filterMonths = QUARTER_MONTHS[deptQtrVal] || MONTHS.slice();
@@ -6317,6 +6332,7 @@ function renderDeptsAndSections() {
   var localData = approvedData.slice();
   if (deptYearVal !== 'all') localData = localData.filter(function(r) { return String(r.year) === deptYearVal; });
   if (deptQtrVal !== 'all') localData = localData.filter(function(r) { return r.quarter === deptQtrVal; });
+  if (deptMonthVal !== 'all') localData = localData.filter(function(r) { return r.month === deptMonthVal; });
 
   // Build filter label for display
   var filterLabel = '';
