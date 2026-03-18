@@ -3342,17 +3342,20 @@ function showPlatformDrill(platform) {
   <div class="drill-chart-container"><canvas id="drillPlatMonthly"></canvas></div>
   <h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">👥 الموظفون على هذه المنصة</h3>
   <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>القسم</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
+  <table class="drill-table"><thead><tr><th>الموظف</th><th>الإدارة</th><th>القسم</th><th>نوع المهمة</th><th>عدد المهام</th><th>إجمالي الإشغال</th></tr></thead><tbody>`;
   const empStats = {};
   pData.forEach(r => {
-    if (!empStats[r.name]) empStats[r.name] = {department:r.department, section:r.section||'', count:0, occ:0};
+    if (!empStats[r.name]) empStats[r.name] = {department:r.department, section:r.section||'', taskTypes:new Set(), count:0, occ:0};
+    empStats[r.name].taskTypes.add(r.taskType);
     empStats[r.name].count++;
     empStats[r.name].occ += parseFloat(r.occupancy)||0;
   });
   Object.entries(empStats).sort((a,b)=>b[1].occ-a[1].occ).forEach(([name,s]) => {
+    var taskTypeBadges = [...s.taskTypes].map(function(t) { return '<span class="badge badge-task" style="margin:1px;">' + escapeHtml(t) + '</span>'; }).join(' ');
     html += `<tr style="cursor:pointer" onclick="closeDrill();setTimeout(()=>showEmployeeDrill('` + escapeJS(name) + `'),200)">
       <td style="font-weight:600">${escapeHtml(name)}</td><td><span class="badge badge-dept">${escapeHtml(s.department)}</span></td>
       <td>${s.section ? '<span class="badge badge-section">' + escapeHtml(s.section) + '</span>' : '—'}</td>
+      <td style="max-width:200px;">${taskTypeBadges}</td>
       <td>${s.count}</td>
       <td><span style="color:${getOccColor(s.occ)};font-weight:700">${s.occ.toFixed(0)}%</span></td></tr>`;
   });
