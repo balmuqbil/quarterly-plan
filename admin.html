@@ -3878,7 +3878,7 @@ function openRpAssignDialog(empName, platform, maxAvail) {
   document.getElementById('rpAssignTitle').textContent = '📋 تخصيص ' + empName + ' → ' + platform;
   document.getElementById('rpAssignMaxHint').textContent = '(المتاح: ' + maxAvail + '%)';
   document.getElementById('rpAssignOcc').max = 120;
-  document.getElementById('rpAssignOcc').value = Math.min(50, maxAvail);
+  document.getElementById('rpAssignOcc').value = Math.min(100, maxAvail);
   // Store maxAvail for later check
   document.getElementById('rpAssignDialog').dataset.maxAvail = maxAvail;
   document.getElementById('rpAssignDesc').value = '';
