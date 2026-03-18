@@ -447,6 +447,9 @@ tr:hover td { background:rgba(27,131,84,0.03); }
 .emp-card-status { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
 .emp-card-status.active { background:#dcfce7; color:#166534; }
 .emp-card-status.inactive { background:#fef2f2; color:#991b1b; }
+.badge-contract { font-size:10px; padding:2px 8px; border-radius:6px; font-weight:600; }
+.badge-contract.inhouse { background:rgba(27,131,84,0.1); color:#1B8354; }
+.badge-contract.offshore { background:rgba(139,92,246,0.1); color:#7c3aed; }
 .emp-card-meta { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
 .emp-card-meta-row { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-light); }
 .emp-card-meta-row .meta-icon { width:16px; text-align:center; flex-shrink:0; }
@@ -2438,12 +2441,16 @@ function renderEmployeesSection() {
   if (countEl) countEl.textContent = employees.length + ' موظف';
 
   var grid = document.getElementById('employeesGrid');
+  var empMgmt = getMgmtData().employees || [];
   grid.innerHTML = employees.map(function(e) {
     var avgOcc = calcAvgOccPerMonth(e.tasks).toFixed(0);
     var barColor = getOccColor(avgOcc);
+    var empObj = empMgmt.find(function(em) { return (typeof em === 'object' ? em.name : em) === e.name; });
+    var ct = (empObj && empObj.contractType) || 'inhouse';
+    var ctLabel = ct === 'offshore' ? 'Offshore' : 'Inhouse';
     return '<div class="detail-card" onclick="showEmployeeDrill(\'' + escapeJS(e.name) + '\')">' +
       '<div class="detail-card-header">' +
-        '<div class="detail-card-name">' + escapeHtml(e.name) + '</div>' +
+        '<div class="detail-card-name">' + escapeHtml(e.name) + ' <span class="badge-contract ' + ct + '" style="vertical-align:middle;">' + ctLabel + '</span></div>' +
         '<span class="detail-card-badge badge-dept">' + escapeHtml(e.department) + '</span>' +
         (e.section ? '<span class="detail-card-badge badge-section">' + escapeHtml(e.section) + '</span>' : '') +
       '</div>' +
@@ -3910,6 +3917,9 @@ function renderResourcePlanner() {
   var mgmt = getMgmtData();
   var employees = mgmt.employees || [];
   var platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  // Build employee lookup for contract type badges
+  var rpEmpLookup = {};
+  employees.forEach(function(e) { if (typeof e === 'object') rpEmpLookup[e.name] = e; });
 
   // Populate platform filter dropdown
   var pfEl = document.getElementById('rpPlatformFilter');
@@ -4023,8 +4033,10 @@ function renderResourcePlanner() {
       var used = empOcc[name] || 0;
       var avail = 100 - used;
       var availClass = avail <= 30 ? ' low' : '';
+      var ct = typeof emp === 'object' ? (emp.contractType || 'inhouse') : 'inhouse';
+      var ctBadge = '<span class="badge-contract ' + ct + '" style="margin-right:4px;">' + (ct === 'offshore' ? 'Off' : 'In') + '</span>';
       return '<div class="rp-emp-item" draggable="true" ondragstart="rpDragStart(event,\'' + escapeJS(name) + '\',' + avail + ')">' +
-        '<div><div class="rp-emp-name">' + escapeHtml(name) + '</div>' +
+        '<div><div class="rp-emp-name">' + ctBadge + escapeHtml(name) + '</div>' +
         '<div class="rp-emp-meta">' + escapeHtml(dept) + (sec ? ' / ' + escapeHtml(sec) : '') + '</div></div>' +
         '<div class="rp-emp-avail' + availClass + '">' + avail + '%</div></div>';
     }).join('');
@@ -4114,9 +4126,12 @@ function renderResourcePlanner() {
           }
         }
       }
+      var empForCard = rpEmpLookup[r.name];
+      var cardCt = empForCard ? (empForCard.contractType || 'inhouse') : 'inhouse';
+      var cardCtBadge = '<span class="badge-contract ' + cardCt + '" style="font-size:8px;padding:1px 5px;">' + (cardCt === 'offshore' ? 'Off' : 'In') + '</span>';
       html += '<div class="rp-assigned" draggable="true" ondragstart="rpCardDragStart(event,' + idx + ')" data-idx="' + idx + '">' +
         '<div class="rp-assigned-info">' +
-          '<span style="font-weight:700;font-size:13px;">' + escapeHtml(r.name) + '</span>' +
+          '<span style="font-weight:700;font-size:13px;">' + cardCtBadge + ' ' + escapeHtml(r.name) + '</span>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;">' +
           '<input type="number" class="rp-occ-edit" value="' + r.occupancy + '" min="20" max="120" step="5" ' +
@@ -5721,6 +5736,7 @@ function getMgmtData() {
         if (!e.startDate) { needsSave = true; e.startDate = 'يناير 2026'; }
         if (!e.absences) e.absences = [];
         if (e.endDate === undefined) e.endDate = '';
+        if (!e.contractType) e.contractType = 'inhouse';
         return e;
       });
       if (needsSave) saveMgmtList('employees', data.employees);
@@ -6180,12 +6196,15 @@ function renderDataManagement() {
             const startDate = (typeof emp === 'object' ? emp.startDate : '') || '';
             const endDate = (typeof emp === 'object' ? emp.endDate : '') || '';
             const absences = (typeof emp === 'object' && Array.isArray(emp.absences)) ? emp.absences : [];
+            const contractType = (typeof emp === 'object' ? emp.contractType : '') || 'inhouse';
+            const contractLabel = contractType === 'offshore' ? 'Offshore' : 'Inhouse';
             const isActive = !endDate;
-            return `<div class="emp-card" id="mgmt-item-employees-${i}" data-emp-name="${escapeAttr(name)}" data-emp-dept="${escapeAttr(dept)}" data-emp-sec="${escapeAttr(sec)}" data-emp-active="${isActive ? '1' : '0'}" data-emp-absences="${absences.length}">
+            return `<div class="emp-card" id="mgmt-item-employees-${i}" data-emp-name="${escapeAttr(name)}" data-emp-dept="${escapeAttr(dept)}" data-emp-sec="${escapeAttr(sec)}" data-emp-active="${isActive ? '1' : '0'}" data-emp-absences="${absences.length}" data-emp-contract="${contractType}">
               <div class="emp-card-top">
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span class="emp-card-name" id="mgmt-name-employees-${i}">${escapeHtml(name)}</span>
                   <span class="emp-card-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : 'غير نشط'}</span>
+                  <span class="badge-contract ${contractType}">${contractLabel}</span>
                 </div>
               </div>
               <div class="emp-card-meta">
@@ -6243,6 +6262,12 @@ function renderDataManagement() {
                 })()}
               </select>
             </div>
+          </div>
+          <div class="mgmt-add-emp-row" style="margin-bottom:8px;">
+            <select id="mgmt-emp-contract" style="min-width:100px;">
+              <option value="inhouse">Inhouse</option>
+              <option value="offshore">Offshore</option>
+            </select>
           </div>
           <div style="display:flex;justify-content:flex-end;">
             <button class="mgmt-add-btn" onclick="addMgmtItem('employees')">+ إضافة الموظف</button>
@@ -6625,7 +6650,9 @@ function addMgmtItem(key) {
       return;
     }
     var startDate = startSelect ? startSelect.value : 'يناير 2026';
-    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [] });
+    var contractSelect = document.getElementById('mgmt-emp-contract');
+    var contractType = contractSelect ? contractSelect.value : 'inhouse';
+    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [], contractType: contractType });
     saveMgmtList('employees', data.employees);
     nameInput.value = '';
     deptSelect.selectedIndex = 0;
@@ -6708,6 +6735,13 @@ function editMgmtItem(key, index) {
     editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">📅 تاريخ الانتهاء</label>';
     editHtml += '<select id="mgmt-edit-end-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;"><option value="">نشط (بدون تاريخ انتهاء)</option>' + monthOpts.replace('value="' + escapeAttr(currentEnd) + '"', 'value="' + escapeAttr(currentEnd) + '" selected') + '</select></div>';
     editHtml += '</div>';
+    // Row 4: Contract Type
+    var currentContract = (typeof emp === 'object' ? emp.contractType : '') || 'inhouse';
+    editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">نوع التعاقد</label>';
+    editHtml += '<select id="mgmt-edit-contract-' + index + '" class="mgmt-edit-input" style="width:auto;padding:8px;">';
+    editHtml += '<option value="inhouse"' + (currentContract === 'inhouse' ? ' selected' : '') + '>Inhouse</option>';
+    editHtml += '<option value="offshore"' + (currentContract === 'offshore' ? ' selected' : '') + '>Offshore</option>';
+    editHtml += '</select></div>';
     // Actions
     editHtml += '<div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px;">';
     editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 16px;font-size:12px;" onclick="renderDataManagement()">❌ إلغاء</button>';
@@ -6752,13 +6786,15 @@ function saveEditMgmt(key, index) {
     var endSelect = document.getElementById('mgmt-edit-end-' + index);
     var existingEmp = data.employees[index];
     var existingAbsences = (typeof existingEmp === 'object' && Array.isArray(existingEmp.absences)) ? existingEmp.absences : [];
+    var contractSelect = document.getElementById('mgmt-edit-contract-' + index);
     data.employees[index] = {
       name: val,
       department: sanitizeInput(deptSelect ? deptSelect.value : ''),
       section: sanitizeInput(secSelect ? secSelect.value : ''),
       startDate: startSelect ? startSelect.value : '',
       endDate: endSelect ? endSelect.value : '',
-      absences: existingAbsences
+      absences: existingAbsences,
+      contractType: contractSelect ? contractSelect.value : (existingEmp.contractType || 'inhouse')
     };
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
