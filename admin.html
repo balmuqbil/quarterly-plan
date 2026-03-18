@@ -3956,10 +3956,11 @@ function renderResourcePlanner() {
     // Group tasks by squad (0 = unassigned pool)
     var squads = { 0: [] };
     for (var s = 1; s <= numSquads; s++) squads[s] = [];
+    var poolEnabled = rpHasPool(platform);
     tasks.forEach(function(r) {
       var sq = r.squad;
       if (sq === 0 || sq === '0') sq = 0;
-      else if (!sq || sq > numSquads) sq = (numSquads > 1) ? 0 : 1; // unassigned goes to pool if multi-squad
+      else if (!sq || sq > numSquads) sq = (numSquads > 1 || poolEnabled) ? 0 : 1; // unassigned goes to pool if multi-squad or pool enabled
       if (!squads[sq]) squads[sq] = [];
       squads[sq].push(r);
     });
