@@ -3966,6 +3966,7 @@ function renderResourcePlanner() {
 
     // Build unassigned pool section (squad 0)
     var poolTasks = squads[0] || [];
+    var hasPool = rpHasPool(platform) || poolTasks.length > 0;
     var poolHtml = '';
     if (numSquads > 1 || poolTasks.length > 0 || rpHasPool(platform)) {
       var poolOcc = poolTasks.reduce(function(sum,r) { return sum + (parseFloat(r.occupancy)||0); }, 0);
@@ -4032,7 +4033,6 @@ function renderResourcePlanner() {
     }
 
     // Squad controls
-    var hasPool = rpHasPool(platform) || poolTasks.length > 0;
     var squadControls = '<div class="rp-squad-controls">' +
       (!hasPool ? '<button class="rp-squad-add" onclick="event.stopPropagation();rpEnablePool(\'' + escapeJS(platform) + '\')" style="color:var(--warning);border-color:var(--warning);">📥 موارد غير مخصصة</button>' : '') +
       (numSquads < 4 ? '<button class="rp-squad-add" onclick="event.stopPropagation();rpAddSquad(\'' + escapeJS(platform) + '\')">+ فريق جديد</button>' : '') +
