@@ -4987,17 +4987,23 @@ function saveMgmtList(key, list) {
 
 // ===== Initialize management data from CSV (replaces all existing data) =====
 function initializeFromCSV() {
-  // Save departments
-  saveMgmtList('departments', DEFAULT_MGMT.departments);
-  // Save sections
-  localStorage.setItem(MGMT_STORAGE_PREFIX + 'sections', JSON.stringify(DEFAULT_MGMT.sections));
-  // Preserve existing sectionCapacity (head count) — only initialize if not set
+  // Only initialize if no existing data — preserve user modifications
+  if (!localStorage.getItem(MGMT_STORAGE_PREFIX + 'departments')) {
+    saveMgmtList('departments', DEFAULT_MGMT.departments);
+  }
+  if (!localStorage.getItem(MGMT_STORAGE_PREFIX + 'sections')) {
+    localStorage.setItem(MGMT_STORAGE_PREFIX + 'sections', JSON.stringify(DEFAULT_MGMT.sections));
+  }
   if (!localStorage.getItem(MGMT_STORAGE_PREFIX + 'sectionCapacity')) {
     localStorage.setItem(MGMT_STORAGE_PREFIX + 'sectionCapacity', JSON.stringify({}));
   }
-  // Save employees from CSV
-  saveMgmtList('employees', CSV_EMPLOYEES);
-  console.log('✅ Initialized from CSV:', CSV_EMPLOYEES.length, 'employees,', DEFAULT_MGMT.departments.length, 'departments');
+  // Only seed employees if none exist yet
+  if (!localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees')) {
+    saveMgmtList('employees', CSV_EMPLOYEES);
+    console.log('✅ Initialized from CSV:', CSV_EMPLOYEES.length, 'employees');
+  } else {
+    console.log('✅ Using existing management data from localStorage');
+  }
 }
 
 // ===== Generate sample tasks =====
