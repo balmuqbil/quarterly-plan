@@ -701,7 +701,13 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-emp-avail.low { color:var(--warning); }
 .rp-plat-card { background:var(--bg-card); border:1.5px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px; transition:all 0.2s; }
 .rp-plat-card.drag-over { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
-.rp-plat-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.rp-plat-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; cursor:pointer; user-select:none; }
+.rp-plat-header:hover { opacity:0.85; }
+.rp-plat-toggle { font-size:16px; margin-left:8px; transition:transform 0.2s; }
+.rp-plat-card.collapsed .rp-plat-toggle { transform:rotate(-90deg); }
+.rp-plat-card.collapsed .rp-plat-body { display:none; }
+.rp-expand-all { font-size:12px; padding:4px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); cursor:pointer; font-family:inherit; color:var(--text-secondary); transition:all 0.2s; }
+.rp-expand-all:hover { border-color:var(--accent); color:var(--accent); }
 .rp-plat-name { font-size:16px; font-weight:700; }
 .rp-plat-stats { font-size:12px; color:var(--text-light); }
 .rp-drop-zone { min-height:36px; border:2px dashed var(--border); border-radius:8px; padding:8px; text-align:center; color:var(--text-light); font-size:12px; transition:all 0.2s; margin-top:8px; }
@@ -1324,7 +1330,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
         </div>
       </div>
       <div class="rp-right">
-        <input type="text" class="rp-search" id="rpPlatSearch" placeholder="🔍 بحث في المنصات والموظفين المخصصين..." oninput="renderResourcePlanner()" style="margin-bottom:12px;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <input type="text" class="rp-search" id="rpPlatSearch" placeholder="🔍 بحث في المنصات والموظفين المخصصين..." oninput="renderResourcePlanner()" style="margin-bottom:0;flex:1;">
+          <button class="rp-expand-all" onclick="rpExpandAll()" title="توسيع الكل">▼ توسيع</button>
+          <button class="rp-expand-all" onclick="rpCollapseAll()" title="طي الكل">▲ طي</button>
+        </div>
         <div id="rpPlatforms"></div>
       </div>
     </div>
@@ -3749,15 +3759,28 @@ function renderResourcePlanner() {
     }).join('');
 
     return '<div class="rp-plat-card" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">' +
-      '<div class="rp-plat-header">' +
-        '<div class="rp-plat-name">' + escapeHtml(platform) + '</div>' +
+      '<div class="rp-plat-header" onclick="rpTogglePlat(this)">' +
+        '<div style="display:flex;align-items:center;gap:6px;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span></div>' +
         '<div class="rp-plat-stats">' + empCount + ' موظف · ' + fte + ' FTEs · ' + tasks.length + ' مهمة</div>' +
       '</div>' +
+      '<div class="rp-plat-body">' +
       assignedHtml +
       '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">اسحب موظف هنا للتخصيص</div>' +
-    '</div>';
+      '</div></div>';
   }).join('');
   if (!platNames.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
+}
+
+// Expand/Collapse
+function rpTogglePlat(headerEl) {
+  var card = headerEl.closest('.rp-plat-card');
+  if (card) card.classList.toggle('collapsed');
+}
+function rpExpandAll() {
+  document.querySelectorAll('.rp-plat-card.collapsed').forEach(function(c) { c.classList.remove('collapsed'); });
+}
+function rpCollapseAll() {
+  document.querySelectorAll('.rp-plat-card').forEach(function(c) { c.classList.add('collapsed'); });
 }
 
 // Drag & Drop
