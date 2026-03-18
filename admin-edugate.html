@@ -3951,11 +3951,30 @@ function renderResourcePlanner() {
     return selVal <= endVal; // employee was still active during or before their end month
   }
 
-  // Available employees (occ < 100% and active in selected period)
+  // Check for time-off: both from tasks (any status) and from employee absences
+  var empOnLeave = {};
+  allData.forEach(function(r) {
+    if (r.month === month && String(r.year) === year &&
+        (r.taskType === 'إجازة' || r.platform === 'إجازة' || r.timeOff)) {
+      empOnLeave[r.name] = true;
+    }
+  });
+  employees.forEach(function(emp) {
+    if (typeof emp !== 'object') return;
+    var name = emp.name;
+    (emp.absences || []).forEach(function(a) {
+      if (a.month === month && String(a.year) === String(year)) {
+        empOnLeave[name] = true;
+      }
+    });
+  });
+
+  // Available employees (occ < 100%, active, and not on leave)
   var available = employees.filter(function(emp) {
     var name = typeof emp === 'string' ? emp : emp.name;
     if (!name) return false;
     if (!wasActiveInMonth(emp, month, year)) return false;
+    if (empOnLeave[name]) return false;
     var used = empOcc[name] || 0;
     return used < 100;
   });
