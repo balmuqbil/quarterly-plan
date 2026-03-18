@@ -711,8 +711,10 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-plat-stats { font-size:12px; color:var(--text-light); }
 .rp-drop-zone { min-height:36px; border:2px dashed var(--border); border-radius:8px; padding:8px; text-align:center; color:var(--text-light); font-size:12px; transition:all 0.2s; margin-top:8px; }
 .rp-drop-zone.drag-over { border-color:var(--accent); background:var(--accent-glow); color:var(--accent); }
-.rp-cards-flow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-.rp-role-label { font-size:10px; font-weight:700; color:#fff; padding:3px 8px; background:var(--accent); border-radius:5px; white-space:nowrap; align-self:center; }
+.rp-cards-flow { display:flex; flex-direction:column; gap:8px; }
+.rp-role-group { display:flex; flex-direction:column; gap:4px; }
+.rp-role-label { font-size:10px; font-weight:700; color:var(--text-light); padding:0; border-bottom:1px solid var(--border); padding-bottom:3px; margin-bottom:2px; letter-spacing:0.5px; }
+.rp-role-cards { display:flex; flex-wrap:wrap; gap:6px; }
 .rp-assigned { display:inline-flex; flex-direction:column; align-items:center; padding:10px 14px; border-radius:10px; background:var(--bg-card-dark); font-size:12px; border:1px solid var(--border); min-width:100px; text-align:center; transition:all 0.2s; }
 .rp-assigned:hover { border-color:var(--accent); box-shadow:0 2px 8px rgba(0,0,0,0.06); }
 .rp-assigned-info { display:flex; flex-direction:column; align-items:center; gap:2px; }
@@ -3807,7 +3809,8 @@ function renderResourcePlanner() {
       var idx = allData.indexOf(r);
       var tt = r.taskType || 'أخرى';
       if (tt !== lastTT) {
-        html += '<span class="rp-role-label">' + escapeHtml(tt) + '</span>';
+        if (lastTT) html += '</div></div>'; // close previous rp-role-cards and rp-role-group
+        html += '<div class="rp-role-group"><div class="rp-role-label">' + escapeHtml(tt) + '</div><div class="rp-role-cards">';
         lastTT = tt;
       }
       // Build squad move buttons
@@ -3830,6 +3833,7 @@ function renderResourcePlanner() {
           '<button class="rp-remove-btn" onclick="rpRemoveAssignment(' + idx + ')" title="إزالة" style="font-size:12px;">✕</button>' +
         '</div></div>';
     });
+    if (lastTT) html += '</div></div>'; // close last rp-role-cards and rp-role-group
     html += '</div>';
     return html;
   }
