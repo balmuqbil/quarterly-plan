@@ -3790,8 +3790,19 @@ function renderResourcePlanner() {
     });
   }
 
+  var RP_CARD_TASK_PRIORITY = [
+    'إدارة تسليم تقني', 'هيكلية الحلول', 'تحليل أعمال', 'تجربة مستخدم',
+    'تطوير واجهات', 'تطوير حلول', 'تطوير تكاملات', 'جودة'
+  ];
   platEl.innerHTML = platNames.map(function(platform) {
-    var tasks = platTasks[platform];
+    var tasks = platTasks[platform].slice().sort(function(a, b) {
+      var ia = RP_CARD_TASK_PRIORITY.indexOf(a.taskType);
+      var ib = RP_CARD_TASK_PRIORITY.indexOf(b.taskType);
+      if (ia === -1) ia = RP_CARD_TASK_PRIORITY.length;
+      if (ib === -1) ib = RP_CARD_TASK_PRIORITY.length;
+      if (ia !== ib) return ia - ib;
+      return (a.name || '').localeCompare(b.name || '', 'ar');
+    });
     var totalOcc = tasks.reduce(function(s,r) { return s + (parseFloat(r.occupancy)||0); }, 0);
     var fte = (totalOcc / 100).toFixed(1);
     var empCount = new Set(tasks.map(function(r) { return r.name; })).size;
