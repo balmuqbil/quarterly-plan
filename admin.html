@@ -3788,11 +3788,27 @@ function renderResourcePlanner() {
     empOcc[r.name] = (empOcc[r.name] || 0) + (parseFloat(r.occupancy) || 0);
   });
 
-  // Available employees (occ < 100%)
+  // Helper: check if employee was active during selected month/year
+  var MONTH_ORDER = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  function wasActiveInMonth(emp, selMonth, selYear) {
+    if (!emp.endDate || emp.endDate === '') return true; // still active
+    // Parse endDate (format: "فبراير 2026" or just month name)
+    var parts = emp.endDate.trim().split(/\s+/);
+    var endMonth = parts[0];
+    var endYear = parts.length > 1 ? parts[1] : selYear;
+    var endMonthIdx = MONTH_ORDER.indexOf(endMonth);
+    var selMonthIdx = MONTH_ORDER.indexOf(selMonth);
+    if (endMonthIdx === -1) return false; // can't parse, treat as inactive
+    var endVal = parseInt(endYear) * 12 + endMonthIdx;
+    var selVal = parseInt(selYear) * 12 + selMonthIdx;
+    return selVal <= endVal; // employee was still active during or before their end month
+  }
+
+  // Available employees (occ < 100% and active in selected period)
   var available = employees.filter(function(emp) {
     var name = typeof emp === 'string' ? emp : emp.name;
     if (!name) return false;
-    if (emp.endDate && emp.endDate !== '') return false;
+    if (!wasActiveInMonth(emp, month, year)) return false;
     var used = empOcc[name] || 0;
     return used < 100;
   });
