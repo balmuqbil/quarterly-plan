@@ -3912,7 +3912,8 @@ function renderResourcePlanner() {
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">' +
           '<div class="rp-squad-header">' +
             '<div class="squad-name">🏷️ ' + escapeHtml(platform) + ' ' + s + '</div>' +
-            '<div class="squad-stats">' + sqEmpCount + ' موظف · ' + sqFte + ' FTEs' +
+            '<div class="squad-stats">' + sqEmpCount + ' موظف · ' + sqFte + ' FTEs ' +
+              (sqTasks.length > 0 ? '<button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
               (canRemove ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpRemoveSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="حذف الفريق">✕</button>' : '') +
             '</div>' +
           '</div>' +
@@ -4016,6 +4017,32 @@ function rpRemoveSquad(platform, squadNum) {
   renderResourcePlanner();
   showMgmtToast('تم حذف الفريق', 'success');
 }
+function rpReleaseSquad(platform, squadNum) {
+  var month = document.getElementById('rpMonth')?.value;
+  var year = document.getElementById('rpYear')?.value;
+  var toRemove = [];
+  allData.forEach(function(r, i) {
+    if ((r.status||'pending') === 'approved' && r.platform === platform &&
+        r.month === month && String(r.year) === String(year) && (r.squad||1) === squadNum) {
+      toRemove.push(i);
+    }
+  });
+  if (!toRemove.length) { showMgmtToast('لا يوجد موظفين في هذا الفريق', 'error'); return; }
+  if (!confirm('هل تريد إزالة جميع الموظفين (' + toRemove.length + ') من فريق ' + platform + ' ' + squadNum + ' لشهر ' + month + '؟\n\nسيتم حذف ' + toRemove.length + ' مهمة نهائياً.')) return;
+  toRemove.sort(function(a,b){return b-a;});
+  toRemove.forEach(function(idx) {
+    var task = allData[idx];
+    if (task && firebaseReady && task._firebaseKey) {
+      firebaseDb.ref('tasks/' + task._firebaseKey).remove().catch(function(err){console.error(err);});
+    }
+    allData.splice(idx, 1);
+  });
+  syncTestData();
+  applyFilters();
+  renderResourcePlanner();
+  showMgmtToast('تم إزالة ' + toRemove.length + ' موظف من ' + platform + ' ' + squadNum, 'success');
+}
+
 function rpMoveToSquad(idx, newSquad) {
   var task = allData[idx];
   if (!task) return;
