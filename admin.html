@@ -3241,7 +3241,15 @@ function showEmployeeDrill(name) {
 
 // ---- Platform Drill ----
 function showPlatformDrill(platform) {
-  const pData = approvedData.filter(r => r.platform === platform);
+  // Apply same local filters as platforms page
+  var pYearVal = (document.getElementById('platYearFilter')?.value) || 'all';
+  var pQtrVal = (document.getElementById('platQuarterFilter')?.value) || 'all';
+  var pMonthVal = (document.getElementById('platMonthFilter')?.value) || 'all';
+  var pBase = approvedData;
+  if (pYearVal !== 'all') pBase = pBase.filter(function(r) { return String(r.year) === pYearVal; });
+  if (pQtrVal !== 'all') pBase = pBase.filter(function(r) { return r.quarter === pQtrVal; });
+  if (pMonthVal !== 'all') pBase = pBase.filter(function(r) { return r.month === pMonthVal; });
+  const pData = pBase.filter(r => r.platform === platform);
   if (!pData.length) return;
   const empNames = [...new Set(pData.map(r => r.name))];
   const departments = [...new Set(pData.map(r => r.department))];
