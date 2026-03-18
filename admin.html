@@ -4022,7 +4022,9 @@ function renderResourcePlanner() {
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',1)">' +
           '<div class="rp-squad-header">' +
             '<div class="squad-name">🏷️ ' + escapeHtml(platform) + ' 1</div>' +
-            '<div class="squad-stats">' + sq1EmpCount + ' موظف · ' + sq1Fte + ' FTEs</div>' +
+            '<div class="squad-stats">' + sq1EmpCount + ' موظف · ' + sq1Fte + ' FTEs' +
+              (sq1Tasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',1)" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
+            '</div>' +
           '</div>' +
           buildSquadCards(sq1Tasks, platform, 1, 2) +
           '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',1)">اسحب موظف هنا</div>' +
@@ -4155,13 +4157,22 @@ function rpMoveToSquad(idx, newSquad) {
   }
   renderResourcePlanner();
 }
+function rpResolveSquad(r, platform) {
+  // Mirror the same routing logic used in renderResourcePlanner
+  var sq = r.squad;
+  if (sq === 0 || sq === '0') return 0;
+  if (sq && sq <= (rpGetSquadCounts()[platform] || 1)) return sq;
+  var numSquads = rpGetSquadCounts()[platform] || 1;
+  var poolEnabled = rpHasPool(platform);
+  return (numSquads > 1 || poolEnabled) ? 0 : 1;
+}
 function rpReleaseSquad(platform, squadNum) {
   var month = document.getElementById('rpMonth')?.value;
   var year = document.getElementById('rpYear')?.value;
   var toRemove = [];
   allData.forEach(function(r, i) {
     if ((r.status||'pending') === 'approved' && r.platform === platform &&
-        r.month === month && String(r.year) === String(year) && rpGetSquad(r) === squadNum) {
+        r.month === month && String(r.year) === String(year) && rpResolveSquad(r, platform) === squadNum) {
       toRemove.push(i);
     }
   });
