@@ -710,7 +710,10 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-assigned-occ { font-weight:700; color:var(--accent); font-size:14px; }
 .rp-remove-btn { color:var(--danger); cursor:pointer; border:none; background:none; font-size:16px; padding:4px; border-radius:4px; transition:all 0.15s; }
 .rp-remove-btn:hover { background:rgba(239,68,68,0.1); }
-.rp-search { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; margin-bottom:10px; }
+.rp-search { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; margin-bottom:10px; background:var(--bg-card); color:var(--text-primary); }
+.rp-occ-edit { width:48px; padding:2px 4px; border:1.5px solid transparent; border-radius:6px; font-family:inherit; font-size:14px; font-weight:700; color:var(--accent); background:transparent; text-align:center; cursor:pointer; transition:all 0.2s; }
+.rp-occ-edit:hover { border-color:var(--accent); background:var(--bg-card); }
+.rp-occ-edit:focus { border-color:var(--accent); background:var(--bg-card); outline:none; box-shadow:0 0 0 2px var(--accent-glow); }
 .rp-assign-dialog { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:3000; display:none; align-items:center; justify-content:center; }
 .rp-assign-dialog.show { display:flex; }
 .rp-assign-box { background:var(--bg-card); border-radius:16px; padding:24px; width:400px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
@@ -1283,17 +1286,23 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
           <option value="فبراير">فبراير</option>
           <option value="مارس">مارس</option>
         </select>
+        <select class="quarter-filter" id="rpPlatformFilter" onchange="renderResourcePlanner()">
+          <option value="all">جميع المنصات</option>
+        </select>
       </div>
     </div>
     <div class="rp-container">
       <div class="rp-left">
         <div class="rp-panel">
           <div class="rp-panel-title">👥 الموظفون المتاحون <span id="rpAvailCount" style="font-size:12px;color:var(--text-light);font-weight:400;"></span></div>
-          <input type="text" class="rp-search" id="rpEmpSearch" placeholder="🔍 بحث..." oninput="renderResourcePlanner()">
+          <input type="text" class="rp-search" id="rpEmpSearch" placeholder="🔍 بحث عن موظف..." oninput="renderResourcePlanner()">
           <div class="rp-emp-list" id="rpEmpList"></div>
         </div>
       </div>
-      <div class="rp-right" id="rpPlatforms"></div>
+      <div class="rp-right">
+        <input type="text" class="rp-search" id="rpPlatSearch" placeholder="🔍 بحث في المنصات والموظفين المخصصين..." oninput="renderResourcePlanner()" style="margin-bottom:12px;">
+        <div id="rpPlatforms"></div>
+      </div>
     </div>
   </div>
 
@@ -3558,9 +3567,21 @@ function renderResourcePlanner() {
   var quarter = document.getElementById('rpQuarter')?.value || 'الأول';
   var month = document.getElementById('rpMonth')?.value || 'يناير';
   var search = (document.getElementById('rpEmpSearch')?.value || '').trim().toLowerCase();
+  var platSearch = (document.getElementById('rpPlatSearch')?.value || '').trim().toLowerCase();
+  var platFilter = (document.getElementById('rpPlatformFilter')?.value) || 'all';
   var mgmt = getMgmtData();
   var employees = mgmt.employees || [];
   var platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+
+  // Populate platform filter dropdown
+  var pfEl = document.getElementById('rpPlatformFilter');
+  if (pfEl) {
+    var curPf = pfEl.value;
+    pfEl.innerHTML = '<option value="all">جميع المنصات</option>' + platforms.map(function(p) {
+      return '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>';
+    }).join('');
+    pfEl.value = curPf;
+  }
 
   // Get approved tasks for selected month/year
   var monthTasks = allData.filter(function(r) {
@@ -3577,7 +3598,7 @@ function renderResourcePlanner() {
   var available = employees.filter(function(emp) {
     var name = typeof emp === 'string' ? emp : emp.name;
     if (!name) return false;
-    if (emp.endDate && emp.endDate !== '') return false; // inactive
+    if (emp.endDate && emp.endDate !== '') return false;
     var used = empOcc[name] || 0;
     return used < 100;
   });
@@ -3585,11 +3606,12 @@ function renderResourcePlanner() {
     available = available.filter(function(emp) {
       var name = typeof emp === 'string' ? emp : emp.name;
       var dept = typeof emp === 'object' ? (emp.department || '') : '';
-      return name.toLowerCase().indexOf(search) !== -1 || dept.toLowerCase().indexOf(search) !== -1;
+      var sec = typeof emp === 'object' ? (emp.section || '') : '';
+      return name.toLowerCase().indexOf(search) !== -1 || dept.toLowerCase().indexOf(search) !== -1 || sec.toLowerCase().indexOf(search) !== -1;
     });
   }
 
-  // Render left panel — available employees
+  // Render left panel
   var countEl = document.getElementById('rpAvailCount');
   if (countEl) countEl.textContent = '(' + available.length + ')';
   var empListEl = document.getElementById('rpEmpList');
@@ -3617,11 +3639,25 @@ function renderResourcePlanner() {
     if (!platTasks[r.platform]) platTasks[r.platform] = [];
     platTasks[r.platform].push(r);
   });
-  // Add empty platforms
   platforms.forEach(function(p) { if (!platTasks[p]) platTasks[p] = []; });
 
   var platEl = document.getElementById('rpPlatforms');
   var platNames = Object.keys(platTasks).sort(function(a,b) { return platTasks[b].length - platTasks[a].length; });
+
+  // Apply platform filter
+  if (platFilter !== 'all') {
+    platNames = platNames.filter(function(p) { return p === platFilter; });
+  }
+
+  // Apply platform search (searches platform names and assigned employee names)
+  if (platSearch) {
+    platNames = platNames.filter(function(p) {
+      if (p.toLowerCase().indexOf(platSearch) !== -1) return true;
+      var tasks = platTasks[p] || [];
+      return tasks.some(function(r) { return (r.name||'').toLowerCase().indexOf(platSearch) !== -1 || (r.taskType||'').toLowerCase().indexOf(platSearch) !== -1; });
+    });
+  }
+
   platEl.innerHTML = platNames.map(function(platform) {
     var tasks = platTasks[platform];
     var totalOcc = tasks.reduce(function(s,r) { return s + (parseFloat(r.occupancy)||0); }, 0);
@@ -3635,7 +3671,8 @@ function renderResourcePlanner() {
           '<span class="badge badge-task" style="font-size:10px;">' + escapeHtml(r.taskType) + '</span>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<span class="rp-assigned-occ">' + r.occupancy + '%</span>' +
+          '<input type="number" class="rp-occ-edit" value="' + r.occupancy + '" min="20" max="120" step="5" ' +
+            'onchange="rpChangeOcc(' + idx + ',this.value)" onfocus="this.select()" title="انقر لتعديل النسبة">%' +
           '<button class="rp-remove-btn" onclick="rpRemoveAssignment(' + idx + ')" title="إزالة">🗑️</button>' +
         '</div></div>';
     }).join('');
@@ -3649,6 +3686,7 @@ function renderResourcePlanner() {
       '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">اسحب موظف هنا للتخصيص</div>' +
     '</div>';
   }).join('');
+  if (!platNames.length) platEl.innerHTML = '<div class="rp-no-data">لا توجد منصات مطابقة</div>';
 }
 
 // Drag & Drop
@@ -3754,6 +3792,36 @@ function rpRemoveAssignment(idx) {
   applyFilters();
   renderResourcePlanner();
   showMgmtToast('تم إزالة التخصيص', 'success');
+}
+
+function rpChangeOcc(idx, newVal) {
+  var task = allData[idx];
+  if (!task) return;
+  var occ = parseInt(newVal) || 0;
+  if (occ < 20) { showMgmtToast('الحد الأدنى للإشغال 20%', 'error'); renderResourcePlanner(); return; }
+  if (occ > 120) { showMgmtToast('الحد الأقصى للإشغال 120%', 'error'); renderResourcePlanner(); return; }
+  // Check total for employee in this month won't exceed 120%
+  var month = task.month; var year = task.year; var empName = task.name;
+  var existingTotal = 0;
+  for (var i = 0; i < allData.length; i++) {
+    if (i === idx) continue;
+    if ((allData[i].status||'pending') === 'approved' && allData[i].name === empName && allData[i].month === month && String(allData[i].year) === String(year)) {
+      existingTotal += parseFloat(allData[i].occupancy) || 0;
+    }
+  }
+  if (existingTotal + occ > 120) {
+    showMgmtToast('⚠️ إجمالي الإشغال سيتجاوز 120% (المعتمد: ' + existingTotal + '% + ' + occ + '% = ' + (existingTotal+occ) + '%)', 'error');
+    renderResourcePlanner();
+    return;
+  }
+  task.occupancy = occ;
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey + '/occupancy').set(occ).catch(function(err) { console.error(err); });
+  }
+  syncTestData();
+  applyFilters();
+  renderResourcePlanner();
+  showMgmtToast('تم تعديل الإشغال إلى ' + occ + '%', 'success');
 }
 
 // ---- Task Type Drill ----
