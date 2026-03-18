@@ -738,6 +738,17 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .rp-conflict-item .conflict-occ { font-weight:700; color:var(--danger); white-space:nowrap; }
 .rp-copy-btn { padding:5px 12px; border:1.5px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text-secondary); font-family:inherit; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.2s; }
 .rp-copy-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(27,131,84,0.04); }
+.rp-squad-controls { display:flex; gap:6px; margin-bottom:8px; align-items:center; }
+.rp-squad-add { padding:3px 10px; border:1.5px dashed var(--border); border-radius:6px; background:none; color:var(--text-light); font-family:inherit; font-size:11px; cursor:pointer; transition:all 0.2s; }
+.rp-squad-add:hover { border-color:var(--accent); color:var(--accent); }
+.rp-squad-section { border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px; background:rgba(0,0,0,0.01); }
+.rp-squad-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:12px; font-weight:700; color:var(--text-secondary); }
+.rp-squad-header .squad-name { display:flex; align-items:center; gap:6px; }
+.rp-squad-header .squad-stats { font-size:11px; font-weight:500; color:var(--text-light); }
+.rp-squad-remove { border:none; background:none; color:var(--text-light); cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; transition:all 0.15s; }
+.rp-squad-remove:hover { color:var(--danger); background:rgba(239,68,68,0.1); }
+.rp-squad-move { padding:1px 5px; border:1px solid var(--border); border-radius:4px; background:var(--bg-card); color:var(--text-light); font-size:9px; cursor:pointer; transition:all 0.15s; font-family:inherit; }
+.rp-squad-move:hover { border-color:var(--accent); color:var(--accent); }
 .rp-no-data { text-align:center; padding:40px; color:var(--text-light); font-size:14px; }
 @media(max-width:900px) { .rp-container { flex-direction:column; } .rp-left { width:100%; } }
 </style>
@@ -3776,8 +3787,10 @@ function renderResourcePlanner() {
     'إدارة تسليم تقني', 'هيكلية الحلول', 'تحليل أعمال', 'تجربة مستخدم',
     'تطوير واجهات', 'تطوير حلول', 'تطوير تكاملات', 'جودة'
   ];
-  platEl.innerHTML = platNames.map(function(platform) {
-    var tasks = platTasks[platform].slice().sort(function(a, b) {
+  var squadCounts = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'platformSquads') || '{}');
+
+  function buildSquadCards(squadTasks, platform, squadNum, totalSquads) {
+    var sorted = squadTasks.slice().sort(function(a, b) {
       var ia = RP_CARD_TASK_PRIORITY.indexOf(a.taskType);
       var ib = RP_CARD_TASK_PRIORITY.indexOf(b.taskType);
       if (ia === -1) ia = RP_CARD_TASK_PRIORITY.length;
@@ -3785,38 +3798,96 @@ function renderResourcePlanner() {
       if (ia !== ib) return ia - ib;
       return (a.name || '').localeCompare(b.name || '', 'ar');
     });
-    var totalOcc = tasks.reduce(function(s,r) { return s + (parseFloat(r.occupancy)||0); }, 0);
-    var fte = (totalOcc / 100).toFixed(1);
-    var empCount = new Set(tasks.map(function(r) { return r.name; })).size;
-    var assignedCards = '<div class="rp-cards-flow">';
-    var lastTaskType = '';
-    tasks.forEach(function(r) {
+    var html = '<div class="rp-cards-flow">';
+    var lastTT = '';
+    sorted.forEach(function(r) {
       var idx = allData.indexOf(r);
       var tt = r.taskType || 'أخرى';
-      if (tt !== lastTaskType) {
-        assignedCards += '<span class="rp-role-label">' + escapeHtml(tt) + '</span>';
-        lastTaskType = tt;
+      if (tt !== lastTT) {
+        html += '<span class="rp-role-label">' + escapeHtml(tt) + '</span>';
+        lastTT = tt;
       }
-      assignedCards += '<div class="rp-assigned">' +
+      // Build squad move buttons
+      var moveHtml = '';
+      if (totalSquads > 1) {
+        for (var s = 1; s <= totalSquads; s++) {
+          if (s !== squadNum) {
+            moveHtml += '<button class="rp-squad-move" onclick="event.stopPropagation();rpMoveToSquad(' + idx + ',' + s + ')" title="نقل إلى فريق ' + s + '">' + s + '</button>';
+          }
+        }
+      }
+      html += '<div class="rp-assigned">' +
         '<div class="rp-assigned-info">' +
           '<span style="font-weight:700;font-size:13px;">' + escapeHtml(r.name) + '</span>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;">' +
           '<input type="number" class="rp-occ-edit" value="' + r.occupancy + '" min="20" max="120" step="5" ' +
             'onchange="rpChangeOcc(' + idx + ',this.value)" onfocus="this.select()" title="انقر لتعديل النسبة">%' +
+          moveHtml +
           '<button class="rp-remove-btn" onclick="rpRemoveAssignment(' + idx + ')" title="إزالة" style="font-size:12px;">✕</button>' +
         '</div></div>';
     });
-    assignedCards += '</div>';
+    html += '</div>';
+    return html;
+  }
 
-    return '<div class="rp-plat-card" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">' +
+  platEl.innerHTML = platNames.map(function(platform) {
+    var tasks = platTasks[platform];
+    var totalOcc = tasks.reduce(function(s,r) { return s + (parseFloat(r.occupancy)||0); }, 0);
+    var fte = (totalOcc / 100).toFixed(1);
+    var empCount = new Set(tasks.map(function(r) { return r.name; })).size;
+    var numSquads = squadCounts[platform] || 1;
+
+    // Group tasks by squad
+    var squads = {};
+    for (var s = 1; s <= numSquads; s++) squads[s] = [];
+    tasks.forEach(function(r) {
+      var sq = r.squad || 1;
+      if (sq > numSquads) sq = 1; // fallback if squad removed
+      if (!squads[sq]) squads[sq] = [];
+      squads[sq].push(r);
+    });
+
+    // Build squad sections
+    var squadsHtml = '';
+    if (numSquads > 1) {
+      for (var s = 1; s <= numSquads; s++) {
+        var sqTasks = squads[s] || [];
+        var sqOcc = sqTasks.reduce(function(sum,r) { return sum + (parseFloat(r.occupancy)||0); }, 0);
+        var sqFte = (sqOcc / 100).toFixed(1);
+        var sqEmpCount = new Set(sqTasks.map(function(r) { return r.name; })).size;
+        var canRemove = sqTasks.length === 0 && numSquads > 1;
+        squadsHtml += '<div class="rp-squad-section" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">' +
+          '<div class="rp-squad-header">' +
+            '<div class="squad-name">🏷️ ' + escapeHtml(platform) + ' ' + s + '</div>' +
+            '<div class="squad-stats">' + sqEmpCount + ' موظف · ' + sqFte + ' FTEs' +
+              (canRemove ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpRemoveSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="حذف الفريق">✕</button>' : '') +
+            '</div>' +
+          '</div>' +
+          buildSquadCards(sqTasks, platform, s, numSquads) +
+          '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">اسحب موظف هنا</div>' +
+        '</div>';
+      }
+    } else {
+      // Single squad — render flat like before (no squad header)
+      squadsHtml = buildSquadCards(tasks, platform, 1, 1) +
+        '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',1)">اسحب موظف هنا للتخصيص</div>';
+    }
+
+    // Squad controls
+    var squadControls = '<div class="rp-squad-controls">' +
+      (numSquads < 4 ? '<button class="rp-squad-add" onclick="event.stopPropagation();rpAddSquad(\'' + escapeJS(platform) + '\')">+ فريق جديد</button>' : '') +
+      '<span style="font-size:11px;color:var(--text-light);">' + numSquads + ' فريق</span>' +
+    '</div>';
+
+    return '<div class="rp-plat-card">' +
       '<div class="rp-plat-header" onclick="rpTogglePlat(this)">' +
         '<div style="display:flex;align-items:center;gap:6px;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span></div>' +
-        '<div class="rp-plat-stats">' + empCount + ' موظف · ' + fte + ' FTEs · ' + tasks.length + ' مهمة</div>' +
+        '<div class="rp-plat-stats">' + empCount + ' موظف · ' + fte + ' FTEs · ' + tasks.length + ' مهمة · ' + numSquads + ' فريق</div>' +
       '</div>' +
       '<div class="rp-plat-body">' +
-      assignedCards +
-      '<div class="rp-drop-zone" ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\')">اسحب موظف هنا للتخصيص</div>' +
+      squadControls +
+      squadsHtml +
       (tasks.length > 0 ? '<div style="margin-top:8px;text-align:left;"><button class="rp-copy-btn" onclick="event.stopPropagation();rpCopyToNextMonth(\'' + escapeJS(platform) + '\')" title="نسخ تخصيصات هذه المنصة إلى الشهر التالي">📋 نسخ إلى الشهر التالي</button></div>' : '') +
       '</div></div>';
   }).join('');
@@ -3833,6 +3904,57 @@ function rpExpandAll() {
 }
 function rpCollapseAll() {
   document.querySelectorAll('.rp-plat-card').forEach(function(c) { c.classList.add('collapsed'); });
+}
+
+function rpGetSquadCounts() {
+  return JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'platformSquads') || '{}');
+}
+function rpSaveSquadCounts(counts) {
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'platformSquads', JSON.stringify(counts));
+}
+function rpAddSquad(platform) {
+  var counts = rpGetSquadCounts();
+  var current = counts[platform] || 1;
+  if (current >= 4) { showMgmtToast('الحد الأقصى 4 فرق لكل منصة', 'error'); return; }
+  counts[platform] = current + 1;
+  rpSaveSquadCounts(counts);
+  renderResourcePlanner();
+  showMgmtToast('تم إضافة فريق ' + (current + 1) + ' لـ ' + platform, 'success');
+}
+function rpRemoveSquad(platform, squadNum) {
+  // Check if squad is empty
+  var month = document.getElementById('rpMonth').value;
+  var year = document.getElementById('rpYear').value;
+  var hasTask = allData.some(function(r) {
+    return (r.status || 'pending') === 'approved' && r.platform === platform &&
+      r.month === month && r.year === year && (r.squad || 1) === squadNum;
+  });
+  if (hasTask) { showMgmtToast('لا يمكن حذف فريق يحتوي على موظفين — انقل الموظفين أولاً', 'error'); return; }
+  var counts = rpGetSquadCounts();
+  var current = counts[platform] || 1;
+  if (current <= 1) return;
+  // Shift tasks in higher squads down
+  allData.forEach(function(r) {
+    if (r.platform === platform && r.month === month && r.year === year && (r.squad || 1) > squadNum) {
+      r.squad = (r.squad || 1) - 1;
+      if (firebaseReady && r._firebaseKey) {
+        firebaseDb.ref('tasks/' + r._firebaseKey + '/squad').set(r.squad);
+      }
+    }
+  });
+  counts[platform] = current - 1;
+  rpSaveSquadCounts(counts);
+  renderResourcePlanner();
+  showMgmtToast('تم حذف الفريق', 'success');
+}
+function rpMoveToSquad(idx, newSquad) {
+  var task = allData[idx];
+  if (!task) return;
+  task.squad = newSquad;
+  if (firebaseReady && task._firebaseKey) {
+    firebaseDb.ref('tasks/' + task._firebaseKey + '/squad').set(newSquad);
+  }
+  renderResourcePlanner();
 }
 
 // Drag & Drop
@@ -3859,26 +3981,30 @@ function rpDragLeave(e) {
   if (card) card.classList.remove('drag-over');
 }
 
-function rpDrop(e, platform) {
+function rpDrop(e, platform, squadNum) {
   e.preventDefault();
   var card = e.target.closest('.rp-plat-card');
   if (card) card.classList.remove('drag-over');
   var zone = e.target.closest('.rp-drop-zone');
   if (zone) zone.classList.remove('drag-over');
+  var section = e.target.closest('.rp-squad-section');
+  if (section) section.style.borderColor = '';
   if (!rpDragEmp) return;
-  openRpAssignDialog(rpDragEmp, platform, rpDragAvail);
+  openRpAssignDialog(rpDragEmp, platform, rpDragAvail, squadNum || 1);
   rpDragEmp = null;
 }
 
-function openRpAssignDialog(empName, platform, maxAvail) {
+function openRpAssignDialog(empName, platform, maxAvail, squadNum) {
   document.getElementById('rpAssignEmp').value = empName;
   document.getElementById('rpAssignPlatform').value = platform;
-  document.getElementById('rpAssignTitle').textContent = '📋 تخصيص ' + empName + ' → ' + platform;
+  var squadLabel = (rpGetSquadCounts()[platform] || 1) > 1 ? ' (فريق ' + squadNum + ')' : '';
+  document.getElementById('rpAssignTitle').textContent = '📋 تخصيص ' + empName + ' → ' + platform + squadLabel;
   document.getElementById('rpAssignMaxHint').textContent = '(المتاح: ' + maxAvail + '%)';
   document.getElementById('rpAssignOcc').max = 120;
   document.getElementById('rpAssignOcc').value = Math.min(100, maxAvail);
-  // Store maxAvail for later check
+  // Store maxAvail and squad for later use
   document.getElementById('rpAssignDialog').dataset.maxAvail = maxAvail;
+  document.getElementById('rpAssignDialog').dataset.squad = squadNum || 1;
   document.getElementById('rpAssignDesc').value = '';
   // Populate task types based on employee's section
   var mgmt = getMgmtData();
@@ -4010,11 +4136,13 @@ function confirmRpAssign() {
   var department = emp && typeof emp === 'object' ? (emp.department || '') : '';
   var section = emp && typeof emp === 'object' ? (emp.section || '') : '';
 
+  var squadNum = parseInt(document.getElementById('rpAssignDialog').dataset.squad) || 1;
   var task = {
     name: empName, department: department, section: section,
     platform: platform, taskType: taskType, month: month, quarter: quarter, year: year,
     occupancy: occ, description: desc || 'تخطيط موارد', service: '',
-    status: 'approved', timestamp: new Date().toISOString()
+    status: 'approved', timestamp: new Date().toISOString(),
+    squad: squadNum
   };
 
   allData.push(task);
@@ -4140,7 +4268,8 @@ function rpCopyToNextMonth(platform) {
       month: nextMonth, quarter: nextQuarter, year: nextYear,
       occupancy: t.occupancy, description: t.description || 'تخطيط موارد',
       service: t.service || '', status: 'approved',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      squad: t.squad || 1
     };
     allData.push(newTask);
     syncTaskToFirebase(newTask, -1, null);
