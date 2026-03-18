@@ -684,8 +684,8 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .dark-mode-btn .btn-label { font-size:12px; }
 
 /* ========== RESOURCE PLANNER ========== */
-.rp-container { display:flex; gap:20px; min-height:500px; }
-.rp-left { width:320px; flex-shrink:0; position:sticky; top:16px; align-self:flex-start; max-height:calc(100vh - 32px); display:flex; flex-direction:column; }
+.rp-container { display:flex; gap:20px; min-height:500px; align-items:flex-start; }
+.rp-left { width:320px; flex-shrink:0; position:-webkit-sticky; position:sticky; top:16px; max-height:calc(100vh - 32px); display:flex; flex-direction:column; }
 .rp-right { flex:1; }
 .rp-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:16px; flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
 .rp-panel-title { font-size:15px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
