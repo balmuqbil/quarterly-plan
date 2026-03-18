@@ -1063,6 +1063,13 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
       <select class="quarter-filter" id="empYearFilter" onchange="renderEmployeesSection()">
         <option value="all">جميع السنوات</option>
       </select>
+      <select class="quarter-filter" id="empMonthFilter" onchange="renderEmployeesSection()">
+        <option value="all">جميع الأشهر</option>
+        <option value="يناير">يناير</option><option value="فبراير">فبراير</option><option value="مارس">مارس</option>
+        <option value="أبريل">أبريل</option><option value="مايو">مايو</option><option value="يونيو">يونيو</option>
+        <option value="يوليو">يوليو</option><option value="أغسطس">أغسطس</option><option value="سبتمبر">سبتمبر</option>
+        <option value="أكتوبر">أكتوبر</option><option value="نوفمبر">نوفمبر</option><option value="ديسمبر">ديسمبر</option>
+      </select>
       <button class="export-btn" style="font-size:12px;padding:6px 12px;" onclick="resetEmpFilters()">↻ إعادة تعيين</button>
       <span style="border-right:1px solid var(--border);height:24px;margin:0 4px;"></span>
       <select class="quarter-filter" id="empSortBy" onchange="renderEmployeesSection()">
@@ -1625,6 +1632,25 @@ function setDefaultFilters() {
   if (deptMonthFilter && currentMonthName) {
     deptMonthFilter.value = currentMonthName;
   }
+
+  // Also set employee page filters
+  var empYearFilter = document.getElementById('empYearFilter');
+  if (empYearFilter) {
+    var hasEmpYear = false;
+    for (var ey = 0; ey < empYearFilter.options.length; ey++) {
+      if (empYearFilter.options[ey].value === currentYear) { hasEmpYear = true; break; }
+    }
+    if (!hasEmpYear) {
+      var optEy = document.createElement('option');
+      optEy.value = currentYear; optEy.textContent = currentYear;
+      empYearFilter.appendChild(optEy);
+    }
+    empYearFilter.value = currentYear;
+  }
+  var empQuarterFilter = document.getElementById('empQuarterFilter');
+  if (empQuarterFilter) empQuarterFilter.value = currentQuarter;
+  var empMonthFilter = document.getElementById('empMonthFilter');
+  if (empMonthFilter && currentMonthName) empMonthFilter.value = currentMonthName;
 
   // Also set platform page filters
   var platYearFilter = document.getElementById('platYearFilter');
@@ -2316,7 +2342,7 @@ function onEmpDeptFilterChange() {
 }
 
 function resetEmpFilters() {
-  var ids = ['empDeptFilter', 'empSectionFilter', 'empPlatformFilter', 'empQuarterFilter', 'empYearFilter'];
+  var ids = ['empDeptFilter', 'empSectionFilter', 'empPlatformFilter', 'empQuarterFilter', 'empYearFilter', 'empMonthFilter'];
   ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = 'all'; });
   var search = document.getElementById('empSearch');
   if (search) search.value = '';
@@ -2340,6 +2366,7 @@ function renderEmployeesSection() {
   var platVal = (document.getElementById('empPlatformFilter')?.value) || 'all';
   var qtrVal = (document.getElementById('empQuarterFilter')?.value) || 'all';
   var yearVal = (document.getElementById('empYearFilter')?.value) || 'all';
+  var monthVal = (document.getElementById('empMonthFilter')?.value) || 'all';
 
   // Apply local filters on top of global approvedData
   var data = approvedData;
@@ -2348,6 +2375,7 @@ function renderEmployeesSection() {
   if (platVal !== 'all') data = data.filter(function(r) { return r.platform === platVal; });
   if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
   if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
+  if (monthVal !== 'all') data = data.filter(function(r) { return r.month === monthVal; });
 
   var empMap = {};
   data.forEach(function(r) {
