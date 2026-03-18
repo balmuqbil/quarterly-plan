@@ -2882,15 +2882,19 @@ function saveTask() {
   const editIdx = parseInt(document.getElementById('taskEditIdx').value);
 
   // Business rule: total occupancy per employee per month per year must not exceed 120%
+  // Only count approved tasks (pending/rejected don't count toward the cap)
   var existingTotal = 0;
   for (var i = 0; i < allData.length; i++) {
     if (i === editIdx) continue; // Skip the task being edited
-    if (allData[i].name === fields.name && allData[i].month === fields.month && allData[i].year === fields.year) {
-      existingTotal += parseFloat(allData[i].occupancy) || 0;
+    if (allData[i].name === fields.name && allData[i].month === fields.month && String(allData[i].year) === String(fields.year)) {
+      var taskStatus = allData[i].status || 'pending';
+      if (taskStatus === 'approved') {
+        existingTotal += parseFloat(allData[i].occupancy) || 0;
+      }
     }
   }
   if (existingTotal + fields.occupancy > 120) {
-    showMgmtToast('⚠️ إجمالي الإشغال للموظف "' + fields.name + '" في شهر ' + fields.month + ' سيتجاوز 120% (الحالي: ' + existingTotal + '% + ' + fields.occupancy + '% = ' + (existingTotal + fields.occupancy) + '%)', 'error');
+    showMgmtToast('⚠️ إجمالي الإشغال للموظف "' + fields.name + '" في شهر ' + fields.month + ' سيتجاوز 120% (المعتمد: ' + existingTotal + '% + ' + fields.occupancy + '% = ' + (existingTotal + fields.occupancy) + '%)', 'error');
     return;
   }
 
