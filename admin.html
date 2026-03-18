@@ -833,6 +833,13 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
           <option value="الثالث">الربع الثالث</option>
           <option value="الرابع">الربع الرابع</option>
         </select>
+        <select class="quarter-filter" id="monthFilter" onchange="applyFilters()">
+          <option value="all">جميع الأشهر</option>
+          <option value="يناير">يناير</option><option value="فبراير">فبراير</option><option value="مارس">مارس</option>
+          <option value="أبريل">أبريل</option><option value="مايو">مايو</option><option value="يونيو">يونيو</option>
+          <option value="يوليو">يوليو</option><option value="أغسطس">أغسطس</option><option value="سبتمبر">سبتمبر</option>
+          <option value="أكتوبر">أكتوبر</option><option value="نوفمبر">نوفمبر</option><option value="ديسمبر">ديسمبر</option>
+        </select>
         <button class="export-btn" onclick="exportCSV()">📥 تصدير CSV</button>
         <button class="refresh-btn" onclick="loadSampleData()">🧪 بيانات تجريبية</button>
         <button class="refresh-btn" onclick="loadData()">🔄 تحديث</button>
@@ -888,6 +895,24 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
         <div class="kpi-value" id="kpiCapacity">—</div>
         <div class="kpi-label">استغلال السعة</div>
         <span class="kpi-change neutral" id="kpiCapChange">—</span>
+      </div>
+      <div class="kpi-card animate-in delay-1">
+        <div class="kpi-icon">🚫</div>
+        <div class="kpi-value" id="kpiNoTasks">—</div>
+        <div class="kpi-label">بدون مهام</div>
+        <span class="kpi-change neutral" id="kpiNoTasksChange">موظفون بدون مهام</span>
+      </div>
+      <div class="kpi-card animate-in delay-2">
+        <div class="kpi-icon">📉</div>
+        <div class="kpi-value" id="kpiLowOcc">—</div>
+        <div class="kpi-label">إشغال أقل من 50%</div>
+        <span class="kpi-change neutral" id="kpiLowOccChange">موظفون بإشغال منخفض</span>
+      </div>
+      <div class="kpi-card animate-in delay-3">
+        <div class="kpi-icon">🔀</div>
+        <div class="kpi-value" id="kpiMultiPlat">—</div>
+        <div class="kpi-label">أكثر من منصة</div>
+        <span class="kpi-change neutral" id="kpiMultiPlatChange">موظفون على عدة منصات</span>
       </div>
     </div>
 
@@ -2029,9 +2054,11 @@ function loadData() {
 function applyFilters() {
   const quarter = document.getElementById('quarterFilter').value;
   const year = document.getElementById('yearFilter').value;
+  const month = (document.getElementById('monthFilter')?.value) || 'all';
   filteredData = [...allData];
   if (quarter !== 'all') filteredData = filteredData.filter(r => r.quarter === quarter);
   if (year !== 'all') filteredData = filteredData.filter(r => String(r.year) === year);
+  if (month !== 'all') filteredData = filteredData.filter(r => r.month === month);
   approvedData = filteredData.filter(function(r) { return (r.status || 'pending') === 'approved'; });
   updateKPIs(); renderCharts(); currentPage = 1; renderTable(); renderHeatmap();
 }
@@ -2121,6 +2148,53 @@ function updateKPIs() {
     capEl.textContent = 'لا يوجد موظفون نشطون';
     capEl.className = 'kpi-change neutral';
   }
+
+  // New KPIs: employees without tasks, low occupancy, multi-platform
+  var mgmt = getMgmtData();
+  var allEmps = mgmt.employees || [];
+  var activeEmps = allEmps.filter(function(e) { return typeof e === 'string' || !e.endDate; });
+  var empWithTasks = new Set(d.map(function(r) { return r.name; }));
+
+  // 1. Employees without tasks
+  var noTaskCount = activeEmps.filter(function(e) {
+    var name = typeof e === 'string' ? e : e.name;
+    return !empWithTasks.has(name);
+  }).length;
+  animateValue('kpiNoTasks', noTaskCount);
+  var ntEl = document.getElementById('kpiNoTasksChange');
+  ntEl.className = 'kpi-change ' + (noTaskCount > 10 ? 'down' : noTaskCount > 0 ? 'neutral' : 'up');
+  ntEl.textContent = noTaskCount > 0 ? 'من أصل ' + activeEmps.length + ' موظف نشط' : '✓ جميع الموظفين لديهم مهام';
+
+  // 2. Employees with avg occupancy < 50%
+  var empMonthOccLow = {};
+  d.forEach(function(r) {
+    var key = r.name + '|' + (r.month||'') + '|' + (r.year||'');
+    empMonthOccLow[key] = (empMonthOccLow[key]||0) + (parseFloat(r.occupancy)||0);
+  });
+  var empAvgs = {};
+  Object.entries(empMonthOccLow).forEach(function(entry) {
+    var empName = entry[0].split('|')[0];
+    if (!empAvgs[empName]) empAvgs[empName] = { sum:0, count:0 };
+    empAvgs[empName].sum += entry[1];
+    empAvgs[empName].count++;
+  });
+  var lowOccCount = Object.values(empAvgs).filter(function(e) { return (e.sum / e.count) < 50; }).length;
+  animateValue('kpiLowOcc', lowOccCount);
+  var loEl = document.getElementById('kpiLowOccChange');
+  loEl.className = 'kpi-change ' + (lowOccCount > 10 ? 'down' : lowOccCount > 0 ? 'neutral' : 'up');
+  loEl.textContent = lowOccCount > 0 ? 'يمكن زيادة إشغالهم' : '✓ جميع الموظفين ≥ 50%';
+
+  // 3. Employees on multiple platforms
+  var empPlats = {};
+  d.forEach(function(r) {
+    if (!r.platform || r.platform === 'بدون منصة' || r.platform === 'إجازة') return;
+    if (!empPlats[r.name]) empPlats[r.name] = new Set();
+    empPlats[r.name].add(r.platform);
+  });
+  var multiPlatCount = Object.values(empPlats).filter(function(s) { return s.size > 1; }).length;
+  animateValue('kpiMultiPlat', multiPlatCount);
+  var mpEl = document.getElementById('kpiMultiPlatChange');
+  mpEl.textContent = multiPlatCount > 0 ? 'يعملون على أكثر من منصة' : '✓ كل موظف على منصة واحدة';
 }
 
 function animateValue(id, target) {
