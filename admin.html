@@ -1880,16 +1880,23 @@ function sanitizeInput(str) {
   return String(str).replace(/<[^>]*>/g, '').trim();
 }
 async function hashPassword(pass) {
-  var encoder = new TextEncoder();
-  var data = encoder.encode(pass);
-  var hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  var hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+  if (window.crypto && crypto.subtle) {
+    try {
+      var encoder = new TextEncoder();
+      var data = encoder.encode(pass);
+      var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      var hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+    } catch(e) { /* falls through to plaintext marker */ }
+  }
+  // Fallback for file:// or HTTP where crypto.subtle is unavailable
+  return 'plain:' + pass;
 }
 
 let ADMIN_USER = localStorage.getItem(STORAGE_PREFIX + 'user') || 'admin';
 // Password stored as SHA-256 hash
 var DEFAULT_PASS_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'; // sha256('admin123')
+var DEFAULT_PASS_PLAIN = 'admin123';
 let ADMIN_PASS_HASH = localStorage.getItem(STORAGE_PREFIX + 'passHash') || DEFAULT_PASS_HASH;
 
 let allData = [];
@@ -1906,7 +1913,11 @@ async function attemptLogin() {
   var user = document.getElementById('loginUser').value.trim();
   var pass = document.getElementById('loginPass').value;
   var passHash = await hashPassword(pass);
-  if (user === ADMIN_USER && passHash === ADMIN_PASS_HASH) {
+  var isFb = passHash.indexOf('plain:') === 0;
+  var match = isFb
+    ? (user === ADMIN_USER && (ADMIN_PASS_HASH === DEFAULT_PASS_HASH ? passHash.substring(6) === DEFAULT_PASS_PLAIN : false))
+    : (user === ADMIN_USER && passHash === ADMIN_PASS_HASH);
+  if (match) {
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('mainContent').style.display = 'block';
     sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
@@ -2069,7 +2080,13 @@ attemptLogin = async function() {
   var passHash = await hashPassword(pass);
 
   // Check admin account first
-  if (user === ADMIN_USER && passHash === ADMIN_PASS_HASH) {
+  // Handle fallback mode (crypto.subtle unavailable on file:// or HTTP)
+  var isFallback = passHash.indexOf('plain:') === 0;
+  var plainPass = isFallback ? passHash.substring(6) : null;
+  var adminMatch = isFallback
+    ? (user === ADMIN_USER && (ADMIN_PASS_HASH === DEFAULT_PASS_HASH ? plainPass === DEFAULT_PASS_PLAIN : false))
+    : (user === ADMIN_USER && passHash === ADMIN_PASS_HASH);
+  if (adminMatch) {
     CURRENT_USER_ROLE = 'admin';
     CURRENT_USER_PERMS = null;
     sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
@@ -2085,7 +2102,10 @@ attemptLogin = async function() {
   // Check managed users
   var users = getManagedUsers();
   for (var i = 0; i < users.length; i++) {
-    if (users[i].username === user && users[i].passHash === passHash && users[i].active !== false) {
+    var userMatch = isFallback
+      ? (users[i].username === user && users[i].plainPass === plainPass && users[i].active !== false)
+      : (users[i].username === user && users[i].passHash === passHash && users[i].active !== false);
+    if (userMatch) {
       CURRENT_USER_ROLE = users[i].role;
       CURRENT_USER_PERMS = users[i];
       sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
@@ -2289,6 +2309,7 @@ async function addManagedUser() {
     username: username,
     displayName: displayName || username,
     passHash: passHash,
+    plainPass: password,
     role: role,
     departments: departments,
     platforms: platforms,
