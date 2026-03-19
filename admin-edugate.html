@@ -7077,9 +7077,11 @@ function sortEmployeeCards() {
     return 0;
   });
   cards.forEach(function(card) { grid.appendChild(card); });
-  // Update sort button icon
-  var btn = document.querySelector('#empSortField')?.closest('div')?.querySelector('button[title="عكس الترتيب"]');
-  if (btn) btn.textContent = empMgmtSortDir === 'asc' ? '⬆️' : '⬇️';
+  // Sync sort UI
+  var sortSel = document.getElementById('empSortField');
+  if (sortSel) sortSel.value = empMgmtSortField;
+  var sortBtn = sortSel ? sortSel.parentElement.querySelector('button[title="عكس الترتيب"]') : null;
+  if (sortBtn) sortBtn.textContent = empMgmtSortDir === 'asc' ? '⬆️' : '⬇️';
   filterEmployeeCards();
 }
 
