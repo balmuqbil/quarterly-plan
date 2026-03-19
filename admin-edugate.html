@@ -6837,35 +6837,35 @@ function renderEmployeeManagement() {
         // Find platforms this employee is assigned to
         var empPlats = [];
         allData.forEach(function(t) { if (t.name === name && t.platform && empPlats.indexOf(t.platform) === -1) empPlats.push(t.platform); });
-        return \`<div class="emp-card" id="mgmt-item-employees-\${i}" data-emp-name="\${escapeAttr(name)}" data-emp-dept="\${escapeAttr(dept)}" data-emp-sec="\${escapeAttr(sec)}" data-emp-active="\${isActive ? '1' : '0'}" data-emp-absences="\${absences.length}" data-emp-contract="\${contractType}" data-emp-plats="\${escapeAttr(empPlats.join(','))}">
-          <div class="emp-card-top">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span class="emp-card-name" id="mgmt-name-employees-\${i}">\${escapeHtml(name)}</span>
-              <span class="emp-card-status \${isActive ? 'active' : 'inactive'}">\${isActive ? 'نشط' : 'غير نشط'}</span>
-              <button class="badge-contract \${contractType}" style="cursor:pointer;border:none;" onclick="event.stopPropagation();toggleEmployeeContract(\${i})" title="اضغط للتبديل">\${contractLabel}</button>
-            </div>
-          </div>
-          <div class="emp-card-meta">
-            \${dept || sec ? '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><div class="emp-card-badges">' +
+        return '<div class="emp-card" id="mgmt-item-employees-' + i + '" data-emp-name="' + escapeAttr(name) + '" data-emp-dept="' + escapeAttr(dept) + '" data-emp-sec="' + escapeAttr(sec) + '" data-emp-active="' + (isActive ? '1' : '0') + '" data-emp-absences="' + absences.length + '" data-emp-contract="' + contractType + '" data-emp-plats="' + escapeAttr(empPlats.join(',')) + '">' +
+          '<div class="emp-card-top">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span class="emp-card-name" id="mgmt-name-employees-' + i + '">' + escapeHtml(name) + '</span>' +
+              '<span class="emp-card-status ' + (isActive ? 'active' : 'inactive') + '">' + (isActive ? 'نشط' : 'غير نشط') + '</span>' +
+              '<button class="badge-contract ' + contractType + '" style="cursor:pointer;border:none;" onclick="event.stopPropagation();toggleEmployeeContract(' + i + ')" title="اضغط للتبديل">' + contractLabel + '</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="emp-card-meta">' +
+            (dept || sec ? '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><div class="emp-card-badges">' +
               (dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : '') +
               (sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : '') +
-            '</div></div>' : '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><span style="color:#f59e0b;font-size:11px;">لم يتم تعيين الإدارة</span></div>'}
-            <div class="emp-card-meta-row">
-              <span class="meta-icon">📅</span>
-              <span>\${startDate ? escapeHtml(startDate) + (endDate ? ' ← ' + escapeHtml(endDate) : ' ← الآن') : '<span style="color:#f59e0b;">لم يحدد تاريخ البدء</span>'}</span>
-            </div>
-            \${absences.length > 0 ? '<div class="emp-card-meta-row"><span class="meta-icon">🔴</span><div class="emp-card-badges">' +
+            '</div></div>' : '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><span style="color:#f59e0b;font-size:11px;">لم يتم تعيين الإدارة</span></div>') +
+            '<div class="emp-card-meta-row">' +
+              '<span class="meta-icon">📅</span>' +
+              '<span>' + (startDate ? escapeHtml(startDate) + (endDate ? ' ← ' + escapeHtml(endDate) : ' ← الآن') : '<span style="color:#f59e0b;">لم يحدد تاريخ البدء</span>') + '</span>' +
+            '</div>' +
+            (absences.length > 0 ? '<div class="emp-card-meta-row"><span class="meta-icon">🔴</span><div class="emp-card-badges">' +
               absences.map(function(a) {
                 return '<span class="emp-absence-tag" onclick="manageAbsences(' + i + ')" title="' + escapeAttr((a.reason || 'غياب') + ': ' + a.from + ' → ' + a.to) + '">' + escapeHtml(a.from) + ' → ' + escapeHtml(a.to) + '</span>';
               }).join('') +
-            '</div></div>' : ''}
-          </div>
-          <div class="emp-card-actions">
-            <button class="mgmt-action-btn" title="إدارة الغياب" onclick="manageAbsences(\${i})" style="font-size:14px;">🔴</button>
-            <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',\${i})">✏️</button>
-            <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',\${i})">🗑️</button>
-          </div>
-        </div>\`;
+            '</div></div>' : '') +
+          '</div>' +
+          '<div class="emp-card-actions">' +
+            '<button class="mgmt-action-btn" title="إدارة الغياب" onclick="manageAbsences(' + i + ')" style="font-size:14px;">🔴</button>' +
+            '<button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem(\'employees\',' + i + ')">✏️</button>' +
+            '<button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem(\'employees\',' + i + ')">🗑️</button>' +
+          '</div>' +
+        '</div>';
       }).join('')}
       ${items.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--text-light);font-size:13px;grid-column:1/-1;">لا يوجد موظفون — أضف موظف جديد أدناه</div>' : ''}
     </div>
