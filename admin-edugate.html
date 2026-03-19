@@ -803,6 +803,7 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div class="logo">📊</div>
     <h1>لوحة تحكم خطة العمل</h1>
     <p>الربعية — تسجيل دخول المسؤول</p>
+    <form id="loginForm" onsubmit="event.preventDefault();attemptLogin();" autocomplete="on">
     <div class="login-field">
       <label>اسم المستخدم</label>
       <input type="text" id="loginUser" placeholder="admin" autocomplete="username">
@@ -811,8 +812,9 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
       <label>كلمة المرور</label>
       <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <button class="login-btn" onclick="attemptLogin()">تسجيل الدخول</button>
+    <button type="submit" class="login-btn">تسجيل الدخول</button>
     <div class="login-error" id="loginError"></div>
+    </form>
   </div>
 </div>
 
