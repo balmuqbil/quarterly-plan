@@ -1423,6 +1423,10 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
             <div style="font-size:11px;font-weight:700;color:var(--text-light);cursor:pointer;display:flex;align-items:center;gap:4px;" onclick="this.parentElement.querySelector('#rpExcludedList').style.display=this.parentElement.querySelector('#rpExcludedList').style.display==='none'?'block':'none';this.querySelector('.exc-toggle').textContent=this.parentElement.querySelector('#rpExcludedList').style.display==='none'?'▶':'▼'"><span class="exc-toggle">▶</span> غير متاحين <span id="rpExcludedCount" style="font-weight:400;"></span></div>
             <div id="rpExcludedList" style="display:none;margin-top:6px;max-height:200px;overflow-y:auto;"></div>
           </div>
+          <div id="rpRequestableSection" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
+            <div style="font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:4px;" onclick="this.parentElement.querySelector('#rpRequestableList').style.display=this.parentElement.querySelector('#rpRequestableList').style.display==='none'?'block':'none';this.querySelector('.req-toggle').textContent=this.parentElement.querySelector('#rpRequestableList').style.display==='none'?'▶':'▼'"><span class="req-toggle">▶</span> 📬 طلب موظف من فريق آخر <span id="rpRequestableCount" style="font-weight:400;"></span></div>
+            <div id="rpRequestableList" style="display:none;margin-top:6px;max-height:250px;overflow-y:auto;"></div>
+          </div>
         </div>
       </div>
       <div class="rp-right">
@@ -4427,7 +4431,7 @@ function renderResourcePlanner() {
   });
 
   // Available employees (occ < 100%, active, and not on leave)
-  var available = employees.filter(function(emp) {
+  var allAvailable = employees.filter(function(emp) {
     var name = typeof emp === 'string' ? emp : emp.name;
     if (!name) return false;
     if (!wasActiveInMonth(emp, month, year)) return false;
@@ -4435,6 +4439,19 @@ function renderResourcePlanner() {
     var used = empOcc[name] || 0;
     return used < 100;
   });
+  // For non-admin: split into direct team (matching dept) vs requestable (other depts)
+  var available = allAvailable;
+  var requestable = [];
+  if (!isAdmin() && CURRENT_USER_PERMS && CURRENT_USER_PERMS.departments && CURRENT_USER_PERMS.departments.length > 0) {
+    available = allAvailable.filter(function(emp) {
+      var dept = typeof emp === 'object' ? (emp.department || '') : '';
+      return userCanAccessDept(dept);
+    });
+    requestable = allAvailable.filter(function(emp) {
+      var dept = typeof emp === 'object' ? (emp.department || '') : '';
+      return !userCanAccessDept(dept);
+    });
+  }
   if (search) {
     available = available.filter(function(emp) {
       var name = typeof emp === 'string' ? emp : emp.name;
@@ -4524,6 +4541,50 @@ function renderResourcePlanner() {
     }).join('');
   } else {
     excSection.style.display = 'none';
+  }
+
+  // Render requestable employees (other departments) for non-admin
+  var reqSection = document.getElementById('rpRequestableSection');
+  var reqList = document.getElementById('rpRequestableList');
+  var reqCount = document.getElementById('rpRequestableCount');
+  if (requestable.length > 0 && !isAdmin()) {
+    // Apply search filter to requestable too
+    var filteredRequestable = requestable;
+    if (search) {
+      filteredRequestable = requestable.filter(function(emp) {
+        var name = typeof emp === 'string' ? emp : emp.name;
+        var dept = typeof emp === 'object' ? (emp.department || '') : '';
+        var sec = typeof emp === 'object' ? (emp.section || '') : '';
+        return name.toLowerCase().indexOf(search) !== -1 || dept.toLowerCase().indexOf(search) !== -1 || sec.toLowerCase().indexOf(search) !== -1;
+      });
+    }
+    // Sort requestable by priority too
+    filteredRequestable.sort(function(a, b) {
+      var pa = rpEmpPriority(a);
+      var pb = rpEmpPriority(b);
+      if (pa !== pb) return pa - pb;
+      var na = typeof a === 'string' ? a : a.name;
+      var nb = typeof b === 'string' ? b : b.name;
+      return na.localeCompare(nb, 'ar');
+    });
+    reqSection.style.display = 'block';
+    reqCount.textContent = '(' + filteredRequestable.length + ')';
+    reqList.innerHTML = filteredRequestable.map(function(emp) {
+      var name = typeof emp === 'string' ? emp : emp.name;
+      var dept = typeof emp === 'object' ? (emp.department || '') : '';
+      var sec = typeof emp === 'object' ? (emp.section || '') : '';
+      var used = empOcc[name] || 0;
+      var avail = 100 - used;
+      var availClass = avail <= 30 ? ' low' : '';
+      var ct = typeof emp === 'object' ? (emp.contractType || 'inhouse') : 'inhouse';
+      var ctBadge = '<span class="badge-contract ' + ct + '" style="margin-right:4px;">' + (ct === 'offshore' ? 'Off' : 'In') + '</span>';
+      return '<div class="rp-emp-item" draggable="true" ondragstart="rpDragStart(event,\'' + escapeJS(name) + '\',' + avail + ')" style="border-right:3px solid var(--accent);opacity:0.85;">' +
+        '<div><div class="rp-emp-name">' + ctBadge + escapeHtml(name) + '</div>' +
+        '<div class="rp-emp-meta">' + escapeHtml(dept) + (sec ? ' / ' + escapeHtml(sec) : '') + '</div></div>' +
+        '<div class="rp-emp-avail' + availClass + '">' + avail + '%</div></div>';
+    }).join('');
+  } else if (reqSection) {
+    reqSection.style.display = 'none';
   }
 
   // Render right panel — platform cards
