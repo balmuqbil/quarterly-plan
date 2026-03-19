@@ -86,6 +86,8 @@ body { font-family:'Tajawal',sans-serif; background:#f1f5f9; color:var(--text-pr
 .nav-item:hover { background:rgba(255,255,255,0.05); color:#fff; }
 .nav-item.active { background:rgba(99,102,241,0.15); color:#fff; }
 .nav-item .icon { font-size:20px; width:28px; text-align:center; }
+.nav-item .nav-badge { background:#ef4444; color:#fff; font-size:10px; font-weight:700; min-width:18px; height:18px; line-height:18px; text-align:center; border-radius:9px; padding:0 5px; margin-right:auto; margin-left:4px; display:none; }
+.nav-item .nav-badge.show { display:inline-block; }
 .sidebar-footer { padding:16px 24px; border-top:1px solid rgba(255,255,255,0.08); }
 .sidebar-footer .user-info { display:flex; align-items:center; gap:10px; }
 .sidebar-footer .avatar {
@@ -837,7 +839,7 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
       <span class="icon">💻</span> المنصات
     </div>
     <div class="nav-item" data-section="tasks">
-      <span class="icon">📋</span> المهام
+      <span class="icon">📋</span> المهام <span class="nav-badge" id="pendingBadge"></span>
     </div>
     <div class="nav-item" data-section="deptsAndSections">
       <span class="icon">🏢</span> الإدارات والأقسام
@@ -2320,6 +2322,22 @@ logout = function() {
   _origLogout();
 };
 
+// Pending allocation requests badge
+function updatePendingBadge() {
+  var badge = document.getElementById('pendingBadge');
+  if (!badge) return;
+  var count = 0;
+  for (var i = 0; i < allData.length; i++) {
+    if ((allData[i].status || 'pending') === 'pending') count++;
+  }
+  if (count > 0) {
+    badge.textContent = count;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+}
+
 // ==================== DATA CLEANING ====================
 function normalizeOccupancy(val) {
   let v = parseFloat(val) || 0;
@@ -2560,6 +2578,7 @@ function applyFilters() {
   if (month !== 'all') filteredData = filteredData.filter(r => r.month === month);
   approvedData = filteredData.filter(function(r) { return (r.status || 'pending') === 'approved'; });
   updateKPIs(); renderCharts(); currentPage = 1; renderTable(); renderHeatmap();
+  updatePendingBadge();
 }
 
 // ==================== KPIs ====================
@@ -3268,7 +3287,7 @@ function renderTasksSection() {
       <td>${escapeHtml((r.month||'') + (r.year ? ' ' + r.year : ''))}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeAttr(r.description||'')}">${escapeHtml(r.description||'') || '—'}</td>
       <td style="font-size:11px;color:var(--text-light);white-space:nowrap;direction:ltr;text-align:center;">${formatTimestamp(r.timestamp)}</td>
-      <td>${statusBadge}</td>
+      <td>${statusBadge}${r.requestedBy ? '<div style="font-size:10px;color:var(--text-light);margin-top:2px;">📬 ' + escapeHtml(r.requestedBy) + '</div>' : ''}</td>
       <td>
         <div class="task-crud-actions">
           <button class="task-crud-btn approve-btn" title="اعتماد" onclick="updateTaskStatus(${idx},'approved')"${approveDisabled}>✅</button>
@@ -5012,7 +5031,7 @@ function rpDrop(e, platform, squadNum) {
   // Ignore card drags in single-squad mode
   if (rpCardDragIdx !== null) { rpCardDragIdx = null; return; }
   if (!rpDragEmp) return;
-  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لتخصيص الموارد', 'error'); return; }
+  if (!userCanPlanResources()) { showMgmtToast('ليس لديك صلاحية لتخصيص الموارد', 'error'); return; }
   openRpAssignDialog(rpDragEmp, platform, rpDragAvail, squadNum || 1);
   rpDragEmp = null;
 }
@@ -5162,13 +5181,18 @@ function confirmRpAssign() {
 
   var rawSquad = document.getElementById('rpAssignDialog').dataset.squad;
   var squadNum = rawSquad === '0' ? 0 : (parseInt(rawSquad) || 1);
+  var isRequest = !isAdmin();
   var task = {
     name: empName, department: department, section: section,
     platform: platform, taskType: taskType, month: month, quarter: quarter, year: year,
     occupancy: occ, description: desc || 'تخطيط موارد', service: '',
-    status: 'approved', timestamp: new Date().toISOString(),
+    status: isRequest ? 'pending' : 'approved',
+    timestamp: new Date().toISOString(),
     squad: squadNum
   };
+  if (isRequest && CURRENT_USER_PERMS) {
+    task.requestedBy = CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username;
+  }
 
   allData.push(task);
   conflictArea.style.display = 'none';
@@ -5176,9 +5200,15 @@ function confirmRpAssign() {
   applyFilters();
   syncTaskToFirebase(task, -1, null);
   renderResourcePlanner();
-  var msg = toDelete.length > 0 ?
-    'تم حذف ' + toDelete.length + ' مهمة وتخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%' :
-    'تم تخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%';
+  updatePendingBadge();
+  var msg;
+  if (isRequest) {
+    msg = '📬 تم إرسال طلب تخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '% — بانتظار موافقة المسؤول';
+  } else {
+    msg = toDelete.length > 0 ?
+      'تم حذف ' + toDelete.length + ' مهمة وتخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%' :
+      'تم تخصيص ' + empName + ' على ' + platform + ' بنسبة ' + occ + '%';
+  }
   showMgmtToast(msg, 'success');
 }
 
