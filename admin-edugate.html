@@ -450,6 +450,9 @@ tr:hover td { background:rgba(27,131,84,0.03); }
 .badge-contract { font-size:10px; padding:2px 8px; border-radius:6px; font-weight:600; }
 .badge-contract.inhouse { background:rgba(27,131,84,0.1); color:#1B8354; }
 .badge-contract.offshore { background:rgba(139,92,246,0.1); color:#7c3aed; }
+.badge-managed { font-size:10px; padding:2px 8px; border-radius:6px; font-weight:600; }
+.badge-managed.internal { background:rgba(27,131,84,0.1); color:#1B8354; }
+.badge-managed.vendor { background:rgba(245,158,11,0.12); color:#b45309; }
 .emp-card-meta { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
 .emp-card-meta-row { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-light); }
 .emp-card-meta-row .meta-icon { width:16px; text-align:center; flex-shrink:0; }
@@ -2545,10 +2548,11 @@ function renderPlatformsSection() {
     var fte = p._fte.toFixed(1);
     var avgOcc = p._avgOcc.toFixed(0);
     var projBadges = renderProjectBadges(p.name);
+    var managedBadge = getPlatformManagedBadge(p.name);
     return `<div class="detail-card platform-card" onclick="showPlatformDrill('` + escapeJS(p.name) + `')">
       <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
       <div class="detail-card-header">
-        <div class="detail-card-name">${escapeHtml(p.name)}</div>
+        <div class="detail-card-name">${escapeHtml(p.name)} ${managedBadge}</div>
         <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${p.tasks} مهمة</span>
       </div>
       ${projBadges ? '<div style="margin-bottom:8px;">' + projBadges + '</div>' : ''}
@@ -4245,9 +4249,10 @@ function renderResourcePlanner() {
     var hasPoolActive = numSquads > 1 || rpHasPool(platform) || poolTasks.length > 0;
     var bodyDropHandler = hasPoolActive ? '' : ' ondragover="rpDragOver(event)" ondragleave="rpDragLeave(event)" ondrop="rpDrop(event,\'' + escapeJS(platform) + '\',1)"';
     var rpProjBadges = renderProjectBadges(platform);
+    var rpManagedBadge = getPlatformManagedBadge(platform);
     return '<div class="rp-plat-card">' +
       '<div class="rp-plat-header" onclick="rpTogglePlat(this)">' +
-        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span>' + (rpProjBadges ? '<span style="margin-right:4px;">' + rpProjBadges + '</span>' : '') + '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span class="rp-plat-toggle">▼</span><span class="rp-plat-name">' + escapeHtml(platform) + '</span>' + rpManagedBadge + (rpProjBadges ? '<span style="margin-right:4px;">' + rpProjBadges + '</span>' : '') + '</div>' +
         '<div class="rp-plat-stats">' + empCount + ' موظف · ' + fte + ' FTEs · ' + tasks.length + ' مهمة · ' + numSquads + ' فريق</div>' +
       '</div>' +
       '<div class="rp-plat-body"' + bodyDropHandler + '>' +
@@ -5719,7 +5724,7 @@ function getMgmtData() {
     } catch(e) { data[key] = [...(DEFAULT_MGMT[key] || [])]; }
   });
   // Object categories
-  ['sections', 'sectionCapacity', 'sectionTaskTypes'].forEach(key => {
+  ['sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta'].forEach(key => {
     try {
       const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + key);
       data[key] = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULT_MGMT[key] || {}));
@@ -5772,6 +5777,24 @@ function renderProjectBadges(platformName) {
       (p.endDate ? '<span style="font-size:9px;opacity:0.7;">← ' + escapeHtml(p.endDate) + '</span>' : '') +
     '</span>';
   }).join(' ');
+}
+
+function togglePlatformManaged(platformName) {
+  var data = getMgmtData();
+  var meta = data.platformMeta || {};
+  if (!meta[platformName]) meta[platformName] = {};
+  meta[platformName].managedBy = (meta[platformName].managedBy === 'vendor') ? 'internal' : 'vendor';
+  saveMgmtList('platformMeta', meta);
+  renderDataManagement();
+  showMgmtToast(platformName + ': ' + (meta[platformName].managedBy === 'vendor' ? 'Vendor' : 'Internal'), 'success');
+}
+
+function getPlatformManagedBadge(platformName) {
+  var mgmt = getMgmtData();
+  var meta = (mgmt.platformMeta || {})[platformName];
+  var managed = meta && meta.managedBy === 'vendor' ? 'vendor' : 'internal';
+  var label = managed === 'vendor' ? 'Vendor' : 'Internal';
+  return '<span class="badge-managed ' + managed + '">' + label + '</span>';
 }
 
 function saveMgmtList(key, list) {
@@ -6407,6 +6430,11 @@ function renderDataManagement() {
           ${items.map((item, i) => `
             <div class="mgmt-item" id="mgmt-item-${cat.key}-${i}">
               <span class="mgmt-item-name" id="mgmt-name-${cat.key}-${i}">${escapeHtml(item)}</span>
+              ${cat.key === 'platforms' ? (() => {
+                var pm = (data.platformMeta || {})[item] || {};
+                var isVendor = pm.managedBy === 'vendor';
+                return '<button class="badge-managed ' + (isVendor ? 'vendor' : 'internal') + '" style="cursor:pointer;border:none;margin:0 6px;" onclick="event.stopPropagation();togglePlatformManaged(\'' + escapeAttr(item) + '\')" title="اضغط للتبديل">' + (isVendor ? 'Vendor' : 'Internal') + '</button>';
+              })() : ''}
               <div class="mgmt-item-actions">
                 <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('${cat.key}',${i})">✏️</button>
                 <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('${cat.key}',${i})">🗑️</button>
