@@ -4406,9 +4406,12 @@ function renderResourcePlanner() {
     return true;
   });
 
-  // Calculate employee occupancy for this month
+  // Calculate employee occupancy from ALL approved tasks (not filtered by platform access)
+  var allMonthApproved = allData.filter(function(r) {
+    return (r.status || 'pending') === 'approved' && r.month === month && String(r.year) === year;
+  });
   var empOcc = {};
-  monthTasks.forEach(function(r) {
+  allMonthApproved.forEach(function(r) {
     empOcc[r.name] = (empOcc[r.name] || 0) + (parseFloat(r.occupancy) || 0);
   });
 
