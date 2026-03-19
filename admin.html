@@ -4807,7 +4807,7 @@ function renderResourcePlanner() {
         squadsHtml += '<div class="rp-squad-section" data-squad="' + s + '" data-platform="' + escapeAttr(platform) + '" ' +
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">' +
           '<div class="rp-squad-header" onclick="rpToggleSquadSection(this)">' +
-            '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ <span class="rp-squad-name-label" onclick="rpStartEditSquadName(this,\'' + escapeJS(platform) + '\',' + s + ')" title="انقر لتعديل اسم الفريق" style="cursor:pointer;border-bottom:1px dashed var(--text-light);">' + rpGetSquadName(platform, s) + '</span></div>' +
+            '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ <span class="rp-squad-name-label" onclick="rpStartEditSquadName(event,this,\'' + escapeJS(platform) + '\',' + s + ')" title="انقر لتعديل اسم الفريق" style="cursor:pointer;border-bottom:1px dashed var(--text-light);">' + rpGetSquadName(platform, s) + '</span></div>' +
             '<div class="squad-stats">' + sqEmpCount + ' موظف · ' + sqFte + ' FTEs ' +
               (sqTasks.length > 0 ? '<button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
               (canRemove ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpRemoveSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="حذف الفريق">✕</button>' : '') +
@@ -4828,7 +4828,7 @@ function renderResourcePlanner() {
         '<div class="rp-squad-section" data-squad="1" data-platform="' + escapeAttr(platform) + '" ' +
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',1)">' +
           '<div class="rp-squad-header" onclick="rpToggleSquadSection(this)">' +
-            '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ <span class="rp-squad-name-label" onclick="rpStartEditSquadName(this,\'' + escapeJS(platform) + '\',1)" title="انقر لتعديل اسم الفريق" style="cursor:pointer;border-bottom:1px dashed var(--text-light);">' + rpGetSquadName(platform, 1) + '</span></div>' +
+            '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ <span class="rp-squad-name-label" onclick="rpStartEditSquadName(event,this,\'' + escapeJS(platform) + '\',1)" title="انقر لتعديل اسم الفريق" style="cursor:pointer;border-bottom:1px dashed var(--text-light);">' + rpGetSquadName(platform, 1) + '</span></div>' +
             '<div class="squad-stats">' + sq1EmpCount + ' موظف · ' + sq1Fte + ' FTEs' +
               (sq1Tasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',1)" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
             '</div>' +
@@ -4980,8 +4980,8 @@ function rpGetSquadName(platform, squadNum) {
   var key = platform + '::' + squadNum;
   return names[key] || (escapeHtml(platform) + ' ' + squadNum);
 }
-function rpStartEditSquadName(el, platform, squadNum) {
-  event.stopPropagation();
+function rpStartEditSquadName(ev, el, platform, squadNum) {
+  ev.stopPropagation(); ev.preventDefault();
   var currentName = rpGetSquadNames()[platform + '::' + squadNum] || (platform + ' ' + squadNum);
   var input = document.createElement('input');
   input.type = 'text';
