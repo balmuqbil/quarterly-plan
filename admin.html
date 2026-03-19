@@ -1425,7 +1425,7 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
             <div id="rpExcludedList" style="display:none;margin-top:6px;max-height:200px;overflow-y:auto;"></div>
           </div>
           <div id="rpRequestableSection" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
-            <div style="font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:4px;" onclick="this.parentElement.querySelector('#rpRequestableList').style.display=this.parentElement.querySelector('#rpRequestableList').style.display==='none'?'block':'none';this.querySelector('.req-toggle').textContent=this.parentElement.querySelector('#rpRequestableList').style.display==='none'?'▶':'▼'"><span class="req-toggle">▶</span> 📬 طلب موظف من فريق آخر <span id="rpRequestableCount" style="font-weight:400;color:var(--text-light);"></span></div>
+            <div style="font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:4px;" onclick="this.parentElement.querySelector('#rpRequestableList').style.display=this.parentElement.querySelector('#rpRequestableList').style.display==='none'?'block':'none';this.querySelector('.req-toggle').textContent=this.parentElement.querySelector('#rpRequestableList').style.display==='none'?'▶':'▼'"><span class="req-toggle">▶</span> 📬 طلب نقل موظف <span id="rpRequestableCount" style="font-weight:400;color:var(--text-light);"></span></div>
             <div id="rpRequestableList" style="display:none;margin-top:6px;max-height:250px;overflow-y:auto;"></div>
           </div>
         </div>
@@ -4444,19 +4444,7 @@ function renderResourcePlanner() {
     var used = empOcc[name] || 0;
     return used < 100;
   });
-  // For non-admin: split into direct team (matching dept) vs requestable (other depts)
   var available = allAvailable;
-  var requestable = [];
-  if (!isAdmin() && CURRENT_USER_PERMS && CURRENT_USER_PERMS.departments && CURRENT_USER_PERMS.departments.length > 0) {
-    available = allAvailable.filter(function(emp) {
-      var dept = typeof emp === 'object' ? (emp.department || '') : '';
-      return userCanAccessDept(dept);
-    });
-    requestable = allAvailable.filter(function(emp) {
-      var dept = typeof emp === 'object' ? (emp.department || '') : '';
-      return !userCanAccessDept(dept);
-    });
-  }
   if (search) {
     available = available.filter(function(emp) {
       var name = typeof emp === 'string' ? emp : emp.name;
@@ -4548,46 +4536,68 @@ function renderResourcePlanner() {
     excSection.style.display = 'none';
   }
 
-  // Render requestable employees (other departments) for non-admin
+  // Render assigned employees list (for non-admin: request reassignment)
   var reqSection = document.getElementById('rpRequestableSection');
   var reqList = document.getElementById('rpRequestableList');
   var reqCount = document.getElementById('rpRequestableCount');
-  if (requestable.length > 0 && !isAdmin()) {
-    // Apply search filter to requestable too
-    var filteredRequestable = requestable;
+  if (!isAdmin()) {
+    // Get ALL approved tasks for this month (including platforms user can't access)
+    var allMonthTasks = allData.filter(function(r) {
+      return (r.status || 'pending') === 'approved' && r.month === month && String(r.year) === year && r.platform !== 'إجازة';
+    });
+    // Build assigned employees map: name → [{platform, taskType, occupancy}]
+    var assignedMap = {};
+    allMonthTasks.forEach(function(r) {
+      if (!r.name) return;
+      if (!assignedMap[r.name]) assignedMap[r.name] = [];
+      assignedMap[r.name].push({ platform: r.platform || 'بدون منصة', taskType: r.taskType || '', occupancy: parseFloat(r.occupancy) || 0 });
+    });
+    // Build list of assigned employees with their details
+    var assignedList = [];
+    var empMap = {};
+    employees.forEach(function(emp) {
+      var n = typeof emp === 'object' ? emp.name : emp;
+      if (n) empMap[n] = emp;
+    });
+    Object.keys(assignedMap).forEach(function(name) {
+      var emp = empMap[name];
+      var dept = emp && typeof emp === 'object' ? (emp.department || '') : '';
+      var sec = emp && typeof emp === 'object' ? (emp.section || '') : '';
+      var ct = emp && typeof emp === 'object' ? (emp.contractType || 'inhouse') : 'inhouse';
+      var assignments = assignedMap[name];
+      var totalOcc = 0;
+      assignments.forEach(function(a) { totalOcc += a.occupancy; });
+      var platNames = assignments.map(function(a) { return a.platform; });
+      // Remove duplicates
+      var uniquePlats = [];
+      platNames.forEach(function(p) { if (uniquePlats.indexOf(p) === -1) uniquePlats.push(p); });
+      assignedList.push({ name: name, dept: dept, sec: sec, ct: ct, platforms: uniquePlats, totalOcc: totalOcc, avail: Math.max(0, 100 - totalOcc) });
+    });
+    // Apply search filter
+    var filteredAssigned = assignedList;
     if (search) {
-      filteredRequestable = requestable.filter(function(emp) {
-        var name = typeof emp === 'string' ? emp : emp.name;
-        var dept = typeof emp === 'object' ? (emp.department || '') : '';
-        var sec = typeof emp === 'object' ? (emp.section || '') : '';
-        return name.toLowerCase().indexOf(search) !== -1 || dept.toLowerCase().indexOf(search) !== -1 || sec.toLowerCase().indexOf(search) !== -1;
+      filteredAssigned = assignedList.filter(function(e) {
+        return e.name.toLowerCase().indexOf(search) !== -1 || e.dept.toLowerCase().indexOf(search) !== -1 || e.sec.toLowerCase().indexOf(search) !== -1 || e.platforms.join(' ').toLowerCase().indexOf(search) !== -1;
       });
     }
-    // Sort requestable by priority too
-    filteredRequestable.sort(function(a, b) {
-      var pa = rpEmpPriority(a);
-      var pb = rpEmpPriority(b);
-      if (pa !== pb) return pa - pb;
-      var na = typeof a === 'string' ? a : a.name;
-      var nb = typeof b === 'string' ? b : b.name;
-      return na.localeCompare(nb, 'ar');
-    });
-    reqSection.style.display = 'block';
-    reqCount.textContent = '(' + filteredRequestable.length + ')';
-    reqList.innerHTML = filteredRequestable.map(function(emp) {
-      var name = typeof emp === 'string' ? emp : emp.name;
-      var dept = typeof emp === 'object' ? (emp.department || '') : '';
-      var sec = typeof emp === 'object' ? (emp.section || '') : '';
-      var used = empOcc[name] || 0;
-      var avail = 100 - used;
-      var availClass = avail <= 30 ? ' low' : '';
-      var ct = typeof emp === 'object' ? (emp.contractType || 'inhouse') : 'inhouse';
-      var ctBadge = '<span class="badge-contract ' + ct + '" style="margin-right:4px;">' + (ct === 'offshore' ? 'Off' : 'In') + '</span>';
-      return '<div class="rp-emp-item" draggable="true" ondragstart="rpDragStart(event,\'' + escapeJS(name) + '\',' + avail + ')" style="border-right:3px solid var(--accent);opacity:0.85;">' +
-        '<div><div class="rp-emp-name">' + ctBadge + escapeHtml(name) + '</div>' +
-        '<div class="rp-emp-meta">' + escapeHtml(dept) + (sec ? ' / ' + escapeHtml(sec) : '') + '</div></div>' +
-        '<div class="rp-emp-avail' + availClass + '">' + avail + '%</div></div>';
-    }).join('');
+    // Sort by name
+    filteredAssigned.sort(function(a, b) { return a.name.localeCompare(b.name, 'ar'); });
+    if (filteredAssigned.length > 0) {
+      reqSection.style.display = 'block';
+      reqCount.textContent = '(' + filteredAssigned.length + ')';
+      reqList.innerHTML = filteredAssigned.map(function(e) {
+        var ctBadge = '<span class="badge-contract ' + e.ct + '" style="margin-right:4px;">' + (e.ct === 'offshore' ? 'Off' : 'In') + '</span>';
+        var availClass = e.avail <= 30 ? ' low' : '';
+        var platLabel = e.platforms.map(function(p) { return escapeHtml(p); }).join('، ');
+        return '<div class="rp-emp-item" draggable="true" ondragstart="rpDragStart(event,\'' + escapeJS(e.name) + '\',' + e.avail + ')" style="border-right:3px solid var(--accent);opacity:0.85;">' +
+          '<div><div class="rp-emp-name">' + ctBadge + escapeHtml(e.name) + '</div>' +
+          '<div class="rp-emp-meta">' + escapeHtml(e.dept) + (e.sec ? ' / ' + escapeHtml(e.sec) : '') + '</div>' +
+          '<div class="rp-emp-meta" style="color:var(--accent);font-size:9px;">📌 ' + platLabel + '</div></div>' +
+          '<div class="rp-emp-avail' + availClass + '">' + e.avail + '%</div></div>';
+      }).join('');
+    } else {
+      reqSection.style.display = 'none';
+    }
   } else if (reqSection) {
     reqSection.style.display = 'none';
   }
