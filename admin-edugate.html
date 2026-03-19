@@ -848,6 +848,9 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div class="nav-item" data-section="dataManagement">
       <span class="icon">🗂️</span> إدارة البيانات
     </div>
+    <div class="nav-item" data-section="employeeManagement" id="navEmpMgmt" style="display:none;">
+      <span class="icon">👥</span> إدارة الموظفين
+    </div>
     <div class="nav-item" data-section="resourcePlanner"><span class="icon">📋</span> تخطيط الموارد</div>
     <div class="nav-item" data-section="userManagement" id="navUserMgmt" style="display:none;">
       <span class="icon">👤</span> إدارة المستخدمين
@@ -1488,13 +1491,27 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
         <div class="subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُحفظ محلياً في المتصفح وتُطبق على نموذج الموظف</div>
       </div>
       <div class="top-actions">
-        <button class="export-btn" onclick="exportEmployeesExcel()">📊 تصدير الموظفين Excel</button>
         <button class="export-btn" onclick="exportMgmtData()">📥 تصدير الإعدادات</button>
         <label class="export-btn" style="cursor:pointer;">📤 استيراد <input type="file" accept=".json" style="display:none" onchange="importMgmtData(event)"></label>
       </div>
     </div>
     <div class="mgmt-grid" id="mgmtGrid"></div>
     <div class="mgmt-save-hint">💡 التغييرات تُحفظ تلقائياً وتُطبق فوراً على نموذج الموظف</div>
+  </div>
+
+  <!-- ===== EMPLOYEE MANAGEMENT SECTION ===== -->
+  <div class="section-view" id="section-employeeManagement">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>👥 إدارة الموظفين</h1>
+        <div class="subtitle">إضافة، تعديل، وحذف بيانات الموظفين — تُحفظ محلياً في المتصفح</div>
+      </div>
+      <div class="top-actions">
+        <button class="export-btn" onclick="exportEmployeesExcel()">📊 تصدير Excel</button>
+      </div>
+    </div>
+    <div id="empMgmtGrid"></div>
   </div>
 
   <!-- ===== USER MANAGEMENT SECTION ===== -->
@@ -1927,6 +1944,7 @@ function navigateTo(section) {
   if (section === 'deptsAndSections') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDeptsAndSections(); }
   if (section === 'resourcePlanner') { initRpDefaults(); renderResourcePlanner(); }
   if (section === 'dataManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDataManagement(); }
+  if (section === 'employeeManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderEmployeeManagement(); }
   if (section === 'userManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderUserManagement(); }
   if (section === 'settings') { if (!isAdmin()) { navigateTo('dashboard'); return; } openSettings(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2102,6 +2120,9 @@ function applyUserPermissions() {
   // Hide data management for non-admin
   var navDataMgmt = document.querySelector('.nav-item[data-section="dataManagement"]');
   if (navDataMgmt) navDataMgmt.style.display = isAdmin ? '' : 'none';
+
+  var navEmpMgmt = document.getElementById('navEmpMgmt');
+  if (navEmpMgmt) navEmpMgmt.style.display = isAdmin ? '' : 'none';
 
   // Hide departments & sections for non-admin
   var navDepts = document.querySelector('.nav-item[data-section="deptsAndSections"]');
@@ -6738,147 +6759,170 @@ function hideTestDataBanner() {
   if (banner) banner.style.display = 'none';
 }
 
+function renderEmployeeManagement() {
+  const data = getMgmtData();
+  const items = data.employees;
+  const depts = data.departments || [];
+  const secs = data.sections || {};
+  const plats = data.platforms || [];
+  const activeCount = items.filter(function(e) { return typeof e === 'string' || !e.endDate; }).length;
+  const inactiveCount = items.length - activeCount;
+
+  var html = `<div class="mgmt-card" style="grid-column: 1 / -1; border:none; box-shadow:none; padding:0;">
+    <div class="mgmt-card-header">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="emp-card-status active">${activeCount} نشط</span>
+        ${inactiveCount > 0 ? '<span class="emp-card-status inactive">' + inactiveCount + ' غير نشط</span>' : ''}
+        <span class="mgmt-card-count">${items.length} إجمالي</span>
+      </div>
+    </div>
+    <div class="emp-filter-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+      <input type="text" class="search-box" id="empSearchFilter" placeholder="🔍 بحث بالاسم..." oninput="filterEmployeeCards()" style="flex:1;min-width:180px;max-width:300px;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;">
+      <select id="empDeptFilter" class="quarter-filter" onchange="updateEmpFilterSections();filterEmployeeCards()" style="min-width:130px;">
+        <option value="all">جميع الإدارات</option>
+        ${depts.map(d => '<option value="' + escapeAttr(d) + '">' + escapeHtml(d) + '</option>').join('')}
+      </select>
+      <select id="empSecFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">
+        <option value="all">جميع الأقسام</option>
+      </select>
+      <select id="empPlatFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">
+        <option value="all">جميع المنصات</option>
+        ${plats.map(p => '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>').join('')}
+      </select>
+      <select id="empStatusFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:110px;">
+        <option value="all">الكل</option>
+        <option value="active">نشط</option>
+        <option value="inactive">غير نشط</option>
+        <option value="has-absence">لديه غياب</option>
+        <option value="no-dept">بدون إدارة</option>
+      </select>
+      <span id="empFilterCount" style="font-size:12px;color:var(--text-light);margin-right:4px;"></span>
+    </div>
+    <div class="emp-grid" id="mgmt-list-employees">
+      ${items.map((emp, i) => {
+        const name = typeof emp === 'string' ? emp : emp.name;
+        const dept = typeof emp === 'string' ? '' : (emp.department || '');
+        const sec = typeof emp === 'string' ? '' : (emp.section || '');
+        const startDate = (typeof emp === 'object' ? emp.startDate : '') || '';
+        const endDate = (typeof emp === 'object' ? emp.endDate : '') || '';
+        const absences = (typeof emp === 'object' && Array.isArray(emp.absences)) ? emp.absences : [];
+        const contractType = (typeof emp === 'object' ? emp.contractType : '') || 'inhouse';
+        const contractLabel = contractType === 'offshore' ? 'Offshore' : 'Inhouse';
+        const isActive = !endDate;
+        // Find platforms this employee is assigned to
+        var empPlats = [];
+        allData.forEach(function(t) { if (t.name === name && t.platform && empPlats.indexOf(t.platform) === -1) empPlats.push(t.platform); });
+        return \`<div class="emp-card" id="mgmt-item-employees-\${i}" data-emp-name="\${escapeAttr(name)}" data-emp-dept="\${escapeAttr(dept)}" data-emp-sec="\${escapeAttr(sec)}" data-emp-active="\${isActive ? '1' : '0'}" data-emp-absences="\${absences.length}" data-emp-contract="\${contractType}" data-emp-plats="\${escapeAttr(empPlats.join(','))}">
+          <div class="emp-card-top">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="emp-card-name" id="mgmt-name-employees-\${i}">\${escapeHtml(name)}</span>
+              <span class="emp-card-status \${isActive ? 'active' : 'inactive'}">\${isActive ? 'نشط' : 'غير نشط'}</span>
+              <button class="badge-contract \${contractType}" style="cursor:pointer;border:none;" onclick="event.stopPropagation();toggleEmployeeContract(\${i})" title="اضغط للتبديل">\${contractLabel}</button>
+            </div>
+          </div>
+          <div class="emp-card-meta">
+            \${dept || sec ? '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><div class="emp-card-badges">' +
+              (dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : '') +
+              (sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : '') +
+            '</div></div>' : '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><span style="color:#f59e0b;font-size:11px;">لم يتم تعيين الإدارة</span></div>'}
+            <div class="emp-card-meta-row">
+              <span class="meta-icon">📅</span>
+              <span>\${startDate ? escapeHtml(startDate) + (endDate ? ' ← ' + escapeHtml(endDate) : ' ← الآن') : '<span style="color:#f59e0b;">لم يحدد تاريخ البدء</span>'}</span>
+            </div>
+            \${absences.length > 0 ? '<div class="emp-card-meta-row"><span class="meta-icon">🔴</span><div class="emp-card-badges">' +
+              absences.map(function(a) {
+                return '<span class="emp-absence-tag" onclick="manageAbsences(' + i + ')" title="' + escapeAttr((a.reason || 'غياب') + ': ' + a.from + ' → ' + a.to) + '">' + escapeHtml(a.from) + ' → ' + escapeHtml(a.to) + '</span>';
+              }).join('') +
+            '</div></div>' : ''}
+          </div>
+          <div class="emp-card-actions">
+            <button class="mgmt-action-btn" title="إدارة الغياب" onclick="manageAbsences(\${i})" style="font-size:14px;">🔴</button>
+            <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',\${i})">✏️</button>
+            <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',\${i})">🗑️</button>
+          </div>
+        </div>\`;
+      }).join('')}
+      ${items.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--text-light);font-size:13px;grid-column:1/-1;">لا يوجد موظفون — أضف موظف جديد أدناه</div>' : ''}
+    </div>
+    <div style="border-top:1.5px dashed var(--border);margin-top:12px;padding-top:14px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--accent);">➕ إضافة موظف جديد</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">الاسم *</label>
+          <input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="width:100%;" onkeydown="if(event.key==='Enter')addMgmtItem('employees')">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">الإدارة *</label>
+          <select id="mgmt-emp-dept" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;" onchange="updateEmpSectionDropdown()"><option value="">— اختر الإدارة —</option>${depts.map(d=>'<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>').join('')}</select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">القسم *</label>
+          <select id="mgmt-emp-section" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;"><option value="">— اختر القسم —</option></select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">📅 تاريخ البدء</label>
+          <select id="mgmt-emp-start" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;">
+            ${(function() {
+              var opts = '';
+              ['2025','2026','2027','2028','2029','2030'].forEach(function(y) {
+                MONTHS.forEach(function(m) {
+                  var v = m + ' ' + y;
+                  var sel = (v === 'يناير 2026') ? ' selected' : '';
+                  opts += '<option value="' + v + '"' + sel + '>' + v + '</option>';
+                });
+              });
+              return opts;
+            })()}
+          </select>
+        </div>
+      </div>
+      <div class="mgmt-add-emp-row" style="margin-bottom:8px;">
+        <select id="mgmt-emp-contract" style="min-width:100px;">
+          <option value="inhouse">Inhouse</option>
+          <option value="offshore">Offshore</option>
+        </select>
+      </div>
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="mgmt-add-btn" onclick="addMgmtItem('employees')">+ إضافة الموظف</button>
+      </div>
+    </div>
+    <div class="mgmt-bulk-import">
+      <div class="mgmt-bulk-header">
+        <span>📋 استيراد جماعي</span>
+        <button class="mgmt-template-btn" onclick="downloadEmployeeTemplate()">⬇️ تحميل القالب</button>
+      </div>
+      <div class="mgmt-bulk-body">
+        <label class="mgmt-bulk-upload-btn">
+          📄 رفع ملف CSV أو TXT
+          <input type="file" accept=".csv,.txt" style="display:none" onchange="importEmployeesBulk(event)">
+        </label>
+        <span class="mgmt-bulk-or">أو</span>
+        <button class="mgmt-bulk-paste-btn" onclick="showBulkPasteDialog()">📝 لصق قائمة</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.getElementById('empMgmtGrid').innerHTML = html;
+}
+
+function toggleEmployeeContract(empIndex) {
+  var data = getMgmtData();
+  var emp = data.employees[empIndex];
+  if (!emp || typeof emp === 'string') return;
+  emp.contractType = (emp.contractType === 'offshore') ? 'inhouse' : 'offshore';
+  data.employees[empIndex] = emp;
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'employees', JSON.stringify(data.employees));
+  renderEmployeeManagement();
+}
+
 function renderDataManagement() {
   const data = getMgmtData();
   const grid = document.getElementById('mgmtGrid');
   let html = '';
 
   MGMT_CATEGORIES.forEach(cat => {
-    if (cat.key === 'employees') {
-      // Custom employees card — full width with card grid
-      const items = data.employees;
-      const depts = data.departments || [];
-      const secs = data.sections || {};
-      const activeCount = items.filter(function(e) { return typeof e === 'string' || !e.endDate; }).length;
-      const inactiveCount = items.length - activeCount;
-      html += `<div class="mgmt-card" id="mgmt-card-employees" style="grid-column: 1 / -1;">
-        <div class="mgmt-card-header">
-          <div class="mgmt-card-title">${cat.icon} ${cat.title}</div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <span class="emp-card-status active">${activeCount} نشط</span>
-            ${inactiveCount > 0 ? '<span class="emp-card-status inactive">' + inactiveCount + ' غير نشط</span>' : ''}
-            <span class="mgmt-card-count">${items.length} إجمالي</span>
-          </div>
-        </div>
-        <div class="emp-filter-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
-          <input type="text" class="search-box" id="empSearchFilter" placeholder="🔍 بحث بالاسم..." oninput="filterEmployeeCards()" style="flex:1;min-width:180px;max-width:300px;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:var(--font);font-size:13px;outline:none;">
-          <select id="empDeptFilter" class="quarter-filter" onchange="updateEmpFilterSections();filterEmployeeCards()" style="min-width:130px;">
-            <option value="all">جميع الإدارات</option>
-            ${depts.map(d => '<option value="' + escapeAttr(d) + '">' + escapeHtml(d) + '</option>').join('')}
-          </select>
-          <select id="empSecFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">
-            <option value="all">جميع الأقسام</option>
-          </select>
-          <select id="empStatusFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:110px;">
-            <option value="all">الكل</option>
-            <option value="active">نشط</option>
-            <option value="inactive">غير نشط</option>
-            <option value="has-absence">لديه غياب</option>
-            <option value="no-dept">بدون إدارة</option>
-          </select>
-          <span id="empFilterCount" style="font-size:12px;color:var(--text-light);margin-right:4px;"></span>
-        </div>
-        <div class="emp-grid" id="mgmt-list-employees">
-          ${items.map((emp, i) => {
-            const name = typeof emp === 'string' ? emp : emp.name;
-            const dept = typeof emp === 'string' ? '' : (emp.department || '');
-            const sec = typeof emp === 'string' ? '' : (emp.section || '');
-            const startDate = (typeof emp === 'object' ? emp.startDate : '') || '';
-            const endDate = (typeof emp === 'object' ? emp.endDate : '') || '';
-            const absences = (typeof emp === 'object' && Array.isArray(emp.absences)) ? emp.absences : [];
-            const contractType = (typeof emp === 'object' ? emp.contractType : '') || 'inhouse';
-            const contractLabel = contractType === 'offshore' ? 'Offshore' : 'Inhouse';
-            const isActive = !endDate;
-            return `<div class="emp-card" id="mgmt-item-employees-${i}" data-emp-name="${escapeAttr(name)}" data-emp-dept="${escapeAttr(dept)}" data-emp-sec="${escapeAttr(sec)}" data-emp-active="${isActive ? '1' : '0'}" data-emp-absences="${absences.length}" data-emp-contract="${contractType}">
-              <div class="emp-card-top">
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span class="emp-card-name" id="mgmt-name-employees-${i}">${escapeHtml(name)}</span>
-                  <span class="emp-card-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : 'غير نشط'}</span>
-                  <span class="badge-contract ${contractType}">${contractLabel}</span>
-                </div>
-              </div>
-              <div class="emp-card-meta">
-                ${dept || sec ? '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><div class="emp-card-badges">' +
-                  (dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : '') +
-                  (sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : '') +
-                '</div></div>' : '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><span style="color:#f59e0b;font-size:11px;">لم يتم تعيين الإدارة</span></div>'}
-                <div class="emp-card-meta-row">
-                  <span class="meta-icon">📅</span>
-                  <span>${startDate ? escapeHtml(startDate) + (endDate ? ' ← ' + escapeHtml(endDate) : ' ← الآن') : '<span style="color:#f59e0b;">لم يحدد تاريخ البدء</span>'}</span>
-                </div>
-                ${absences.length > 0 ? '<div class="emp-card-meta-row"><span class="meta-icon">🔴</span><div class="emp-card-badges">' +
-                  absences.map(function(a) {
-                    return '<span class="emp-absence-tag" onclick="manageAbsences(' + i + ')" title="' + escapeAttr((a.reason || 'غياب') + ': ' + a.from + ' → ' + a.to) + '">' + escapeHtml(a.from) + ' → ' + escapeHtml(a.to) + '</span>';
-                  }).join('') +
-                '</div></div>' : ''}
-              </div>
-              <div class="emp-card-actions">
-                <button class="mgmt-action-btn" title="إدارة الغياب" onclick="manageAbsences(${i})" style="font-size:14px;">🔴</button>
-                <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('employees',${i})">✏️</button>
-                <button class="mgmt-action-btn delete" title="حذف" onclick="deleteMgmtItem('employees',${i})">🗑️</button>
-              </div>
-            </div>`;
-          }).join('')}
-          ${items.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--text-light);font-size:13px;grid-column:1/-1;">لا يوجد موظفون — أضف موظف جديد أدناه</div>' : ''}
-        </div>
-        <div style="border-top:1.5px dashed var(--border);margin-top:12px;padding-top:14px;">
-          <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--accent);">➕ إضافة موظف جديد</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px;margin-bottom:10px;">
-            <div>
-              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">الاسم *</label>
-              <input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="width:100%;" onkeydown="if(event.key==='Enter')addMgmtItem('employees')">
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">الإدارة *</label>
-              <select id="mgmt-emp-dept" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;" onchange="updateEmpSectionDropdown()"><option value="">— اختر الإدارة —</option>${depts.map(d=>'<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>').join('')}</select>
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">القسم *</label>
-              <select id="mgmt-emp-section" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;"><option value="">— اختر القسم —</option></select>
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">📅 تاريخ البدء</label>
-              <select id="mgmt-emp-start" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;">
-                ${(function() {
-                  var opts = '';
-                  ['2025','2026','2027','2028','2029','2030'].forEach(function(y) {
-                    MONTHS.forEach(function(m) {
-                      var v = m + ' ' + y;
-                      var sel = (v === 'يناير 2026') ? ' selected' : '';
-                      opts += '<option value="' + v + '"' + sel + '>' + v + '</option>';
-                    });
-                  });
-                  return opts;
-                })()}
-              </select>
-            </div>
-          </div>
-          <div class="mgmt-add-emp-row" style="margin-bottom:8px;">
-            <select id="mgmt-emp-contract" style="min-width:100px;">
-              <option value="inhouse">Inhouse</option>
-              <option value="offshore">Offshore</option>
-            </select>
-          </div>
-          <div style="display:flex;justify-content:flex-end;">
-            <button class="mgmt-add-btn" onclick="addMgmtItem('employees')">+ إضافة الموظف</button>
-          </div>
-        </div>
-        <div class="mgmt-bulk-import">
-          <div class="mgmt-bulk-header">
-            <span>📋 استيراد جماعي</span>
-            <button class="mgmt-template-btn" onclick="downloadEmployeeTemplate()">⬇️ تحميل القالب</button>
-          </div>
-          <div class="mgmt-bulk-body">
-            <label class="mgmt-bulk-upload-btn">
-              📄 رفع ملف CSV أو TXT
-              <input type="file" accept=".csv,.txt" style="display:none" onchange="importEmployeesBulk(event)">
-            </label>
-            <span class="mgmt-bulk-or">أو</span>
-            <button class="mgmt-bulk-paste-btn" onclick="showBulkPasteDialog()">📝 لصق قائمة</button>
-          </div>
-        </div>
-      </div>`;
-    } else if (cat.key === 'sections') {
+    if (cat.key === 'employees') { return; } // Employees moved to إدارة الموظفين page
+    if (cat.key === 'sections') {
       // Custom sections card grouped by department
       const depts = data.departments || [];
       const secs = data.sections || {};
@@ -7177,6 +7221,7 @@ function filterEmployeeCards() {
   var deptVal = (document.getElementById('empDeptFilter')?.value) || 'all';
   var secVal = (document.getElementById('empSecFilter')?.value) || 'all';
   var statusVal = (document.getElementById('empStatusFilter')?.value) || 'all';
+  var platVal = (document.getElementById('empPlatFilter')?.value) || 'all';
   var grid = document.getElementById('mgmt-list-employees');
   if (!grid) return;
   var cards = grid.querySelectorAll('.emp-card');
@@ -7187,10 +7232,12 @@ function filterEmployeeCards() {
     var sec = card.getAttribute('data-emp-sec') || '';
     var isActive = card.getAttribute('data-emp-active') === '1';
     var absCount = parseInt(card.getAttribute('data-emp-absences')) || 0;
+    var empPlats = (card.getAttribute('data-emp-plats') || '').split(',').filter(Boolean);
     var show = true;
     if (search && name.indexOf(search) === -1) show = false;
     if (deptVal !== 'all' && dept !== deptVal) show = false;
     if (secVal !== 'all' && sec !== secVal) show = false;
+    if (platVal !== 'all' && empPlats.indexOf(platVal) === -1) show = false;
     if (statusVal === 'active' && !isActive) show = false;
     if (statusVal === 'inactive' && isActive) show = false;
     if (statusVal === 'has-absence' && absCount === 0) show = false;
