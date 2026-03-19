@@ -1449,6 +1449,7 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
         <div class="subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُحفظ محلياً في المتصفح وتُطبق على نموذج الموظف</div>
       </div>
       <div class="top-actions">
+        <button class="export-btn" onclick="exportEmployeesExcel()">📊 تصدير الموظفين Excel</button>
         <button class="export-btn" onclick="exportMgmtData()">📥 تصدير الإعدادات</button>
         <label class="export-btn" style="cursor:pointer;">📤 استيراد <input type="file" accept=".json" style="display:none" onchange="importMgmtData(event)"></label>
       </div>
@@ -7342,6 +7343,54 @@ function showCapacityDrill() {
       options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:'IBM Plex Sans Arabic'}}}}, scales:{x:{grid:{display:false},ticks:{font:{family:'IBM Plex Sans Arabic',size:11}}},y:{grid:{color:'#E5E7EB'},ticks:{font:{family:'IBM Plex Sans Arabic'},callback:function(v){return v+'%';}}}} }
     });
   }, 100);
+}
+
+function exportEmployeesExcel() {
+  var data = getMgmtData();
+  var employees = data.employees || [];
+  if (!employees.length) { showMgmtToast('لا يوجد موظفين للتصدير', 'error'); return; }
+  // Build Excel XML (SpreadsheetML format)
+  var xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  xml += '<?mso-application progid="Excel.Sheet"?>\n';
+  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+  xml += '<Styles><Style ss:ID="header"><Font ss:Bold="1" ss:Size="12"/><Interior ss:Color="#1B8354" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1"/></Style>';
+  xml += '<Style ss:ID="rtl"><Alignment ss:ReadingOrder="RightToLeft"/></Style></Styles>\n';
+  xml += '<Worksheet ss:Name="الموظفين"><Table>\n';
+  // Headers
+  var headers = ['#', 'الاسم', 'الإدارة', 'القسم', 'نوع التعاقد', 'تاريخ البدء', 'تاريخ الانتهاء', 'الحالة', 'عدد الغيابات'];
+  xml += '<Row>';
+  headers.forEach(function(h) { xml += '<Cell ss:StyleID="header"><Data ss:Type="String">' + escapeHtml(h) + '</Data></Cell>'; });
+  xml += '</Row>\n';
+  // Data rows
+  employees.forEach(function(emp, i) {
+    var name = typeof emp === 'string' ? emp : emp.name;
+    var dept = typeof emp === 'object' ? (emp.department || '') : '';
+    var sec = typeof emp === 'object' ? (emp.section || '') : '';
+    var ct = typeof emp === 'object' ? (emp.contractType || 'inhouse') : 'inhouse';
+    var start = typeof emp === 'object' ? (emp.startDate || '') : '';
+    var end = typeof emp === 'object' ? (emp.endDate || '') : '';
+    var status = end ? 'غير نشط' : 'نشط';
+    var absCount = typeof emp === 'object' && Array.isArray(emp.absences) ? emp.absences.length : 0;
+    var ctLabel = ct === 'offshore' ? 'Offshore' : 'Inhouse';
+    xml += '<Row ss:StyleID="rtl">';
+    xml += '<Cell><Data ss:Type="Number">' + (i+1) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="String">' + escapeHtml(name) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="String">' + escapeHtml(dept) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="String">' + escapeHtml(sec) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="String">' + escapeHtml(ctLabel) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="String">' + escapeHtml(start) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="String">' + escapeHtml(end) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="String">' + escapeHtml(status) + '</Data></Cell>';
+    xml += '<Cell><Data ss:Type="Number">' + absCount + '</Data></Cell>';
+    xml += '</Row>\n';
+  });
+  xml += '</Table></Worksheet></Workbook>';
+  var blob = new Blob(['\uFEFF' + xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'employees_' + new Date().toISOString().slice(0,10) + '.xls';
+  a.click();
+  showMgmtToast('تم تصدير ' + employees.length + ' موظف إلى Excel', 'success');
 }
 
 function exportMgmtData() {
