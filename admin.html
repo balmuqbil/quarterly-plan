@@ -3984,7 +3984,17 @@ function renderResourcePlanner() {
     if (typeof emp !== 'object') return;
     var name = emp.name;
     (emp.absences || []).forEach(function(a) {
-      if (a.month === month && String(a.year) === String(year)) {
+      // Check if selected month/year falls within the absence from-to range
+      if (!a.from) return;
+      var fromParts = a.from.split(/\s+/);
+      var toParts = (a.to || a.from).split(/\s+/);
+      var fromMonth = fromParts[0], fromYear = fromParts[1] || year;
+      var toMonth = toParts[0], toYear = toParts[1] || year;
+      var mi = MONTHS.indexOf(month), fi = MONTHS.indexOf(fromMonth), ti = MONTHS.indexOf(toMonth);
+      var selVal = parseInt(year) * 12 + mi;
+      var fromVal = parseInt(fromYear) * 12 + fi;
+      var toVal = parseInt(toYear) * 12 + ti;
+      if (selVal >= fromVal && selVal <= toVal) {
         empOnLeave[name] = true;
       }
     });
