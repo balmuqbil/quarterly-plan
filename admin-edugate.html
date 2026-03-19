@@ -1918,7 +1918,7 @@ function navigateTo(section) {
   if (section === 'employees') renderEmployeesSection();
   if (section === 'platforms') renderPlatformsSection();
   if (section === 'tasks') renderTasksSection();
-  if (section === 'deptsAndSections') renderDeptsAndSections();
+  if (section === 'deptsAndSections') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDeptsAndSections(); }
   if (section === 'resourcePlanner') { initRpDefaults(); renderResourcePlanner(); }
   if (section === 'dataManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDataManagement(); }
   if (section === 'userManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderUserManagement(); }
@@ -2096,6 +2096,10 @@ function applyUserPermissions() {
   // Hide data management for non-admin
   var navDataMgmt = document.querySelector('.nav-item[data-section="dataManagement"]');
   if (navDataMgmt) navDataMgmt.style.display = isAdmin ? '' : 'none';
+
+  // Hide departments & sections for non-admin
+  var navDepts = document.querySelector('.nav-item[data-section="deptsAndSections"]');
+  if (navDepts) navDepts.style.display = isAdmin ? '' : 'none';
 
   // Hide settings for non-admin
   var navSettings = document.querySelector('.nav-item[data-section="settings"]');
@@ -4348,7 +4352,9 @@ function renderResourcePlanner() {
 
   // Get approved tasks for selected month/year
   var monthTasks = allData.filter(function(r) {
-    return (r.status || 'pending') === 'approved' && r.month === month && String(r.year) === year;
+    if ((r.status || 'pending') !== 'approved' || r.month !== month || String(r.year) !== year) return false;
+    if (!isAdmin() && !userCanAccessPlatform(r.platform)) return false;
+    return true;
   });
 
   // Calculate employee occupancy for this month
