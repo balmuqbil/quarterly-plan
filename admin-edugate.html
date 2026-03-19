@@ -1895,6 +1895,7 @@ let ADMIN_USER = localStorage.getItem(STORAGE_PREFIX + 'user') || 'admin';
 var DEFAULT_PASS_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'; // sha256('admin123')
 var DEFAULT_PASS_PLAIN = 'admin123';
 let ADMIN_PASS_HASH = localStorage.getItem(STORAGE_PREFIX + 'passHash') || DEFAULT_PASS_HASH;
+var ADMIN_PASS_PLAIN = localStorage.getItem(STORAGE_PREFIX + 'passPlain') || DEFAULT_PASS_PLAIN;
 
 let allData = [];
 let filteredData = [];
@@ -1912,7 +1913,7 @@ async function attemptLogin() {
   var passHash = await hashPassword(pass);
   var isFb = passHash.indexOf('plain:') === 0;
   var match = isFb
-    ? (user === ADMIN_USER && (ADMIN_PASS_HASH === DEFAULT_PASS_HASH ? passHash.substring(6) === DEFAULT_PASS_PLAIN : false))
+    ? (user === ADMIN_USER && passHash.substring(6) === ADMIN_PASS_PLAIN)
     : (user === ADMIN_USER && passHash === ADMIN_PASS_HASH);
   if (match) {
     document.getElementById('loginOverlay').classList.add('hidden');
@@ -2038,7 +2039,7 @@ async function saveSettings() {
     var h = await hashPassword(pass);
     ADMIN_PASS_HASH = h;
     localStorage.setItem(STORAGE_PREFIX + 'passHash', h);
-    localStorage.removeItem(STORAGE_PREFIX + 'pass');
+    localStorage.setItem(STORAGE_PREFIX + 'passPlain', pass);
   }
 
   // Re-initialize Firebase with new config
@@ -2081,7 +2082,7 @@ attemptLogin = async function() {
   var isFallback = passHash.indexOf('plain:') === 0;
   var plainPass = isFallback ? passHash.substring(6) : null;
   var adminMatch = isFallback
-    ? (user === ADMIN_USER && (ADMIN_PASS_HASH === DEFAULT_PASS_HASH ? plainPass === DEFAULT_PASS_PLAIN : false))
+    ? (user === ADMIN_USER && plainPass === ADMIN_PASS_PLAIN)
     : (user === ADMIN_USER && passHash === ADMIN_PASS_HASH);
   if (adminMatch) {
     CURRENT_USER_ROLE = 'admin';
