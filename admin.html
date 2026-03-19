@@ -4782,7 +4782,7 @@ function renderResourcePlanner() {
       var poolEmpCount = new Set(poolTasks.map(function(r) { return r.name; })).size;
       poolHtml = '<div class="rp-squad-section rp-pool-section" data-squad="0" data-platform="' + escapeAttr(platform) + '" ' +
         'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',0)">' +
-        '<div class="rp-squad-header rp-pool-header" onclick="rpToggleSquadSection(this)">' +
+        '<div class="rp-squad-header rp-pool-header" onclick="rpToggleSquadSection(this,event)">' +
           '<div class="squad-name"><span class="squad-toggle">▼</span> 📥 مستوى البرنامج/المحفظة للتسليم التقني</div>' +
           '<div class="squad-stats">' + poolEmpCount + ' موظف · ' + poolFte + ' FTEs' +
             (poolTasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',0)" title="إزالة جميع الموظفين غير المخصصين" style="color:var(--warning);">🗑️</button>' : '') +
@@ -4806,7 +4806,7 @@ function renderResourcePlanner() {
         var canRemove = sqTasks.length === 0 && numSquads > 1;
         squadsHtml += '<div class="rp-squad-section" data-squad="' + s + '" data-platform="' + escapeAttr(platform) + '" ' +
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',' + s + ')">' +
-          '<div class="rp-squad-header" onclick="rpToggleSquadSection(this)">' +
+          '<div class="rp-squad-header" onclick="rpToggleSquadSection(this,event)">' +
             '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ <span class="rp-squad-name-label" onclick="rpStartEditSquadName(event,this,\'' + escapeJS(platform) + '\',' + s + ')" title="انقر لتعديل اسم الفريق" style="cursor:pointer;border-bottom:1px dashed var(--text-light);">' + rpGetSquadName(platform, s) + '</span></div>' +
             '<div class="squad-stats">' + sqEmpCount + ' موظف · ' + sqFte + ' FTEs ' +
               (sqTasks.length > 0 ? '<button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',' + s + ')" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
@@ -4827,7 +4827,7 @@ function renderResourcePlanner() {
       squadsHtml = poolHtml +
         '<div class="rp-squad-section" data-squad="1" data-platform="' + escapeAttr(platform) + '" ' +
           'ondragover="rpSquadDragOver(event)" ondragleave="rpSquadDragLeave(event)" ondrop="rpSquadDrop(event,\'' + escapeJS(platform) + '\',1)">' +
-          '<div class="rp-squad-header" onclick="rpToggleSquadSection(this)">' +
+          '<div class="rp-squad-header" onclick="rpToggleSquadSection(this,event)">' +
             '<div class="squad-name"><span class="squad-toggle">▼</span> 🏷️ <span class="rp-squad-name-label" onclick="rpStartEditSquadName(event,this,\'' + escapeJS(platform) + '\',1)" title="انقر لتعديل اسم الفريق" style="cursor:pointer;border-bottom:1px dashed var(--text-light);">' + rpGetSquadName(platform, 1) + '</span></div>' +
             '<div class="squad-stats">' + sq1EmpCount + ' موظف · ' + sq1Fte + ' FTEs' +
               (sq1Tasks.length > 0 ? ' <button class="rp-squad-remove" onclick="event.stopPropagation();rpReleaseSquad(\'' + escapeJS(platform) + '\',1)" title="إزالة جميع الموظفين من هذا الفريق" style="color:var(--warning);">🗑️</button>' : '') +
@@ -4934,7 +4934,8 @@ function rpTogglePlat(headerEl) {
   var card = headerEl.closest('.rp-plat-card');
   if (card) card.classList.toggle('collapsed');
 }
-function rpToggleSquadSection(headerEl) {
+function rpToggleSquadSection(headerEl, ev) {
+  if (ev && ev.target && (ev.target.classList.contains('rp-squad-name-label') || ev.target.classList.contains('rp-squad-name-input'))) return;
   var section = headerEl.closest('.rp-squad-section');
   if (section) section.classList.toggle('sq-collapsed');
 }
