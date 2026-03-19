@@ -402,6 +402,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
 .mgmt-item {
   display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
   border-radius:8px; margin-bottom:4px; transition:background 0.15s; font-size:13px;
+  flex-wrap:wrap; gap:4px;
 }
 .mgmt-item:hover { background:var(--bg-card-dark); }
 .mgmt-item-name { flex:1; font-weight:500; }
@@ -6494,6 +6495,20 @@ function togglePlatformManaged(platformName) {
   showMgmtToast(platformName + ': ' + (meta[platformName].managedBy === 'vendor' ? 'Vendor' : 'Internal'), 'success');
 }
 
+function setPlatformMeta(platformName, field, value) {
+  var data = getMgmtData();
+  var meta = data.platformMeta || {};
+  if (!meta[platformName]) meta[platformName] = {};
+  if (value) {
+    meta[platformName][field] = value;
+  } else {
+    delete meta[platformName][field];
+  }
+  saveMgmtList('platformMeta', meta);
+  var labels = { owner: 'المالك', replacement: 'البديل' };
+  showMgmtToast(platformName + ' — ' + (labels[field] || field) + ': ' + (value || 'تم الإزالة'), 'success');
+}
+
 function getPlatformManagedBadge(platformName) {
   var mgmt = getMgmtData();
   var meta = (mgmt.platformMeta || {})[platformName];
@@ -7224,7 +7239,16 @@ function renderDataManagement() {
               ${cat.key === 'platforms' ? (() => {
                 var pm = (data.platformMeta || {})[item] || {};
                 var isVendor = pm.managedBy === 'vendor';
-                return '<button class="badge-managed ' + (isVendor ? 'vendor' : 'internal') + '" style="cursor:pointer;border:none;margin:0 6px;" onclick="event.stopPropagation();togglePlatformManaged(\'' + escapeAttr(item) + '\')" title="اضغط للتبديل">' + (isVendor ? 'Vendor' : 'Internal') + '</button>';
+                var empNames = (data.employees || []).map(function(e) { return typeof e === 'string' ? e : e.name; }).sort(function(a,b) { return a.localeCompare(b,'ar'); });
+                var ownerVal = pm.owner || '';
+                var replacementVal = pm.replacement || '';
+                var ownerOpts = '<option value="">— المالك —</option>' + empNames.map(function(n) { return '<option value="' + escapeAttr(n) + '"' + (n === ownerVal ? ' selected' : '') + '>' + escapeHtml(n) + '</option>'; }).join('');
+                var replOpts = '<option value="">— البديل —</option>' + empNames.map(function(n) { return '<option value="' + escapeAttr(n) + '"' + (n === replacementVal ? ' selected' : '') + '>' + escapeHtml(n) + '</option>'; }).join('');
+                return '<button class="badge-managed ' + (isVendor ? 'vendor' : 'internal') + '" style="cursor:pointer;border:none;margin:0 6px;" onclick="event.stopPropagation();togglePlatformManaged(\'' + escapeAttr(item) + '\')" title="اضغط للتبديل">' + (isVendor ? 'Vendor' : 'Internal') + '</button>' +
+                  '<div style="display:flex;gap:6px;align-items:center;margin:0 6px;">' +
+                    '<select class="plat-owner-select" onchange="setPlatformMeta(\'' + escapeAttr(item) + '\',\'owner\',this.value)" title="مالك المنصة" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;background:var(--bg);color:var(--text);min-width:100px;max-width:150px;">' + ownerOpts + '</select>' +
+                    '<select class="plat-repl-select" onchange="setPlatformMeta(\'' + escapeAttr(item) + '\',\'replacement\',this.value)" title="بديل المالك" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;background:var(--bg);color:var(--text);min-width:100px;max-width:150px;">' + replOpts + '</select>' +
+                  '</div>';
               })() : ''}
               <div class="mgmt-item-actions">
                 <button class="mgmt-action-btn edit" title="تعديل" onclick="editMgmtItem('${cat.key}',${i})">✏️</button>
