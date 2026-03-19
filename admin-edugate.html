@@ -453,6 +453,29 @@ tr:hover td { background:rgba(27,131,84,0.03); }
 .badge-managed { font-size:10px; padding:2px 8px; border-radius:6px; font-weight:600; }
 .badge-managed.internal { background:rgba(27,131,84,0.1); color:#1B8354; }
 .badge-managed.vendor { background:rgba(245,158,11,0.12); color:#b45309; }
+/* User Management */
+.um-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px; margin-top:16px; }
+.um-card { background:var(--bg-card); border-radius:12px; padding:16px; border:1px solid var(--border); }
+.um-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.um-card-name { font-weight:700; font-size:15px; color:var(--text); }
+.um-card-role { font-size:11px; padding:3px 10px; border-radius:8px; font-weight:600; }
+.um-card-role.admin { background:rgba(239,68,68,0.1); color:#dc2626; }
+.um-card-role.viewer { background:rgba(59,130,246,0.1); color:#2563eb; }
+.um-card-role.planner { background:rgba(139,92,246,0.1); color:#7c3aed; }
+.um-card-meta { font-size:12px; color:var(--text-light); margin-bottom:10px; }
+.um-card-perms { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
+.um-card-perm { font-size:10px; padding:2px 8px; border-radius:6px; background:rgba(99,102,241,0.08); color:var(--accent); }
+.um-card-actions { display:flex; gap:6px; justify-content:flex-end; border-top:1px solid var(--border); padding-top:10px; }
+.um-card-actions button { padding:4px 12px; border:none; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; }
+.um-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+.um-form-field { display:flex; flex-direction:column; gap:4px; }
+.um-form-field label { font-size:12px; font-weight:600; color:var(--text-light); }
+.um-form-field input, .um-form-field select { padding:8px 10px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; background:var(--bg-card); color:var(--text); }
+.um-form-field input:focus, .um-form-field select:focus { border-color:var(--accent); outline:none; }
+.um-checkbox-group { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.um-checkbox-group label { font-size:12px; display:flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+.um-checkbox-group label:hover { border-color:var(--accent); }
+.um-checkbox-group input[type=checkbox]:checked + span { color:var(--accent); font-weight:600; }
 .emp-card-meta { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
 .emp-card-meta-row { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-light); }
 .emp-card-meta-row .meta-icon { width:16px; text-align:center; flex-shrink:0; }
@@ -824,6 +847,9 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
       <span class="icon">🗂️</span> إدارة البيانات
     </div>
     <div class="nav-item" data-section="resourcePlanner"><span class="icon">📋</span> تخطيط الموارد</div>
+    <div class="nav-item" data-section="userManagement" id="navUserMgmt" style="display:none;">
+      <span class="icon">👤</span> إدارة المستخدمين
+    </div>
     <div class="nav-item" data-section="settings">
       <span class="icon">⚙️</span> الإعدادات
     </div>
@@ -1467,6 +1493,55 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
 </div>
 
+  <!-- ===== USER MANAGEMENT SECTION ===== -->
+  <div class="section-view" id="section-userManagement">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>👤 إدارة المستخدمين</h1>
+        <div class="subtitle">إضافة مستخدمين مع صلاحيات محددة للوصول إلى لوحة التحكم</div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg-card); border-radius:12px; padding:20px; border:1px solid var(--border); margin-bottom:16px;">
+      <h3 style="font-size:15px; font-weight:700; margin-bottom:16px; color:var(--accent);">➕ إضافة مستخدم جديد</h3>
+      <div class="um-form-grid">
+        <div class="um-form-field">
+          <label>اسم المستخدم</label>
+          <input type="text" id="umNewUsername" placeholder="username" style="direction:ltr;">
+        </div>
+        <div class="um-form-field">
+          <label>الاسم الظاهر</label>
+          <input type="text" id="umNewDisplayName" placeholder="الاسم بالعربي">
+        </div>
+        <div class="um-form-field">
+          <label>كلمة المرور</label>
+          <input type="password" id="umNewPassword" placeholder="••••••••">
+        </div>
+        <div class="um-form-field">
+          <label>الدور</label>
+          <select id="umNewRole">
+            <option value="viewer">مشاهد (قراءة فقط)</option>
+            <option value="planner">مخطط موارد</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px; font-weight:600; color:var(--text-light); display:block; margin-bottom:6px;">صلاحية الأقسام</label>
+        <div class="um-checkbox-group" id="umNewDepts"></div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px; font-weight:600; color:var(--text-light); display:block; margin-bottom:6px;">صلاحية المنصات</label>
+        <div class="um-checkbox-group" id="umNewPlatforms"></div>
+      </div>
+      <div style="text-align:left;">
+        <button class="refresh-btn" onclick="addManagedUser()" style="padding:8px 24px;">➕ إضافة</button>
+      </div>
+    </div>
+
+    <div id="umUsersList"></div>
+  </div>
+
 <!-- ===== DRILL-DOWN MODAL ===== -->
 <div class="drill-modal" id="drillModal">
   <div class="drill-content">
@@ -1845,8 +1920,9 @@ function navigateTo(section) {
   if (section === 'tasks') renderTasksSection();
   if (section === 'deptsAndSections') renderDeptsAndSections();
   if (section === 'resourcePlanner') { initRpDefaults(); renderResourcePlanner(); }
-  if (section === 'dataManagement') renderDataManagement();
-  if (section === 'settings') openSettings();
+  if (section === 'dataManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDataManagement(); }
+  if (section === 'userManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderUserManagement(); }
+  if (section === 'settings') { if (!isAdmin()) { navigateTo('dashboard'); return; } openSettings(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1945,6 +2021,297 @@ async function saveSettings() {
   closeSettings();
   loadData();
 }
+
+// ==================== USER MANAGEMENT ====================
+var CURRENT_USER_ROLE = 'admin'; // 'admin', 'viewer', 'planner'
+var CURRENT_USER_PERMS = null; // null = full access (admin)
+
+function getManagedUsers() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_PREFIX + 'managed_users') || '[]'); }
+  catch(e) { return []; }
+}
+function saveManagedUsers(users) {
+  localStorage.setItem(STORAGE_PREFIX + 'managed_users', JSON.stringify(users));
+}
+
+// Modified login — checks admin first, then managed users
+var _origAttemptLogin = attemptLogin;
+attemptLogin = async function() {
+  var user = document.getElementById('loginUser').value.trim();
+  var pass = document.getElementById('loginPass').value;
+  var passHash = await hashPassword(pass);
+
+  // Check admin account first
+  if (user === ADMIN_USER && passHash === ADMIN_PASS_HASH) {
+    CURRENT_USER_ROLE = 'admin';
+    CURRENT_USER_PERMS = null;
+    sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
+    sessionStorage.setItem(STORAGE_PREFIX + 'auth_role', 'admin');
+    sessionStorage.removeItem(STORAGE_PREFIX + 'auth_perms');
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('mainContent').style.display = 'block';
+    applyUserPermissions();
+    setTimeout(function() { setDefaultFilters(); initializeFromCSV(); loadData(); }, 0);
+    return;
+  }
+
+  // Check managed users
+  var users = getManagedUsers();
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].username === user && users[i].passHash === passHash && users[i].active !== false) {
+      CURRENT_USER_ROLE = users[i].role;
+      CURRENT_USER_PERMS = users[i];
+      sessionStorage.setItem(STORAGE_PREFIX + 'auth', 'true');
+      sessionStorage.setItem(STORAGE_PREFIX + 'auth_role', users[i].role);
+      sessionStorage.setItem(STORAGE_PREFIX + 'auth_perms', JSON.stringify(users[i]));
+      document.getElementById('loginOverlay').classList.add('hidden');
+      document.getElementById('mainContent').style.display = 'block';
+      applyUserPermissions();
+      setTimeout(function() { setDefaultFilters(); initializeFromCSV(); loadData(); }, 0);
+      return;
+    }
+  }
+
+  document.getElementById('loginError').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
+  document.getElementById('loginPass').value = '';
+};
+
+// Restore session permissions
+(function restoreSessionPerms() {
+  var role = sessionStorage.getItem(STORAGE_PREFIX + 'auth_role');
+  if (role && role !== 'admin') {
+    CURRENT_USER_ROLE = role;
+    try { CURRENT_USER_PERMS = JSON.parse(sessionStorage.getItem(STORAGE_PREFIX + 'auth_perms')); }
+    catch(e) { CURRENT_USER_PERMS = null; }
+  }
+  applyUserPermissions();
+})();
+
+function applyUserPermissions() {
+  var isAdmin = CURRENT_USER_ROLE === 'admin';
+  // Show/hide nav items based on role
+  var navUserMgmt = document.getElementById('navUserMgmt');
+  if (navUserMgmt) navUserMgmt.style.display = isAdmin ? '' : 'none';
+
+  // Hide data management for non-admin
+  var navDataMgmt = document.querySelector('.nav-item[data-section="dataManagement"]');
+  if (navDataMgmt) navDataMgmt.style.display = isAdmin ? '' : 'none';
+
+  // Hide settings for non-admin
+  var navSettings = document.querySelector('.nav-item[data-section="settings"]');
+  if (navSettings) navSettings.style.display = isAdmin ? '' : 'none';
+
+  // Update sidebar user info
+  var userName = document.querySelector('.user-name');
+  var userRole = document.querySelector('.user-role');
+  if (userName && userRole) {
+    if (isAdmin) {
+      userName.textContent = 'المسؤول';
+      userRole.textContent = 'مدير النظام';
+    } else if (CURRENT_USER_PERMS) {
+      userName.textContent = CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username;
+      userRole.textContent = CURRENT_USER_ROLE === 'planner' ? 'مخطط موارد' : 'مشاهد';
+    }
+  }
+  var avatar = document.querySelector('.avatar');
+  if (avatar) {
+    if (isAdmin) avatar.textContent = 'م';
+    else if (CURRENT_USER_PERMS && CURRENT_USER_PERMS.displayName) avatar.textContent = CURRENT_USER_PERMS.displayName.charAt(0);
+  }
+}
+
+function isAdmin() { return CURRENT_USER_ROLE === 'admin'; }
+
+function userCanAccessPlatform(platformName) {
+  if (CURRENT_USER_ROLE === 'admin') return true;
+  if (!CURRENT_USER_PERMS) return true;
+  if (!CURRENT_USER_PERMS.platforms || CURRENT_USER_PERMS.platforms.length === 0) return true;
+  return CURRENT_USER_PERMS.platforms.indexOf(platformName) !== -1;
+}
+
+function userCanAccessDept(deptName) {
+  if (CURRENT_USER_ROLE === 'admin') return true;
+  if (!CURRENT_USER_PERMS) return true;
+  if (!CURRENT_USER_PERMS.departments || CURRENT_USER_PERMS.departments.length === 0) return true;
+  return CURRENT_USER_PERMS.departments.indexOf(deptName) !== -1;
+}
+
+function userCanEdit() {
+  return CURRENT_USER_ROLE === 'admin';
+}
+
+function userCanPlanResources() {
+  return CURRENT_USER_ROLE === 'admin' || CURRENT_USER_ROLE === 'planner';
+}
+
+// Render user management page
+function renderUserManagement() {
+  if (!isAdmin()) return;
+  var mgmt = getMgmtData();
+  var depts = mgmt.departments || [];
+  var platforms = mgmt.platforms || [];
+  var users = getManagedUsers();
+
+  // Populate checkboxes in add form
+  var deptsHtml = '<label style="border-color:var(--accent);"><input type="checkbox" value="__all__" onchange="umToggleAll(this,\'umNewDepts\')"> <span>الكل</span></label>';
+  depts.forEach(function(d) {
+    deptsHtml += '<label><input type="checkbox" name="umNewDept" value="' + escapeAttr(d) + '"> <span>' + d + '</span></label>';
+  });
+  document.getElementById('umNewDepts').innerHTML = deptsHtml;
+
+  var platsHtml = '<label style="border-color:var(--accent);"><input type="checkbox" value="__all__" onchange="umToggleAll(this,\'umNewPlatforms\')"> <span>الكل</span></label>';
+  platforms.forEach(function(p) {
+    platsHtml += '<label><input type="checkbox" name="umNewPlat" value="' + escapeAttr(p) + '"> <span>' + p + '</span></label>';
+  });
+  document.getElementById('umNewPlatforms').innerHTML = platsHtml;
+
+  // Render existing users
+  var html = '';
+  if (users.length === 0) {
+    html = '<div style="text-align:center; padding:40px; color:var(--text-light); font-size:14px;">لا يوجد مستخدمين — المسؤول هو المستخدم الوحيد حالياً</div>';
+  } else {
+    html = '<div class="um-grid">';
+    users.forEach(function(u, i) {
+      var roleClass = u.role === 'planner' ? 'planner' : 'viewer';
+      var roleLabel = u.role === 'planner' ? 'مخطط موارد' : 'مشاهد';
+      var statusBadge = u.active !== false ?
+        '<span style="font-size:10px;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#166534;">نشط</span>' :
+        '<span style="font-size:10px;padding:2px 8px;border-radius:6px;background:#fef2f2;color:#991b1b;">معطل</span>';
+
+      html += '<div class="um-card">';
+      html += '<div class="um-card-header">';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<span class="um-card-name">' + (u.displayName || u.username) + '</span>';
+      html += statusBadge;
+      html += '</div>';
+      html += '<span class="um-card-role ' + roleClass + '">' + roleLabel + '</span>';
+      html += '</div>';
+      html += '<div class="um-card-meta">اسم المستخدم: <span style="direction:ltr;display:inline-block;">' + u.username + '</span></div>';
+
+      // Permissions badges
+      html += '<div class="um-card-perms">';
+      if (!u.departments || u.departments.length === 0) {
+        html += '<span class="um-card-perm">🏢 جميع الأقسام</span>';
+      } else {
+        u.departments.forEach(function(d) { html += '<span class="um-card-perm">🏢 ' + d + '</span>'; });
+      }
+      if (!u.platforms || u.platforms.length === 0) {
+        html += '<span class="um-card-perm">💻 جميع المنصات</span>';
+      } else {
+        u.platforms.forEach(function(p) { html += '<span class="um-card-perm">💻 ' + p + '</span>'; });
+      }
+      html += '</div>';
+
+      html += '<div class="um-card-actions">';
+      html += '<button style="background:var(--bg-card-dark);color:var(--text);" onclick="toggleUserActive(' + i + ')">' + (u.active !== false ? '⏸ تعطيل' : '▶ تفعيل') + '</button>';
+      html += '<button style="background:var(--bg-card-dark);color:var(--text);" onclick="resetUserPassword(' + i + ')">🔑 تغيير كلمة المرور</button>';
+      html += '<button style="background:rgba(239,68,68,0.1);color:#dc2626;" onclick="deleteUser(' + i + ')">🗑️ حذف</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  document.getElementById('umUsersList').innerHTML = html;
+}
+
+function umToggleAll(checkbox, containerId) {
+  var container = document.getElementById(containerId);
+  var boxes = container.querySelectorAll('input[type=checkbox]:not([value=__all__])');
+  boxes.forEach(function(b) { b.checked = checkbox.checked; });
+}
+
+async function addManagedUser() {
+  var username = document.getElementById('umNewUsername').value.trim().toLowerCase();
+  var displayName = document.getElementById('umNewDisplayName').value.trim();
+  var password = document.getElementById('umNewPassword').value;
+  var role = document.getElementById('umNewRole').value;
+
+  if (!username || !password) {
+    showMgmtToast('يرجى إدخال اسم المستخدم وكلمة المرور', 'error');
+    return;
+  }
+  if (username === ADMIN_USER) {
+    showMgmtToast('لا يمكن استخدام اسم المستخدم هذا', 'error');
+    return;
+  }
+
+  var users = getManagedUsers();
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].username === username) {
+      showMgmtToast('اسم المستخدم موجود مسبقاً', 'error');
+      return;
+    }
+  }
+
+  var deptBoxes = document.querySelectorAll('#umNewDepts input[name=umNewDept]:checked');
+  var platBoxes = document.querySelectorAll('#umNewPlatforms input[name=umNewPlat]:checked');
+  var departments = [];
+  var platforms = [];
+  deptBoxes.forEach(function(b) { departments.push(b.value); });
+  platBoxes.forEach(function(b) { platforms.push(b.value); });
+
+  var passHash = await hashPassword(password);
+  users.push({
+    username: username,
+    displayName: displayName || username,
+    passHash: passHash,
+    role: role,
+    departments: departments,
+    platforms: platforms,
+    active: true
+  });
+  saveManagedUsers(users);
+
+  // Clear form
+  document.getElementById('umNewUsername').value = '';
+  document.getElementById('umNewDisplayName').value = '';
+  document.getElementById('umNewPassword').value = '';
+  document.getElementById('umNewRole').value = 'viewer';
+
+  showMgmtToast('تم إضافة المستخدم: ' + (displayName || username), 'success');
+  renderUserManagement();
+}
+
+function toggleUserActive(index) {
+  var users = getManagedUsers();
+  if (!users[index]) return;
+  users[index].active = users[index].active === false ? true : false;
+  saveManagedUsers(users);
+  showMgmtToast(users[index].displayName + ': ' + (users[index].active ? 'تم التفعيل' : 'تم التعطيل'), 'success');
+  renderUserManagement();
+}
+
+function resetUserPassword(index) {
+  var users = getManagedUsers();
+  if (!users[index]) return;
+  var newPass = prompt('أدخل كلمة المرور الجديدة لـ ' + users[index].displayName + ':');
+  if (!newPass) return;
+  hashPassword(newPass).then(function(h) {
+    users[index].passHash = h;
+    saveManagedUsers(users);
+    showMgmtToast('تم تغيير كلمة المرور لـ ' + users[index].displayName, 'success');
+  });
+}
+
+function deleteUser(index) {
+  var users = getManagedUsers();
+  if (!users[index]) return;
+  if (!confirm('هل تريد حذف المستخدم: ' + users[index].displayName + '?')) return;
+  users.splice(index, 1);
+  saveManagedUsers(users);
+  showMgmtToast('تم حذف المستخدم', 'success');
+  renderUserManagement();
+}
+
+// Override logout to clear user session
+var _origLogout = logout;
+logout = function() {
+  CURRENT_USER_ROLE = 'admin';
+  CURRENT_USER_PERMS = null;
+  sessionStorage.removeItem(STORAGE_PREFIX + 'auth_role');
+  sessionStorage.removeItem(STORAGE_PREFIX + 'auth_perms');
+  _origLogout();
+};
 
 // ==================== DATA CLEANING ====================
 function normalizeOccupancy(val) {
@@ -2175,6 +2542,12 @@ function applyFilters() {
   const year = document.getElementById('yearFilter').value;
   const month = (document.getElementById('monthFilter')?.value) || 'all';
   filteredData = [...allData];
+  // Filter by user permissions
+  if (!isAdmin()) {
+    filteredData = filteredData.filter(function(r) {
+      return userCanAccessPlatform(r.platform) && userCanAccessDept(r.department);
+    });
+  }
   if (quarter !== 'all') filteredData = filteredData.filter(r => r.quarter === quarter);
   if (year !== 'all') filteredData = filteredData.filter(r => String(r.year) === year);
   if (month !== 'all') filteredData = filteredData.filter(r => r.month === month);
@@ -2415,6 +2788,12 @@ function renderEmployeesSection() {
   if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
   if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
   if (monthVal !== 'all') data = data.filter(function(r) { return r.month === monthVal; });
+  // Filter by user permissions
+  if (!isAdmin()) {
+    data = data.filter(function(r) {
+      return userCanAccessPlatform(r.platform) && userCanAccessDept(r.department);
+    });
+  }
 
   var empMap = {};
   data.forEach(function(r) {
@@ -2492,6 +2871,12 @@ function renderPlatformsSection() {
   if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
   if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
   if (monthVal !== 'all') data = data.filter(function(r) { return r.month === monthVal; });
+  // Filter by user permissions
+  if (!isAdmin()) {
+    data = data.filter(function(r) {
+      return userCanAccessPlatform(r.platform) && userCanAccessDept(r.department);
+    });
+  }
 
   // Count distinct months in filtered data for FTE calculation
   var activeMonths = new Set();
@@ -2681,6 +3066,12 @@ function getTaskFilteredData() {
   var qtrVal = (document.getElementById('taskFilterQuarter')?.value) || 'all';
 
   var data = allData.slice();
+  // Filter by user permissions
+  if (!isAdmin()) {
+    data = data.filter(function(r) {
+      return userCanAccessPlatform(r.platform) && userCanAccessDept(r.department);
+    });
+  }
   if (yearVal !== 'all') data = data.filter(function(r) { return String(r.year) === yearVal; });
   if (qtrVal !== 'all') data = data.filter(function(r) { return r.quarter === qtrVal; });
 
@@ -2735,13 +3126,19 @@ function renderTasksSection() {
   populateTaskFilters();
 
   // Task type cards (from global approvedData, not local filters)
+  var taskApprovedData = approvedData;
+  if (!isAdmin()) {
+    taskApprovedData = taskApprovedData.filter(function(r) {
+      return userCanAccessPlatform(r.platform) && userCanAccessDept(r.department);
+    });
+  }
   // Count distinct months for FTE calculation
   var taskActiveMonths = new Set();
-  approvedData.forEach(function(r) { taskActiveMonths.add((r.month||'') + '|' + (r.year||'')); });
+  taskApprovedData.forEach(function(r) { taskActiveMonths.add((r.month||'') + '|' + (r.year||'')); });
   var taskMonthCount = taskActiveMonths.size || 1;
 
   const typeMap = {};
-  approvedData.forEach(r => {
+  taskApprovedData.forEach(r => {
     if (!typeMap[r.taskType]) typeMap[r.taskType] = { name: r.taskType, count: 0, employees: new Set(), platforms: new Set(), totalOcc: 0, _tasks: [] };
     typeMap[r.taskType].count++;
     typeMap[r.taskType].employees.add(r.name);
@@ -3258,6 +3655,7 @@ function closeTaskModal() {
 }
 
 function saveTask() {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لتعديل المهام', 'error'); return; }
   const fields = {};
   ['name','department','section','platform','taskType','month','quarter','year','description','service'].forEach(f => {
     const el = document.getElementById('taskField_' + f);
@@ -3345,6 +3743,7 @@ function saveTask() {
 }
 
 function deleteTask(idx) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لحذف المهام', 'error'); return; }
   const r = allData[idx];
   if (!r) return;
   if (!confirm(`هل تريد حذف مهمة "${r.taskType}" للموظف "${r.name}" في ${r.month}؟`)) return;
@@ -3359,6 +3758,7 @@ function deleteTask(idx) {
 // ==================== Task Status (Approve / Reject) ====================
 
 function updateTaskStatus(idx, newStatus) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لتغيير حالة المهام', 'error'); return; }
   var task = allData[idx];
   if (!task) return;
   var oldStatus = task.status || 'pending';
@@ -3397,6 +3797,7 @@ function updateTaskStatusFromDrill(idx, newStatus, empName) {
 
 // Delete task from employee drill-down and refresh
 function deleteTaskFromDrill(idx, empName) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لحذف المهام', 'error'); return; }
   var task = allData[idx];
   if (!task) return;
   if (!confirm('هل تريد حذف مهمة "' + (task.taskType || '') + '" — ' + (task.month || '') + '؟')) return;
@@ -3879,6 +4280,7 @@ function updateTaskStatusAndRefreshPlatDrill(idx, newStatus, platform) {
 }
 
 function deleteTaskAndRefreshPlatDrill(idx, platform) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لحذف المهام', 'error'); return; }
   var task = allData[idx];
   if (!task) return;
   if (!confirm('هل تريد حذف مهمة "' + (task.taskType || '') + '" — ' + (task.month || '') + '؟')) return;
@@ -3926,6 +4328,10 @@ function renderResourcePlanner() {
   var mgmt = getMgmtData();
   var employees = mgmt.employees || [];
   var platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  // Filter platforms by user permissions
+  if (!isAdmin()) {
+    platforms = platforms.filter(function(p) { return userCanAccessPlatform(p); });
+  }
   // Build employee lookup for contract type badges
   var rpEmpLookup = {};
   employees.forEach(function(e) { if (typeof e === 'object') rpEmpLookup[e.name] = e; });
@@ -4457,6 +4863,7 @@ function rpResolveSquad(r, platform) {
   return (numSquads > 1 || poolEnabled) ? 0 : 1;
 }
 function rpReleaseSquad(platform, squadNum) {
+  if (!userCanPlanResources()) { showMgmtToast('ليس لديك صلاحية لإزالة الموارد', 'error'); return; }
   var month = document.getElementById('rpMonth')?.value;
   var year = document.getElementById('rpYear')?.value;
   var toRemove = [];
@@ -4495,6 +4902,7 @@ function rpMoveToSquad(idx, newSquad) {
 }
 
 function rpReleasePlatform(platform) {
+  if (!userCanPlanResources()) { showMgmtToast('ليس لديك صلاحية لإزالة الموارد', 'error'); return; }
   var month = document.getElementById('rpMonth')?.value;
   var year = document.getElementById('rpYear')?.value;
   var toRemove = [];
@@ -4597,6 +5005,7 @@ function rpDrop(e, platform, squadNum) {
   var section = e.target.closest('.rp-squad-section');
   if (section) section.style.borderColor = '';
   if (!rpDragEmp) return;
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لتخصيص الموارد', 'error'); return; }
   openRpAssignDialog(rpDragEmp, platform, rpDragAvail, squadNum || 1);
   rpDragEmp = null;
 }
@@ -4780,6 +5189,7 @@ function rpRemoveAssignment(idx) {
 }
 
 function rpChangeOcc(idx, newVal) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لتعديل الإشغال', 'error'); return; }
   var task = allData[idx];
   if (!task) return;
   var occ = parseInt(newVal) || 0;
@@ -4810,6 +5220,7 @@ function rpChangeOcc(idx, newVal) {
 }
 
 function rpCopyToNextMonth(platform) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لنسخ الموارد', 'error'); return; }
   var year = document.getElementById('rpYear')?.value || '2026';
   var quarter = document.getElementById('rpQuarter')?.value || 'الأول';
   var month = document.getElementById('rpMonth')?.value || 'يناير';
