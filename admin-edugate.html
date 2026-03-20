@@ -8655,20 +8655,50 @@ function advanceRequisitionStage(reqId) {
   if (idx >= REQ_STAGES.length - 1) { showMgmtToast('الطلب في آخر مرحلة بالفعل', 'error'); return; }
 
   var nextStage = REQ_STAGES[idx + 1];
+  var needsProject = nextStage.key === 'budget_approved' && !req.projectName;
+  var projects = needsProject ? (data.projects || []).map(function(p) { return p.name; }) : [];
 
-  // At budget_approved stage, prompt for project if none set
-  if (nextStage.key === 'budget_approved' && !req.projectName) {
-    var projects = (data.projects || []).map(function(p) { return p.name; });
-    if (projects.length > 0) {
-      var projChoice = prompt('اختر المشروع (اكتب الاسم):\\n' + projects.join('\\n'));
-      if (projChoice !== null) req.projectName = projChoice.trim();
-    }
+  // Show advance modal
+  var html = '<div class="req-history-overlay" id="reqAdvanceOverlay" onclick="if(event.target===this)this.remove();">';
+  html += '<div class="req-history-modal" style="max-width:400px;">';
+  html += '<h3 style="margin:0 0 16px;font-size:16px;">⏩ الانتقال إلى: ' + nextStage.icon + ' ' + escapeHtml(nextStage.label) + '</h3>';
+  if (needsProject && projects.length > 0) {
+    html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">المشروع</label>';
+    html += '<select id="reqAdvProj" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;">';
+    html += '<option value="">— بدون مشروع —</option>';
+    projects.forEach(function(p) { html += '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>'; });
+    html += '</select></div>';
   }
+  html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">ملاحظات (اختياري)</label>';
+  html += '<input type="text" id="reqAdvNotes" placeholder="ملاحظات للمرحلة..." style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;box-sizing:border-box;"></div>';
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+  html += '<button onclick="document.getElementById(\'reqAdvanceOverlay\').remove()" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);cursor:pointer;font-family:inherit;">إلغاء</button>';
+  html += '<button onclick="confirmAdvanceStage(\'' + escapeJS(reqId) + '\')" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;font-family:inherit;">✅ تأكيد</button>';
+  html += '</div></div></div>';
+  var overlay = document.createElement('div');
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay.firstChild);
+  var notesInput = document.getElementById('reqAdvNotes');
+  if (notesInput) notesInput.focus();
+}
 
-  var noteText = prompt('ملاحظات للمرحلة (اختياري):') || '';
+function confirmAdvanceStage(reqId) {
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var req = reqs.find(function(r) { return r.id === reqId; });
+  if (!req) return;
+  var idx = REQ_STAGES.findIndex(function(s) { return s.key === req.currentStage; });
+  var nextStage = REQ_STAGES[idx + 1];
+
+  var projSel = document.getElementById('reqAdvProj');
+  if (projSel && projSel.value) req.projectName = projSel.value;
+  var noteText = (document.getElementById('reqAdvNotes') || {}).value || '';
+
   req.currentStage = nextStage.key;
   req.stageHistory.push({ stage: nextStage.key, date: new Date().toISOString(), notes: noteText });
   saveMgmtList('requisitions', reqs);
+  var overlay = document.getElementById('reqAdvanceOverlay');
+  if (overlay) overlay.remove();
   showMgmtToast('تم الانتقال إلى: ' + nextStage.label, 'success');
 
   // Auto-onboard
