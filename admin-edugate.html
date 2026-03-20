@@ -506,6 +506,77 @@ tr:hover td { background:rgba(27,131,84,0.03); }
 .mgmt-toast.error { background:var(--danger); }
 .mgmt-toast.success { background:var(--success); }
 
+/* ========== REQUISITION PIPELINE ========== */
+.req-pipeline-bar {
+  display:flex; gap:4px; margin-bottom:24px; padding:16px; background:var(--bg-card);
+  border-radius:16px; border:1px solid var(--border); flex-wrap:wrap;
+}
+.req-pipeline-stage {
+  flex:1; min-width:110px; text-align:center; padding:12px 8px;
+  border-radius:10px; cursor:pointer; transition:all 0.2s;
+  border:2px solid transparent;
+}
+.req-pipeline-stage:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.08); }
+.req-pipeline-stage.active { border-color:var(--accent); background:rgba(99,102,241,0.06); }
+.req-pipeline-stage .stage-icon { font-size:22px; display:block; margin-bottom:4px; }
+.req-pipeline-stage .stage-label { font-size:10px; font-weight:600; color:var(--text-secondary); }
+.req-pipeline-stage .stage-count { font-size:20px; font-weight:800; margin-top:2px; }
+.req-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px; }
+.req-card {
+  background:var(--bg-card); border-radius:12px; padding:16px;
+  border:1px solid var(--border); transition:all 0.2s; position:relative;
+}
+.req-card:hover { box-shadow:0 2px 8px rgba(99,102,241,0.08); }
+.req-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.req-card-candidate { font-weight:700; font-size:15px; }
+.req-card-position { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+.req-card-meta { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; font-size:12px; color:var(--text-light); }
+.req-card-meta-row { display:flex; align-items:center; gap:6px; }
+.req-card-stage-badge {
+  display:inline-flex; align-items:center; gap:4px; font-size:11px;
+  padding:3px 10px; border-radius:8px; font-weight:600;
+}
+.req-card-actions { display:flex; gap:4px; justify-content:flex-end; border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
+.req-card-actions button { opacity:0.6; transition:opacity 0.15s; }
+.req-card:hover .req-card-actions button { opacity:1; }
+.req-stage-progress { display:flex; align-items:center; gap:2px; margin:10px 0; }
+.req-stage-dot {
+  width:22px; height:22px; border-radius:50%; display:flex;
+  align-items:center; justify-content:center; font-size:9px;
+  border:2px solid #e2e8f0; background:#f8fafc; color:var(--text-light);
+  transition:all 0.2s; flex-shrink:0;
+}
+.req-stage-dot.completed { border-color:var(--success); background:#dcfce7; color:#166534; }
+.req-stage-dot.current { border-color:var(--accent); background:var(--accent); color:#fff; transform:scale(1.15); }
+.req-stage-line { flex:1; height:2px; background:#e2e8f0; min-width:4px; }
+.req-stage-line.completed { background:var(--success); }
+.req-history-overlay {
+  position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5);
+  z-index:500; display:flex; align-items:center; justify-content:center;
+}
+.req-history-modal {
+  background:var(--bg-card); border-radius:16px; padding:24px; width:90%; max-width:500px;
+  max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2);
+}
+.req-history-item {
+  display:flex; align-items:flex-start; gap:12px; padding:10px 0;
+  border-bottom:1px solid var(--border); font-size:13px;
+}
+.req-history-item:last-child { border-bottom:none; }
+.req-add-form { background:var(--bg-card); border-radius:12px; padding:20px; border:1px solid var(--border); margin-bottom:20px; }
+.req-add-form .form-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px; }
+.req-add-form label { font-size:12px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px; }
+.req-add-form input, .req-add-form select, .req-add-form textarea {
+  width:100%; padding:8px 10px; border:1.5px solid var(--border); border-radius:8px;
+  font-family:inherit; font-size:12px; box-sizing:border-box;
+}
+.req-add-form textarea { resize:vertical; min-height:60px; }
+.req-filter-bar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+.req-filter-bar input, .req-filter-bar select {
+  padding:8px 12px; border:1.5px solid var(--border); border-radius:8px;
+  font-family:inherit; font-size:12px;
+}
+
 /* Bulk Import */
 .mgmt-bulk-import {
   border-top:1.5px dashed var(--border); margin-top:12px; padding-top:14px;
@@ -709,6 +780,13 @@ html.dark-mode .loading-overlay { background:rgba(17,17,27,0.8); }
 html.dark-mode .task-autocomplete-list { background:#1e1e2e; border-color:#2e2e3e; }
 html.dark-mode .task-autocomplete-item:hover { background:#2e2e3e; }
 html.dark-mode .mgmt-dept-header { background:#181825; }
+html.dark-mode .req-card { background:#181825; border-color:#2e2e3e; }
+html.dark-mode .req-pipeline-bar { background:#1e1e2e; border-color:#2e2e3e; }
+html.dark-mode .req-add-form { background:#181825; border-color:#2e2e3e; }
+html.dark-mode .req-add-form input, html.dark-mode .req-add-form select, html.dark-mode .req-add-form textarea { background:#1e1e2e; color:#e0e0e0; border-color:#2e2e3e; }
+html.dark-mode .req-history-modal { background:#1e1e2e; }
+html.dark-mode .req-stage-dot { border-color:#2e2e3e; background:#181825; }
+html.dark-mode .req-stage-line { background:#2e2e3e; }
 html.dark-mode .mgmt-dept-header:hover { background:#2e2e3e; }
 html.dark-mode .section-hc-input { background:#181825; color:#e0e0e0; border-color:#2e2e3e; }
 html.dark-mode .test-data-banner { background:linear-gradient(135deg,#332b00,#3d3400); border-color:#665200; }
@@ -856,6 +934,9 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     </div>
     <div class="nav-item" data-section="employeeManagement" id="navEmpMgmt" style="display:none;">
       <span class="icon">👥</span> إدارة الموظفين
+    </div>
+    <div class="nav-item" data-section="requisitions" id="navReqMgmt" style="display:none;">
+      <span class="icon">📋</span> طلبات التوظيف
     </div>
     <div class="nav-item" data-section="resourcePlanner"><span class="icon">📋</span> تخطيط الموارد</div>
     <div class="nav-item" data-section="userManagement" id="navUserMgmt" style="display:none;">
@@ -1520,6 +1601,21 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div id="empMgmtGrid"></div>
   </div>
 
+  <!-- ===== JOB REQUISITIONS SECTION ===== -->
+  <div class="section-view" id="section-requisitions">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>📋 إدارة طلبات التوظيف</h1>
+        <div class="subtitle">تتبع طلبات التوظيف من الطرح حتى المباشرة — تُحفظ محلياً في المتصفح</div>
+      </div>
+      <div class="top-actions">
+        <button class="export-btn" onclick="exportRequisitions()">📥 تصدير</button>
+      </div>
+    </div>
+    <div id="reqContent"></div>
+  </div>
+
   <!-- ===== USER MANAGEMENT SECTION ===== -->
   <div class="section-view" id="section-userManagement">
     <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
@@ -1703,6 +1799,16 @@ function initFirebase() {
   }
 }
 const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+
+var REQ_STAGES = [
+  { key: 'initiated',       label: 'تم الطرح',           icon: '📝', color: '#6366f1' },
+  { key: 'budget_approved', label: 'اعتماد الميزانية',     icon: '💰', color: '#f59e0b' },
+  { key: 'screened',        label: 'الفرز',              icon: '🔍', color: '#06b6d4' },
+  { key: 'interviewed',     label: 'المقابلة',            icon: '🎤', color: '#8b5cf6' },
+  { key: 'offered',         label: 'العرض الوظيفي',       icon: '📄', color: '#ec4899' },
+  { key: 'accepted',        label: 'قبول العرض',          icon: '✅', color: '#10b981' },
+  { key: 'onboarded',       label: 'تم المباشرة',         icon: '🎉', color: '#059669' }
+];
 
 // Set default year/quarter filters to current period
 function setDefaultFilters() {
@@ -1963,6 +2069,7 @@ function navigateTo(section) {
   if (section === 'resourcePlanner') { initRpDefaults(); renderResourcePlanner(); }
   if (section === 'dataManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDataManagement(); }
   if (section === 'employeeManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderEmployeeManagement(); }
+  if (section === 'requisitions') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderRequisitions(); }
   if (section === 'userManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderUserManagement(); }
   if (section === 'settings') { if (!isAdmin()) { navigateTo('dashboard'); return; } openSettings(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2150,6 +2257,9 @@ function applyUserPermissions() {
 
   var navEmpMgmt = document.getElementById('navEmpMgmt');
   if (navEmpMgmt) navEmpMgmt.style.display = isAdmin ? '' : 'none';
+
+  var navReqMgmt = document.getElementById('navReqMgmt');
+  if (navReqMgmt) navReqMgmt.style.display = isAdmin ? '' : 'none';
 
   // Hide departments & sections for non-admin
   var navDepts = document.querySelector('.nav-item[data-section="deptsAndSections"]');
@@ -6460,6 +6570,11 @@ function getMgmtData() {
     const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + 'projects');
     data.projects = stored ? JSON.parse(stored) : [];
   } catch(e) { data.projects = []; }
+  // Requisitions
+  try {
+    const stored2 = localStorage.getItem(MGMT_STORAGE_PREFIX + 'requisitions');
+    data.requisitions = stored2 ? JSON.parse(stored2) : [];
+  } catch(e) { data.requisitions = []; }
   return data;
 }
 
@@ -8377,6 +8492,384 @@ function mergeEmployees(newEmployees) {
   let msg = 'تم استيراد ' + added + ' موظف';
   if (skipped > 0) msg += ' (تم تخطي ' + skipped + ' مكرر)';
   showMgmtToast(msg, added > 0 ? 'success' : 'error');
+}
+
+// ==================== JOB REQUISITIONS ====================
+var reqFilterStage = '';
+
+function renderRequisitions() {
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var departments = data.departments || [];
+  var sections = data.sections || {};
+  var projects = data.projects || [];
+  var html = '';
+
+  // Pipeline summary bar
+  html += '<div class="req-pipeline-bar">';
+  REQ_STAGES.forEach(function(st) {
+    var count = reqs.filter(function(r) { return r.currentStage === st.key; }).length;
+    var isActive = reqFilterStage === st.key;
+    html += '<div class="req-pipeline-stage' + (isActive ? ' active' : '') + '" onclick="reqFilterStage=' + (isActive ? "''" : "'" + st.key + "'") + ';renderRequisitions();" style="background:' + st.color + '10;">';
+    html += '<span class="stage-icon">' + st.icon + '</span>';
+    html += '<span class="stage-count" style="color:' + st.color + ';">' + count + '</span>';
+    html += '<span class="stage-label">' + st.label + '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Add form (collapsible)
+  html += '<details class="req-add-form" style="cursor:pointer;">';
+  html += '<summary style="font-weight:700;font-size:14px;color:var(--accent);margin-bottom:12px;">➕ طلب توظيف جديد</summary>';
+  html += '<div class="form-grid">';
+  html += '<div><label>اسم المرشح *</label><input type="text" id="reqCandidateName" placeholder="اسم المرشح"></div>';
+  html += '<div><label>المسمى الوظيفي *</label><input type="text" id="reqPosition" placeholder="المسمى الوظيفي"></div>';
+  html += '<div><label>الإدارة *</label><select id="reqDepartment" onchange="updateReqSections()">';
+  html += '<option value="">— اختر الإدارة —</option>';
+  departments.forEach(function(d) { html += '<option value="' + escapeAttr(d) + '">' + escapeHtml(d) + '</option>'; });
+  html += '</select></div>';
+  html += '<div><label>القسم</label><select id="reqSection"><option value="">— اختر القسم —</option></select></div>';
+  html += '<div><label>نوع التعاقد</label><select id="reqContractType"><option value="inhouse">Inhouse</option><option value="offshore">Offshore</option></select></div>';
+  html += '<div><label>المشروع</label><select id="reqProject"><option value="">— بدون مشروع —</option>';
+  projects.forEach(function(p) { html += '<option value="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</option>'; });
+  html += '</select></div>';
+  html += '<div style="grid-column:1/-1;"><label>ملاحظات</label><textarea id="reqNotes" placeholder="ملاحظات إضافية..."></textarea></div>';
+  html += '</div>';
+  html += '<div style="margin-top:12px;text-align:left;"><button class="mgmt-add-btn" onclick="addRequisition()" style="padding:8px 24px;">➕ إضافة الطلب</button></div>';
+  html += '</details>';
+
+  // Filter bar
+  html += '<div class="req-filter-bar">';
+  html += '<input type="text" id="reqSearchInput" placeholder="🔍 بحث بالاسم أو المسمى..." oninput="filterRequisitions()" style="flex:1;min-width:180px;">';
+  html += '<select id="reqFilterDept" onchange="filterRequisitions()"><option value="">كل الإدارات</option>';
+  departments.forEach(function(d) { html += '<option value="' + escapeAttr(d) + '">' + escapeHtml(d) + '</option>'; });
+  html += '</select>';
+  html += '<span id="reqCountLabel" style="font-size:12px;color:var(--text-light);"></span>';
+  html += '</div>';
+
+  // Cards grid
+  var filtered = reqs;
+  if (reqFilterStage) filtered = filtered.filter(function(r) { return r.currentStage === reqFilterStage; });
+
+  if (filtered.length === 0) {
+    html += '<div style="text-align:center;padding:60px 20px;color:var(--text-light);font-size:14px;">';
+    html += reqFilterStage ? '📋 لا توجد طلبات في هذه المرحلة' : '📋 لا توجد طلبات توظيف بعد — أضف أول طلب أعلاه';
+    html += '</div>';
+  } else {
+    html += '<div class="req-grid" id="reqGrid">';
+    filtered.forEach(function(req) {
+      var stageObj = REQ_STAGES.find(function(s) { return s.key === req.currentStage; }) || REQ_STAGES[0];
+      var stageIdx = REQ_STAGES.findIndex(function(s) { return s.key === req.currentStage; });
+      html += '<div class="req-card" data-req-name="' + escapeAttr(req.candidateName || '') + '" data-req-pos="' + escapeAttr(req.position || '') + '" data-req-dept="' + escapeAttr(req.department || '') + '" style="border-right:4px solid ' + stageObj.color + ';">';
+      // Header
+      html += '<div class="req-card-header"><div>';
+      html += '<div class="req-card-candidate">' + escapeHtml(req.candidateName || '') + '</div>';
+      html += '<div class="req-card-position">' + escapeHtml(req.position || '') + '</div>';
+      html += '</div>';
+      html += '<span class="req-card-stage-badge" style="background:' + stageObj.color + '18;color:' + stageObj.color + ';">' + stageObj.icon + ' ' + stageObj.label + '</span>';
+      html += '</div>';
+      // Meta
+      html += '<div class="req-card-meta">';
+      if (req.department) html += '<div class="req-card-meta-row">🏢 ' + escapeHtml(req.department) + (req.section ? ' / ' + escapeHtml(req.section) : '') + '</div>';
+      if (req.projectName) html += '<div class="req-card-meta-row">📁 ' + escapeHtml(req.projectName) + '</div>';
+      html += '<div class="req-card-meta-row">📅 ' + (req.createdAt ? new Date(req.createdAt).toLocaleDateString('ar-SA') : '—') + '</div>';
+      if (req.contractType) html += '<div class="req-card-meta-row">' + (req.contractType === 'inhouse' ? '🏠 Inhouse' : '🌐 Offshore') + '</div>';
+      html += '</div>';
+      // Stage progress dots
+      html += '<div class="req-stage-progress">';
+      REQ_STAGES.forEach(function(s, i) {
+        var cls = i < stageIdx ? 'completed' : (i === stageIdx ? 'current' : '');
+        html += '<div class="req-stage-dot ' + cls + '" title="' + escapeAttr(s.label) + '">' + s.icon + '</div>';
+        if (i < REQ_STAGES.length - 1) html += '<div class="req-stage-line ' + (i < stageIdx ? 'completed' : '') + '"></div>';
+      });
+      html += '</div>';
+      // Actions
+      html += '<div class="req-card-actions">';
+      if (stageIdx > 0) html += '<button class="mgmt-action-btn" onclick="revertRequisitionStage(\'' + escapeJS(req.id) + '\')" title="تراجع مرحلة">⏪</button>';
+      if (stageIdx < REQ_STAGES.length - 1) html += '<button class="mgmt-action-btn" onclick="advanceRequisitionStage(\'' + escapeJS(req.id) + '\')" title="تقدم للمرحلة التالية" style="color:var(--success);font-weight:700;">⏩ التالي</button>';
+      html += '<button class="mgmt-action-btn" onclick="viewRequisitionHistory(\'' + escapeJS(req.id) + '\')" title="سجل المراحل">📜</button>';
+      html += '<button class="mgmt-action-btn" onclick="editRequisition(\'' + escapeJS(req.id) + '\')" title="تعديل">✏️</button>';
+      html += '<button class="mgmt-action-btn" onclick="deleteRequisition(\'' + escapeJS(req.id) + '\')" title="حذف" style="color:var(--danger);">🗑️</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  document.getElementById('reqContent').innerHTML = html;
+  filterRequisitions();
+}
+
+function updateReqSections() {
+  var dept = document.getElementById('reqDepartment').value;
+  var secSel = document.getElementById('reqSection');
+  if (!secSel) return;
+  var data = getMgmtData();
+  var secs = (data.sections || {})[dept] || [];
+  secSel.innerHTML = '<option value="">— اختر القسم —</option>';
+  secs.forEach(function(s) { secSel.innerHTML += '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; });
+}
+
+function addRequisition() {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
+  var name = sanitizeInput(document.getElementById('reqCandidateName').value);
+  var pos = sanitizeInput(document.getElementById('reqPosition').value);
+  var dept = document.getElementById('reqDepartment').value;
+  var sec = document.getElementById('reqSection').value;
+  var contract = document.getElementById('reqContractType').value;
+  var proj = document.getElementById('reqProject').value;
+  var notes = (document.getElementById('reqNotes').value || '').trim();
+
+  if (!name) { showMgmtToast('أدخل اسم المرشح', 'error'); return; }
+  if (!pos) { showMgmtToast('أدخل المسمى الوظيفي', 'error'); return; }
+  if (!dept) { showMgmtToast('اختر الإدارة', 'error'); return; }
+
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var newReq = {
+    id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    candidateName: name,
+    position: pos,
+    department: dept,
+    section: sec,
+    contractType: contract || 'inhouse',
+    projectName: proj,
+    currentStage: 'initiated',
+    stageHistory: [{ stage: 'initiated', date: new Date().toISOString(), notes: 'تم إنشاء الطلب' }],
+    createdAt: new Date().toISOString(),
+    notes: notes
+  };
+  reqs.push(newReq);
+  saveMgmtList('requisitions', reqs);
+  showMgmtToast('تم إضافة طلب التوظيف لـ ' + name, 'success');
+  renderRequisitions();
+}
+
+function advanceRequisitionStage(reqId) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var req = reqs.find(function(r) { return r.id === reqId; });
+  if (!req) return;
+  var idx = REQ_STAGES.findIndex(function(s) { return s.key === req.currentStage; });
+  if (idx >= REQ_STAGES.length - 1) { showMgmtToast('الطلب في آخر مرحلة بالفعل', 'error'); return; }
+
+  var nextStage = REQ_STAGES[idx + 1];
+
+  // At budget_approved stage, prompt for project if none set
+  if (nextStage.key === 'budget_approved' && !req.projectName) {
+    var projects = (data.projects || []).map(function(p) { return p.name; });
+    if (projects.length > 0) {
+      var projChoice = prompt('اختر المشروع (اكتب الاسم):\\n' + projects.join('\\n'));
+      if (projChoice !== null) req.projectName = projChoice.trim();
+    }
+  }
+
+  var noteText = prompt('ملاحظات للمرحلة (اختياري):') || '';
+  req.currentStage = nextStage.key;
+  req.stageHistory.push({ stage: nextStage.key, date: new Date().toISOString(), notes: noteText });
+  saveMgmtList('requisitions', reqs);
+  showMgmtToast('تم الانتقال إلى: ' + nextStage.label, 'success');
+
+  // Auto-onboard
+  if (nextStage.key === 'onboarded') {
+    onboardRequisition(req);
+  }
+  renderRequisitions();
+}
+
+function revertRequisitionStage(reqId) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var req = reqs.find(function(r) { return r.id === reqId; });
+  if (!req) return;
+  var idx = REQ_STAGES.findIndex(function(s) { return s.key === req.currentStage; });
+  if (idx <= 0) { showMgmtToast('لا يمكن التراجع أكثر', 'error'); return; }
+
+  if (req.currentStage === 'onboarded') {
+    if (!confirm('تنبيه: التراجع من مرحلة المباشرة لن يحذف الموظف من قائمة الموظفين. هل تريد المتابعة؟')) return;
+  }
+
+  var prevStage = REQ_STAGES[idx - 1];
+  req.currentStage = prevStage.key;
+  req.stageHistory.push({ stage: prevStage.key, date: new Date().toISOString(), notes: 'تراجع من ' + REQ_STAGES[idx].label });
+  saveMgmtList('requisitions', reqs);
+  showMgmtToast('تم التراجع إلى: ' + prevStage.label, 'success');
+  renderRequisitions();
+}
+
+function onboardRequisition(req) {
+  var data = getMgmtData();
+  var employees = data.employees || [];
+  // Check duplicate
+  var exists = employees.some(function(e) {
+    var eName = typeof e === 'string' ? e : e.name;
+    return eName === req.candidateName;
+  });
+  if (exists) {
+    showMgmtToast('الموظف ' + req.candidateName + ' موجود بالفعل في قائمة الموظفين', 'error');
+    return;
+  }
+  var now = new Date();
+  var startDate = MONTHS[now.getMonth()] + ' ' + now.getFullYear();
+  var newEmp = {
+    name: req.candidateName,
+    department: req.department || '',
+    section: req.section || '',
+    startDate: startDate,
+    endDate: '',
+    absences: [],
+    contractType: req.contractType || 'inhouse'
+  };
+  employees.push(newEmp);
+  saveMgmtList('employees', employees);
+  showMgmtToast('🎉 تم إضافة ' + req.candidateName + ' إلى قائمة الموظفين تلقائياً', 'success');
+}
+
+function editRequisition(reqId) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var req = reqs.find(function(r) { return r.id === reqId; });
+  if (!req) return;
+  var departments = data.departments || [];
+  var sections = data.sections || {};
+  var projects = data.projects || [];
+  var curSecs = sections[req.department] || [];
+
+  var card = document.querySelector('.req-card[data-req-name="' + CSS.escape(req.candidateName) + '"]');
+  if (!card) { card = event.target.closest('.req-card'); }
+  if (!card) return;
+
+  var html = '<div class="req-add-form" style="border:none;padding:0;">';
+  html += '<div class="form-grid">';
+  html += '<div><label>اسم المرشح</label><input type="text" id="reqEdit_name" value="' + escapeAttr(req.candidateName || '') + '"></div>';
+  html += '<div><label>المسمى الوظيفي</label><input type="text" id="reqEdit_pos" value="' + escapeAttr(req.position || '') + '"></div>';
+  html += '<div><label>الإدارة</label><select id="reqEdit_dept" onchange="updateReqEditSections(\'' + escapeJS(reqId) + '\')">';
+  html += '<option value="">—</option>';
+  departments.forEach(function(d) { html += '<option value="' + escapeAttr(d) + '"' + (d === req.department ? ' selected' : '') + '>' + escapeHtml(d) + '</option>'; });
+  html += '</select></div>';
+  html += '<div><label>القسم</label><select id="reqEdit_sec"><option value="">—</option>';
+  curSecs.forEach(function(s) { html += '<option value="' + escapeAttr(s) + '"' + (s === req.section ? ' selected' : '') + '>' + escapeHtml(s) + '</option>'; });
+  html += '</select></div>';
+  html += '<div><label>نوع التعاقد</label><select id="reqEdit_contract"><option value="inhouse"' + (req.contractType === 'inhouse' ? ' selected' : '') + '>Inhouse</option><option value="offshore"' + (req.contractType === 'offshore' ? ' selected' : '') + '>Offshore</option></select></div>';
+  html += '<div><label>المشروع</label><select id="reqEdit_proj"><option value="">— بدون —</option>';
+  projects.forEach(function(p) { html += '<option value="' + escapeAttr(p.name) + '"' + (p.name === req.projectName ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>'; });
+  html += '</select></div>';
+  html += '<div style="grid-column:1/-1;"><label>ملاحظات</label><textarea id="reqEdit_notes">' + escapeHtml(req.notes || '') + '</textarea></div>';
+  html += '</div>';
+  html += '<div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">';
+  html += '<button class="mgmt-action-btn" onclick="renderRequisitions()" style="padding:6px 16px;">إلغاء</button>';
+  html += '<button class="mgmt-add-btn" onclick="saveRequisitionEdit(\'' + escapeJS(reqId) + '\')" style="padding:6px 16px;">💾 حفظ</button>';
+  html += '</div></div>';
+  card.innerHTML = html;
+}
+
+function updateReqEditSections(reqId) {
+  var dept = document.getElementById('reqEdit_dept').value;
+  var secSel = document.getElementById('reqEdit_sec');
+  if (!secSel) return;
+  var data = getMgmtData();
+  var secs = (data.sections || {})[dept] || [];
+  secSel.innerHTML = '<option value="">—</option>';
+  secs.forEach(function(s) { secSel.innerHTML += '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; });
+}
+
+function saveRequisitionEdit(reqId) {
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var req = reqs.find(function(r) { return r.id === reqId; });
+  if (!req) return;
+  req.candidateName = sanitizeInput(document.getElementById('reqEdit_name').value) || req.candidateName;
+  req.position = sanitizeInput(document.getElementById('reqEdit_pos').value) || req.position;
+  req.department = document.getElementById('reqEdit_dept').value;
+  req.section = document.getElementById('reqEdit_sec').value;
+  req.contractType = document.getElementById('reqEdit_contract').value;
+  req.projectName = document.getElementById('reqEdit_proj').value;
+  req.notes = (document.getElementById('reqEdit_notes').value || '').trim();
+  saveMgmtList('requisitions', reqs);
+  showMgmtToast('تم تحديث طلب التوظيف', 'success');
+  renderRequisitions();
+}
+
+function deleteRequisition(reqId) {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
+  if (!confirm('هل أنت متأكد من حذف هذا الطلب؟')) return;
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var idx = reqs.findIndex(function(r) { return r.id === reqId; });
+  if (idx === -1) return;
+  reqs.splice(idx, 1);
+  saveMgmtList('requisitions', reqs);
+  showMgmtToast('تم حذف الطلب', 'success');
+  renderRequisitions();
+}
+
+function filterRequisitions() {
+  var search = (document.getElementById('reqSearchInput') || {}).value || '';
+  search = search.trim().toLowerCase();
+  var dept = (document.getElementById('reqFilterDept') || {}).value || '';
+  var cards = document.querySelectorAll('.req-card');
+  var shown = 0;
+  cards.forEach(function(card) {
+    var name = (card.getAttribute('data-req-name') || '').toLowerCase();
+    var pos = (card.getAttribute('data-req-pos') || '').toLowerCase();
+    var cardDept = card.getAttribute('data-req-dept') || '';
+    var matchSearch = !search || name.indexOf(search) > -1 || pos.indexOf(search) > -1;
+    var matchDept = !dept || cardDept === dept;
+    if (matchSearch && matchDept) { card.style.display = ''; shown++; } else { card.style.display = 'none'; }
+  });
+  var label = document.getElementById('reqCountLabel');
+  if (label) label.textContent = shown + ' طلب' + (cards.length !== shown ? ' (من ' + cards.length + ')' : '');
+}
+
+function viewRequisitionHistory(reqId) {
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  var req = reqs.find(function(r) { return r.id === reqId; });
+  if (!req) return;
+  var history = req.stageHistory || [];
+
+  var html = '<div class="req-history-overlay" onclick="if(event.target===this)this.remove();">';
+  html += '<div class="req-history-modal">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+  html += '<h3 style="margin:0;font-size:16px;">📜 سجل المراحل — ' + escapeHtml(req.candidateName) + '</h3>';
+  html += '<button onclick="this.closest(\'.req-history-overlay\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>';
+  html += '</div>';
+
+  if (history.length === 0) {
+    html += '<div style="text-align:center;color:var(--text-light);padding:20px;">لا يوجد سجل</div>';
+  } else {
+    history.slice().reverse().forEach(function(h) {
+      var stageObj = REQ_STAGES.find(function(s) { return s.key === h.stage; }) || { icon: '❓', label: h.stage, color: '#999' };
+      html += '<div class="req-history-item">';
+      html += '<span style="font-size:20px;">' + stageObj.icon + '</span>';
+      html += '<div style="flex:1;">';
+      html += '<div style="font-weight:600;">' + stageObj.label + '</div>';
+      html += '<div style="font-size:11px;color:var(--text-light);">' + new Date(h.date).toLocaleDateString('ar-SA') + ' — ' + new Date(h.date).toLocaleTimeString('ar-SA', {hour:'2-digit',minute:'2-digit'}) + '</div>';
+      if (h.notes) html += '<div style="font-size:12px;margin-top:2px;color:var(--text-secondary);">' + escapeHtml(h.notes) + '</div>';
+      html += '</div></div>';
+    });
+  }
+  html += '</div></div>';
+
+  var overlay = document.createElement('div');
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay.firstChild);
+}
+
+function exportRequisitions() {
+  var data = getMgmtData();
+  var reqs = data.requisitions || [];
+  if (reqs.length === 0) { showMgmtToast('لا توجد طلبات للتصدير', 'error'); return; }
+  var blob = new Blob([JSON.stringify(reqs, null, 2)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'requisitions_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showMgmtToast('تم تصدير ' + reqs.length + ' طلب', 'success');
 }
 
 function showMgmtToast(msg, type) {
