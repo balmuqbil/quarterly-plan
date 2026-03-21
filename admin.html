@@ -8561,11 +8561,17 @@ function renderRequisitions() {
   html += '<div><label>المسمى الوظيفي *</label><select id="reqPosition"><option value="">— اختر المسمى الوظيفي —</option>';
   jobTitles.forEach(function(jt) { html += '<option value="' + escapeAttr(jt) + '">' + escapeHtml(jt) + '</option>'; });
   html += '</select></div>';
+  html += '<div><label>نوع الطلب *</label><select id="reqType" onchange="toggleReqReplacementDropdown()"><option value="new">🆕 جديد</option><option value="replacement">🔄 إحلال</option></select></div>';
+  // Inactive employees for replacement
+  var inactiveEmps = (data.employees || []).filter(function(e) { return typeof e === 'object' && e.endDate; });
+  html += '<div id="reqReplacementRow" style="display:none;"><label>الموظف المغادر *</label><select id="reqReplacementEmp"><option value="">— اختر الموظف —</option>';
+  inactiveEmps.forEach(function(e) { html += '<option value="' + escapeAttr(e.name) + '">' + escapeHtml(e.name) + (e.jobTitle ? ' (' + escapeHtml(e.jobTitle) + ')' : '') + '</option>'; });
+  html += '</select></div>';
   html += '<div><label>نوع التعاقد</label><select id="reqContractType"><option value="inhouse">Inhouse</option><option value="offshore">Offshore</option></select></div>';
   html += '<div><label>💻 المنصة *</label><select id="reqPlatform" onchange="updateReqProjectsByPlatform()"><option value="">— اختر المنصة —</option>';
   platforms.forEach(function(p) { html += '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>'; });
   html += '</select></div>';
-  html += '<div><label>المشروع</label><select id="reqProject"><option value="">— اختر المنصة أولاً —</option></select></div>';
+  html += '<div><label>المشروع *</label><select id="reqProject"><option value="">— اختر المنصة أولاً —</option></select></div>';
   html += '<div style="grid-column:1/-1;"><label>ملاحظات</label><textarea id="reqNotes" placeholder="ملاحظات إضافية..."></textarea></div>';
   html += '</div>';
   html += '<div style="margin-top:12px;text-align:left;"><button class="mgmt-add-btn" onclick="addRequisition()" style="padding:8px 24px;">➕ إضافة الطلب</button></div>';
@@ -8608,6 +8614,8 @@ function renderRequisitions() {
       html += '</div>';
       // Meta
       html += '<div class="req-card-meta">';
+      html += '<div class="req-card-meta-row">' + (req.requestType === 'replacement' ? '🔄 إحلال' : '🆕 جديد') + '</div>';
+      if (req.requestType === 'replacement' && req.replacementFor) html += '<div class="req-card-meta-row">↩️ بديل: ' + escapeHtml(req.replacementFor) + '</div>';
       if (req.projectName) html += '<div class="req-card-meta-row">📁 ' + escapeHtml(req.projectName) + '</div>';
       if (req.platformName) html += '<div class="req-card-meta-row">💻 ' + escapeHtml(req.platformName) + '</div>';
       html += '<div class="req-card-meta-row">📅 ' + (req.createdAt ? new Date(req.createdAt).toLocaleDateString('ar-SA') : '—') + '</div>';
@@ -8654,6 +8662,12 @@ function updateReqSections() {
   secs.forEach(function(s) { secSel.innerHTML += '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; });
 }
 
+function toggleReqReplacementDropdown() {
+  var type = document.getElementById('reqType').value;
+  var row = document.getElementById('reqReplacementRow');
+  if (row) row.style.display = type === 'replacement' ? '' : 'none';
+}
+
 function updateReqProjectsByPlatform() {
   var plat = document.getElementById('reqPlatform').value;
   var projSel = document.getElementById('reqProject');
@@ -8676,10 +8690,14 @@ function addRequisition() {
   var contract = document.getElementById('reqContractType').value;
   var proj = document.getElementById('reqProject').value;
   var plat = document.getElementById('reqPlatform').value;
+  var reqType = document.getElementById('reqType').value;
+  var replacementEmp = reqType === 'replacement' ? document.getElementById('reqReplacementEmp').value : '';
   var notes = (document.getElementById('reqNotes').value || '').trim();
 
   if (!pos) { showMgmtToast('اختر المسمى الوظيفي', 'error'); return; }
   if (!plat) { showMgmtToast('اختر المنصة', 'error'); return; }
+  if (!proj) { showMgmtToast('اختر المشروع', 'error'); return; }
+  if (reqType === 'replacement' && !replacementEmp) { showMgmtToast('اختر الموظف المغادر', 'error'); return; }
 
   var data = getMgmtData();
   var reqs = data.requisitions || [];
@@ -8692,6 +8710,8 @@ function addRequisition() {
     contractType: contract || 'inhouse',
     projectName: proj,
     platformName: plat,
+    requestType: reqType,
+    replacementFor: replacementEmp,
     currentStage: 'initiated',
     stageHistory: [{ stage: 'initiated', date: new Date().toISOString(), notes: 'تم إنشاء الطلب' }],
     requestedBy: CURRENT_USER_PERMS ? (CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username || '') : 'المسؤول',
@@ -8885,6 +8905,11 @@ function editRequisition(reqId) {
   html += '<div><label>المسمى الوظيفي</label><select id="reqEdit_pos"><option value="">— اختر —</option>';
   jobTitles.forEach(function(jt) { html += '<option value="' + escapeAttr(jt) + '"' + (jt === req.position ? ' selected' : '') + '>' + escapeHtml(jt) + '</option>'; });
   html += '</select></div>';
+  html += '<div><label>نوع الطلب</label><select id="reqEdit_type" onchange="var r=document.getElementById(\'reqEditReplacementRow\');if(r)r.style.display=this.value===\'replacement\'?\'\'  :\'none\';"><option value="new"' + (req.requestType !== 'replacement' ? ' selected' : '') + '>🆕 جديد</option><option value="replacement"' + (req.requestType === 'replacement' ? ' selected' : '') + '>🔄 إحلال</option></select></div>';
+  var inactiveEmps = (data.employees || []).filter(function(e) { return typeof e === 'object' && e.endDate; });
+  html += '<div id="reqEditReplacementRow" style="' + (req.requestType === 'replacement' ? '' : 'display:none;') + '"><label>الموظف المغادر</label><select id="reqEdit_replacement"><option value="">— اختر —</option>';
+  inactiveEmps.forEach(function(e) { html += '<option value="' + escapeAttr(e.name) + '"' + (e.name === req.replacementFor ? ' selected' : '') + '>' + escapeHtml(e.name) + (e.jobTitle ? ' (' + escapeHtml(e.jobTitle) + ')' : '') + '</option>'; });
+  html += '</select></div>';
   html += '<div><label>نوع التعاقد</label><select id="reqEdit_contract"><option value="inhouse"' + (req.contractType === 'inhouse' ? ' selected' : '') + '>Inhouse</option><option value="offshore"' + (req.contractType === 'offshore' ? ' selected' : '') + '>Offshore</option></select></div>';
   html += '<div><label>💻 المنصة</label><select id="reqEdit_plat" onchange="updateReqEditProjectsByPlatform(\'' + escapeJS(reqId) + '\')"><option value="">— اختر —</option>';
   platforms.forEach(function(p) { html += '<option value="' + escapeAttr(p) + '"' + (p === req.platformName ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'; });
@@ -8932,6 +8957,10 @@ function saveRequisitionEdit(reqId) {
   var nameEl = document.getElementById('reqEdit_name');
   if (nameEl) req.candidateName = sanitizeInput(nameEl.value) || req.candidateName;
   req.position = sanitizeInput(document.getElementById('reqEdit_pos').value) || req.position;
+  var typeEl = document.getElementById('reqEdit_type');
+  if (typeEl) { req.requestType = typeEl.value; }
+  var replEl = document.getElementById('reqEdit_replacement');
+  if (replEl) { req.replacementFor = req.requestType === 'replacement' ? replEl.value : ''; }
   req.contractType = document.getElementById('reqEdit_contract').value;
   req.projectName = document.getElementById('reqEdit_proj').value;
   var platEl = document.getElementById('reqEdit_plat');
