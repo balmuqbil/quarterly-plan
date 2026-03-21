@@ -4551,16 +4551,27 @@ function renderResourcePlanner() {
   // Helper: check if employee was active during selected month/year
   var MONTH_ORDER = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   function wasActiveInMonth(emp, selMonth, selYear) {
+    var selMonthIdx = MONTH_ORDER.indexOf(selMonth);
+    var selVal = parseInt(selYear) * 12 + selMonthIdx;
+    // Check startDate: employee hasn't started yet
+    if (emp.startDate && emp.startDate !== '') {
+      var sParts = emp.startDate.trim().split(/\s+/);
+      var startMonth = sParts[0];
+      var startYear = sParts.length > 1 ? sParts[1] : selYear;
+      var startMonthIdx = MONTH_ORDER.indexOf(startMonth);
+      if (startMonthIdx !== -1) {
+        var startVal = parseInt(startYear) * 12 + startMonthIdx;
+        if (selVal < startVal) return false; // selected month is before employee starts
+      }
+    }
+    // Check endDate: employee already left
     if (!emp.endDate || emp.endDate === '') return true; // still active
-    // Parse endDate (format: "فبراير 2026" or just month name)
     var parts = emp.endDate.trim().split(/\s+/);
     var endMonth = parts[0];
     var endYear = parts.length > 1 ? parts[1] : selYear;
     var endMonthIdx = MONTH_ORDER.indexOf(endMonth);
-    var selMonthIdx = MONTH_ORDER.indexOf(selMonth);
     if (endMonthIdx === -1) return false; // can't parse, treat as inactive
     var endVal = parseInt(endYear) * 12 + endMonthIdx;
-    var selVal = parseInt(selYear) * 12 + selMonthIdx;
     return selVal <= endVal; // employee was still active during or before their end month
   }
 
@@ -4671,7 +4682,23 @@ function renderResourcePlanner() {
     var fullOcc = used >= 100;
     if (isActive && !onLeave && !fullOcc) return; // available, skip
     var reason = '';
-    if (!isActive) reason = 'غير نشط';
+    if (!isActive) {
+      // Distinguish between "not started yet" and "already left"
+      if (emp.startDate && emp.startDate !== '') {
+        var sParts = emp.startDate.trim().split(/\s+/);
+        var sMonthIdx = MONTH_ORDER.indexOf(sParts[0]);
+        var sYear = sParts.length > 1 ? sParts[1] : year;
+        var sVal = parseInt(sYear) * 12 + sMonthIdx;
+        var curVal = parseInt(year) * 12 + MONTH_ORDER.indexOf(month);
+        if (sMonthIdx !== -1 && curVal < sVal) {
+          reason = 'لم يباشر بعد';
+        } else {
+          reason = 'غير نشط';
+        }
+      } else {
+        reason = 'غير نشط';
+      }
+    }
     else if (onLeave) reason = 'إجازة';
     else if (fullOcc) reason = 'مشغول ' + used + '%';
     excluded.push({ name: name, reason: reason, emp: emp });
@@ -4683,7 +4710,7 @@ function renderResourcePlanner() {
     excSection.style.display = 'block';
     excCount.textContent = '(' + excluded.length + ')';
     excList.innerHTML = excluded.map(function(e) {
-      var reasonColor = e.reason === 'إجازة' ? '#DBA102' : e.reason === 'غير نشط' ? '#DC2626' : 'var(--text-light)';
+      var reasonColor = e.reason === 'إجازة' ? '#DBA102' : e.reason === 'غير نشط' ? '#DC2626' : e.reason === 'لم يباشر بعد' ? '#F59E0B' : 'var(--text-light)';
       return '<div style="padding:4px 8px;font-size:11px;display:flex;justify-content:space-between;align-items:center;border-radius:6px;margin-bottom:2px;background:var(--bg-card-dark);">' +
         '<span style="color:var(--text-secondary);">' + escapeHtml(e.name) + '</span>' +
         '<span style="color:' + reasonColor + ';font-weight:600;font-size:10px;">' + escapeHtml(e.reason) + '</span>' +
