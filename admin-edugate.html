@@ -6337,7 +6337,8 @@ var DEFAULT_MGMT = {
   sectionCapacity: {},
   sectionTaskTypes: {},  // { "sectionName": ["taskType1", ...] } — empty means all enabled
   platforms: ['نور','مدرستي','سفير','بوابة التعليم','فارس'],
-  taskTypes: ['تحليل أعمال','تجربة مستخدم','تطوير حلول','تطوير تكاملات','تطوير واجهات','تطوير موبايل','جودة','إدارة عمليات DevOps','دعم L3','إدارة تسليم تقني','أعمال داخلية','أعمال مشاريع جديدة (لم تعتمد)','دراسات كراسات مشاريع جديدة']
+  taskTypes: ['تحليل أعمال','تجربة مستخدم','تطوير حلول','تطوير تكاملات','تطوير واجهات','تطوير موبايل','جودة','إدارة عمليات DevOps','دعم L3','إدارة تسليم تقني','أعمال داخلية','أعمال مشاريع جديدة (لم تعتمد)','دراسات كراسات مشاريع جديدة'],
+  jobTitles: []
 };
 
 // ===== CSV Employee Data (source of truth) =====
@@ -6520,6 +6521,7 @@ var MGMT_CATEGORIES = [
   { key: 'sections', title: 'الأقسام', icon: '📂', placeholder: '', custom: true },
   { key: 'platforms', title: 'المنصات / المنتجات', icon: '💻', placeholder: 'أضف منصة جديدة...' },
   { key: 'taskTypes', title: 'أنواع المهام', icon: '📋', placeholder: 'أضف نوع مهمة جديد...' },
+  { key: 'jobTitles', title: 'المسميات الوظيفية', icon: '💼', placeholder: 'أضف مسمى وظيفي جديد...' },
   { key: 'employees', title: 'الموظفون', icon: '👥', placeholder: 'أضف اسم موظف جديد...', custom: true }
 ];
 
@@ -6532,7 +6534,7 @@ function getMgmtData() {
 
   const data = {};
   // Simple array categories
-  ['departments', 'platforms', 'taskTypes'].forEach(key => {
+  ['departments', 'platforms', 'taskTypes', 'jobTitles'].forEach(key => {
     try {
       const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + key);
       data[key] = stored ? JSON.parse(stored) : [...(DEFAULT_MGMT[key] || [])];
@@ -7033,6 +7035,10 @@ function renderEmployeeManagement() {
           '<input class="mgmt-add-input" id="mgmt-emp-name" placeholder="اسم الموظف" style="width:100%;" onkeydown="if(event.key===\'Enter\')addMgmtItem(\'employees\')">' +
         '</div>' +
         '<div>' +
+          '<label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">💼 المسمى الوظيفي</label>' +
+          '<select id="mgmt-emp-jobtitle" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;"><option value="">— اختر المسمى —</option>' + (data.jobTitles || []).map(function(jt){return '<option value="'+escapeAttr(jt)+'">'+escapeHtml(jt)+'</option>';}).join('') + '</select>' +
+        '</div>' +
+        '<div>' +
           '<label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:3px;">الإدارة *</label>' +
           '<select id="mgmt-emp-dept" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;" onchange="updateEmpSectionDropdown()"><option value="">— اختر الإدارة —</option>' + depts.map(function(d){return '<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>';}).join('') + '</select>' +
         '</div>' +
@@ -7119,6 +7125,7 @@ function renderEmployeeManagement() {
     var endDate = (typeof emp === 'object' ? emp.endDate : '') || '';
     var absences = (typeof emp === 'object' && Array.isArray(emp.absences)) ? emp.absences : [];
     var contractType = (typeof emp === 'object' ? emp.contractType : '') || 'inhouse';
+    var jobTitle = (typeof emp === 'object' ? emp.jobTitle : '') || '';
     var contractLabel = contractType === 'offshore' ? 'Offshore' : 'Inhouse';
     var isActive = !endDate;
     var empPlats = [];
@@ -7136,6 +7143,7 @@ function renderEmployeeManagement() {
           (dept ? '<span class="badge badge-dept">' + escapeHtml(dept) + '</span>' : '') +
           (sec ? '<span class="badge badge-section">' + escapeHtml(sec) + '</span>' : '') +
         '</div></div>' : '<div class="emp-card-meta-row"><span class="meta-icon">🏢</span><span style="color:#f59e0b;font-size:11px;">لم يتم تعيين الإدارة</span></div>') +
+        (jobTitle ? '<div class="emp-card-meta-row"><span class="meta-icon">💼</span><span class="badge" style="background:#8b5cf620;color:#8b5cf6;font-size:11px;">' + escapeHtml(jobTitle) + '</span></div>' : '') +
         '<div class="emp-card-meta-row">' +
           '<span class="meta-icon">📅</span>' +
           '<span>' + (startDate ? escapeHtml(startDate) + (endDate ? ' ← ' + escapeHtml(endDate) : ' ← الآن') : '<span style="color:#f59e0b;">لم يحدد تاريخ البدء</span>') + '</span>' +
@@ -7613,7 +7621,9 @@ function addMgmtItem(key) {
     var startDate = startSelect ? startSelect.value : 'يناير 2026';
     var contractSelect = document.getElementById('mgmt-emp-contract');
     var contractType = contractSelect ? contractSelect.value : 'inhouse';
-    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [], contractType: contractType });
+    var jobTitleSelect = document.getElementById('mgmt-emp-jobtitle');
+    var jobTitle = jobTitleSelect ? jobTitleSelect.value : '';
+    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [], contractType: contractType, jobTitle: jobTitle });
     saveMgmtList('employees', data.employees);
     nameInput.value = '';
     deptSelect.selectedIndex = 0;
@@ -7675,6 +7685,15 @@ function editMgmtItem(key, index) {
     // Row 1: Name
     editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">الاسم</label>';
     editHtml += '<input class="mgmt-edit-input" style="width:100%;" value="' + escapeAttr(currentName) + '" id="mgmt-edit-employees-' + index + '" placeholder="اسم الموظف"></div>';
+    // Row 1b: Job Title
+    var currentJobTitle = (typeof emp === 'object' ? emp.jobTitle : '') || '';
+    var jobTitlesList = data.jobTitles || [];
+    editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">💼 المسمى الوظيفي</label>';
+    editHtml += '<select id="mgmt-edit-jobtitle-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;"><option value="">— اختر —</option>';
+    jobTitlesList.forEach(function(jt) {
+      editHtml += '<option value="' + escapeAttr(jt) + '"' + (jt === currentJobTitle ? ' selected' : '') + '>' + escapeHtml(jt) + '</option>';
+    });
+    editHtml += '</select></div>';
     // Row 2: Department + Section
     editHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
     editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">الإدارة</label>';
@@ -7748,6 +7767,7 @@ function saveEditMgmt(key, index) {
     var existingEmp = data.employees[index];
     var existingAbsences = (typeof existingEmp === 'object' && Array.isArray(existingEmp.absences)) ? existingEmp.absences : [];
     var contractSelect = document.getElementById('mgmt-edit-contract-' + index);
+    var jobTitleSelect = document.getElementById('mgmt-edit-jobtitle-' + index);
     data.employees[index] = {
       name: val,
       department: sanitizeInput(deptSelect ? deptSelect.value : ''),
@@ -7755,7 +7775,8 @@ function saveEditMgmt(key, index) {
       startDate: startSelect ? startSelect.value : '',
       endDate: endSelect ? endSelect.value : '',
       absences: existingAbsences,
-      contractType: contractSelect ? contractSelect.value : (existingEmp.contractType || 'inhouse')
+      contractType: contractSelect ? contractSelect.value : (existingEmp.contractType || 'inhouse'),
+      jobTitle: jobTitleSelect ? jobTitleSelect.value : (existingEmp.jobTitle || '')
     };
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
@@ -8538,7 +8559,10 @@ function renderRequisitions() {
   html += '<summary style="font-weight:700;font-size:14px;color:var(--accent);margin-bottom:12px;">➕ طلب توظيف جديد</summary>';
   html += '<div class="form-grid">';
   html += '<div><label>اسم المرشح *</label><input type="text" id="reqCandidateName" placeholder="اسم المرشح"></div>';
-  html += '<div><label>المسمى الوظيفي *</label><input type="text" id="reqPosition" placeholder="المسمى الوظيفي"></div>';
+  var jobTitles = data.jobTitles || [];
+  html += '<div><label>المسمى الوظيفي *</label><select id="reqPosition"><option value="">— اختر المسمى الوظيفي —</option>';
+  jobTitles.forEach(function(jt) { html += '<option value="' + escapeAttr(jt) + '">' + escapeHtml(jt) + '</option>'; });
+  html += '</select></div>';
   html += '<div><label>الإدارة *</label><select id="reqDepartment" onchange="updateReqSections()">';
   html += '<option value="">— اختر الإدارة —</option>';
   departments.forEach(function(d) { html += '<option value="' + escapeAttr(d) + '">' + escapeHtml(d) + '</option>'; });
@@ -8771,7 +8795,8 @@ function onboardRequisition(req) {
     startDate: startDate,
     endDate: '',
     absences: [],
-    contractType: req.contractType || 'inhouse'
+    contractType: req.contractType || 'inhouse',
+    jobTitle: req.position || ''
   };
   employees.push(newEmp);
   saveMgmtList('employees', employees);
@@ -8796,7 +8821,10 @@ function editRequisition(reqId) {
   var html = '<div class="req-add-form" style="border:none;padding:0;">';
   html += '<div class="form-grid">';
   html += '<div><label>اسم المرشح</label><input type="text" id="reqEdit_name" value="' + escapeAttr(req.candidateName || '') + '"></div>';
-  html += '<div><label>المسمى الوظيفي</label><input type="text" id="reqEdit_pos" value="' + escapeAttr(req.position || '') + '"></div>';
+  var jobTitles = data.jobTitles || [];
+  html += '<div><label>المسمى الوظيفي</label><select id="reqEdit_pos"><option value="">— اختر —</option>';
+  jobTitles.forEach(function(jt) { html += '<option value="' + escapeAttr(jt) + '"' + (jt === req.position ? ' selected' : '') + '>' + escapeHtml(jt) + '</option>'; });
+  html += '</select></div>';
   html += '<div><label>الإدارة</label><select id="reqEdit_dept" onchange="updateReqEditSections(\'' + escapeJS(reqId) + '\')">';
   html += '<option value="">—</option>';
   departments.forEach(function(d) { html += '<option value="' + escapeAttr(d) + '"' + (d === req.department ? ' selected' : '') + '>' + escapeHtml(d) + '</option>'; });
