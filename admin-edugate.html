@@ -2069,7 +2069,7 @@ function navigateTo(section) {
   if (section === 'resourcePlanner') { initRpDefaults(); renderResourcePlanner(); }
   if (section === 'dataManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDataManagement(); }
   if (section === 'employeeManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderEmployeeManagement(); }
-  if (section === 'requisitions') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderRequisitions(); }
+  if (section === 'requisitions') { if (!isAdmin() && CURRENT_USER_ROLE !== 'planner') { navigateTo('dashboard'); return; } renderRequisitions(); }
   if (section === 'userManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderUserManagement(); }
   if (section === 'settings') { if (!isAdmin()) { navigateTo('dashboard'); return; } openSettings(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2259,7 +2259,7 @@ function applyUserPermissions() {
   if (navEmpMgmt) navEmpMgmt.style.display = isAdmin ? '' : 'none';
 
   var navReqMgmt = document.getElementById('navReqMgmt');
-  if (navReqMgmt) navReqMgmt.style.display = isAdmin ? '' : 'none';
+  if (navReqMgmt) navReqMgmt.style.display = (isAdmin || CURRENT_USER_ROLE === 'planner') ? '' : 'none';
 
   // Hide departments & sections for non-admin
   var navDepts = document.querySelector('.nav-item[data-section="deptsAndSections"]');
@@ -8504,6 +8504,21 @@ function renderRequisitions() {
   var sections = data.sections || {};
   var projects = data.projects || [];
   var html = '';
+  var canManage = isAdmin(); // only admin can advance/revert/edit/delete
+
+  // For planner: filter to only their accessible platforms/departments
+  var userPlatforms = [];
+  if (!canManage && CURRENT_USER_PERMS) {
+    userPlatforms = CURRENT_USER_PERMS.platforms || [];
+    if (CURRENT_USER_PERMS.departments && CURRENT_USER_PERMS.departments.length > 0) {
+      departments = departments.filter(function(d) { return CURRENT_USER_PERMS.departments.indexOf(d) !== -1; });
+    }
+    // Filter requisitions: show only those created by this user OR matching their platforms
+    reqs = reqs.filter(function(r) {
+      if (r.requestedBy === (CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username)) return true;
+      return userCanAccessDept(r.department);
+    });
+  }
 
   // Pipeline summary bar
   html += '<div class="req-pipeline-bar">';
@@ -8574,6 +8589,7 @@ function renderRequisitions() {
       if (req.projectName) html += '<div class="req-card-meta-row">📁 ' + escapeHtml(req.projectName) + '</div>';
       html += '<div class="req-card-meta-row">📅 ' + (req.createdAt ? new Date(req.createdAt).toLocaleDateString('ar-SA') : '—') + '</div>';
       if (req.contractType) html += '<div class="req-card-meta-row">' + (req.contractType === 'inhouse' ? '🏠 Inhouse' : '🌐 Offshore') + '</div>';
+      if (req.requestedBy) html += '<div class="req-card-meta-row">👤 ' + escapeHtml(req.requestedBy) + '</div>';
       html += '</div>';
       // Stage progress dots
       html += '<div class="req-stage-progress">';
@@ -8585,11 +8601,15 @@ function renderRequisitions() {
       html += '</div>';
       // Actions
       html += '<div class="req-card-actions">';
-      if (stageIdx > 0) html += '<button class="mgmt-action-btn" onclick="revertRequisitionStage(\'' + escapeJS(req.id) + '\')" title="تراجع مرحلة">⏪</button>';
-      if (stageIdx < REQ_STAGES.length - 1) html += '<button class="mgmt-action-btn" onclick="advanceRequisitionStage(\'' + escapeJS(req.id) + '\')" title="تقدم للمرحلة التالية" style="color:var(--success);font-weight:700;">⏩ التالي</button>';
+      if (canManage) {
+        if (stageIdx > 0) html += '<button class="mgmt-action-btn" onclick="revertRequisitionStage(\'' + escapeJS(req.id) + '\')" title="تراجع مرحلة">⏪</button>';
+        if (stageIdx < REQ_STAGES.length - 1) html += '<button class="mgmt-action-btn" onclick="advanceRequisitionStage(\'' + escapeJS(req.id) + '\')" title="تقدم للمرحلة التالية" style="color:var(--success);font-weight:700;">⏩ التالي</button>';
+      }
       html += '<button class="mgmt-action-btn" onclick="viewRequisitionHistory(\'' + escapeJS(req.id) + '\')" title="سجل المراحل">📜</button>';
-      html += '<button class="mgmt-action-btn" onclick="editRequisition(\'' + escapeJS(req.id) + '\')" title="تعديل">✏️</button>';
-      html += '<button class="mgmt-action-btn" onclick="deleteRequisition(\'' + escapeJS(req.id) + '\')" title="حذف" style="color:var(--danger);">🗑️</button>';
+      if (canManage) {
+        html += '<button class="mgmt-action-btn" onclick="editRequisition(\'' + escapeJS(req.id) + '\')" title="تعديل">✏️</button>';
+        html += '<button class="mgmt-action-btn" onclick="deleteRequisition(\'' + escapeJS(req.id) + '\')" title="حذف" style="color:var(--danger);">🗑️</button>';
+      }
       html += '</div>';
       html += '</div>';
     });
@@ -8611,7 +8631,7 @@ function updateReqSections() {
 }
 
 function addRequisition() {
-  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
+  if (!isAdmin() && CURRENT_USER_ROLE !== 'planner') { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
   var name = sanitizeInput(document.getElementById('reqCandidateName').value);
   var pos = sanitizeInput(document.getElementById('reqPosition').value);
   var dept = document.getElementById('reqDepartment').value;
@@ -8636,6 +8656,7 @@ function addRequisition() {
     projectName: proj,
     currentStage: 'initiated',
     stageHistory: [{ stage: 'initiated', date: new Date().toISOString(), notes: 'تم إنشاء الطلب' }],
+    requestedBy: CURRENT_USER_PERMS ? (CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username || '') : 'المسؤول',
     createdAt: new Date().toISOString(),
     notes: notes
   };
