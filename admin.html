@@ -8562,12 +8562,10 @@ function renderRequisitions() {
   jobTitles.forEach(function(jt) { html += '<option value="' + escapeAttr(jt) + '">' + escapeHtml(jt) + '</option>'; });
   html += '</select></div>';
   html += '<div><label>نوع التعاقد</label><select id="reqContractType"><option value="inhouse">Inhouse</option><option value="offshore">Offshore</option></select></div>';
-  html += '<div><label>المشروع</label><select id="reqProject"><option value="">— بدون مشروع —</option>';
-  projects.forEach(function(p) { html += '<option value="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</option>'; });
-  html += '</select></div>';
-  html += '<div><label>💻 المنصة *</label><select id="reqPlatform"><option value="">— اختر المنصة —</option>';
+  html += '<div><label>💻 المنصة *</label><select id="reqPlatform" onchange="updateReqProjectsByPlatform()"><option value="">— اختر المنصة —</option>';
   platforms.forEach(function(p) { html += '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>'; });
   html += '</select></div>';
+  html += '<div><label>المشروع</label><select id="reqProject"><option value="">— اختر المنصة أولاً —</option></select></div>';
   html += '<div style="grid-column:1/-1;"><label>ملاحظات</label><textarea id="reqNotes" placeholder="ملاحظات إضافية..."></textarea></div>';
   html += '</div>';
   html += '<div style="margin-top:12px;text-align:left;"><button class="mgmt-add-btn" onclick="addRequisition()" style="padding:8px 24px;">➕ إضافة الطلب</button></div>';
@@ -8656,6 +8654,22 @@ function updateReqSections() {
   secs.forEach(function(s) { secSel.innerHTML += '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; });
 }
 
+function updateReqProjectsByPlatform() {
+  var plat = document.getElementById('reqPlatform').value;
+  var projSel = document.getElementById('reqProject');
+  if (!projSel) return;
+  if (!plat) {
+    projSel.innerHTML = '<option value="">— اختر المنصة أولاً —</option>';
+    return;
+  }
+  var data = getMgmtData();
+  var projects = (data.projects || []).filter(function(p) {
+    return p.platforms && p.platforms.indexOf(plat) !== -1;
+  });
+  projSel.innerHTML = '<option value="">— بدون مشروع —</option>';
+  projects.forEach(function(p) { projSel.innerHTML += '<option value="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</option>'; });
+}
+
 function addRequisition() {
   if (!isAdmin() && CURRENT_USER_ROLE !== 'planner') { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
   var pos = sanitizeInput(document.getElementById('reqPosition').value);
@@ -8701,7 +8715,7 @@ function advanceRequisitionStage(reqId) {
 
   var nextStage = REQ_STAGES[idx + 1];
   var needsProject = nextStage.key === 'budget_approved' && !req.projectName;
-  var projects = needsProject ? (data.projects || []).map(function(p) { return p.name; }) : [];
+  var projects = needsProject ? (data.projects || []).filter(function(p) { return !req.platformName || (p.platforms && p.platforms.indexOf(req.platformName) !== -1); }).map(function(p) { return p.name; }) : [];
   var needsCandidateName = nextStage.key === 'offered' && !req.candidateName;
   var needsDeptSection = nextStage.key === 'onboarded';
   var departments = data.departments || [];
@@ -8872,11 +8886,12 @@ function editRequisition(reqId) {
   jobTitles.forEach(function(jt) { html += '<option value="' + escapeAttr(jt) + '"' + (jt === req.position ? ' selected' : '') + '>' + escapeHtml(jt) + '</option>'; });
   html += '</select></div>';
   html += '<div><label>نوع التعاقد</label><select id="reqEdit_contract"><option value="inhouse"' + (req.contractType === 'inhouse' ? ' selected' : '') + '>Inhouse</option><option value="offshore"' + (req.contractType === 'offshore' ? ' selected' : '') + '>Offshore</option></select></div>';
-  html += '<div><label>المشروع</label><select id="reqEdit_proj"><option value="">— بدون —</option>';
-  projects.forEach(function(p) { html += '<option value="' + escapeAttr(p.name) + '"' + (p.name === req.projectName ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>'; });
-  html += '</select></div>';
-  html += '<div><label>💻 المنصة</label><select id="reqEdit_plat"><option value="">— اختر —</option>';
+  html += '<div><label>💻 المنصة</label><select id="reqEdit_plat" onchange="updateReqEditProjectsByPlatform(\'' + escapeJS(reqId) + '\')"><option value="">— اختر —</option>';
   platforms.forEach(function(p) { html += '<option value="' + escapeAttr(p) + '"' + (p === req.platformName ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'; });
+  html += '</select></div>';
+  var filteredProjects = projects.filter(function(p) { return !req.platformName || (p.platforms && p.platforms.indexOf(req.platformName) !== -1); });
+  html += '<div><label>المشروع</label><select id="reqEdit_proj"><option value="">— بدون —</option>';
+  filteredProjects.forEach(function(p) { html += '<option value="' + escapeAttr(p.name) + '"' + (p.name === req.projectName ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>'; });
   html += '</select></div>';
   html += '<div style="grid-column:1/-1;"><label>ملاحظات</label><textarea id="reqEdit_notes">' + escapeHtml(req.notes || '') + '</textarea></div>';
   html += '</div>';
@@ -8895,6 +8910,18 @@ function updateReqEditSections(reqId) {
   var secs = (data.sections || {})[dept] || [];
   secSel.innerHTML = '<option value="">—</option>';
   secs.forEach(function(s) { secSel.innerHTML += '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>'; });
+}
+
+function updateReqEditProjectsByPlatform(reqId) {
+  var plat = document.getElementById('reqEdit_plat').value;
+  var projSel = document.getElementById('reqEdit_proj');
+  if (!projSel) return;
+  var data = getMgmtData();
+  var projects = (data.projects || []).filter(function(p) {
+    return !plat || (p.platforms && p.platforms.indexOf(plat) !== -1);
+  });
+  projSel.innerHTML = '<option value="">— بدون —</option>';
+  projects.forEach(function(p) { projSel.innerHTML += '<option value="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</option>'; });
 }
 
 function saveRequisitionEdit(reqId) {
