@@ -8572,9 +8572,13 @@ function renderRequisitions() {
   platforms.forEach(function(p) { html += '<option value="' + escapeAttr(p) + '">' + escapeHtml(p) + '</option>'; });
   html += '</select></div>';
   html += '<div><label>المشروع *</label><select id="reqProject"><option value="">— اختر المنصة أولاً —</option></select></div>';
+  html += '<div><label>عدد الطلبات</label><input type="number" id="reqCount" min="1" max="50" value="1" style="width:80px;"></div>';
   html += '<div style="grid-column:1/-1;"><label>ملاحظات</label><textarea id="reqNotes" placeholder="ملاحظات إضافية..."></textarea></div>';
   html += '</div>';
-  html += '<div style="margin-top:12px;text-align:left;"><button class="mgmt-add-btn" onclick="addRequisition()" style="padding:8px 24px;">➕ إضافة الطلب</button></div>';
+  html += '<div style="margin-top:12px;display:flex;align-items:center;gap:16px;justify-content:flex-end;">';
+  html += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-light);"><input type="checkbox" id="reqAddAnother" style="cursor:pointer;"> إضافة أخرى على نفس المشروع</label>';
+  html += '<button class="mgmt-add-btn" onclick="addRequisition()" style="padding:8px 24px;">➕ إضافة الطلب</button>';
+  html += '</div>';
   html += '</details>';
 
   // Filter bar
@@ -8693,6 +8697,10 @@ function addRequisition() {
   var reqType = document.getElementById('reqType').value;
   var replacementEmp = reqType === 'replacement' ? document.getElementById('reqReplacementEmp').value : '';
   var notes = (document.getElementById('reqNotes').value || '').trim();
+  var count = parseInt(document.getElementById('reqCount').value) || 1;
+  if (count < 1) count = 1;
+  if (count > 50) count = 50;
+  var addAnother = document.getElementById('reqAddAnother') && document.getElementById('reqAddAnother').checked;
 
   if (!pos) { showMgmtToast('اختر المسمى الوظيفي', 'error'); return; }
   if (!plat) { showMgmtToast('اختر المنصة', 'error'); return; }
@@ -8701,27 +8709,60 @@ function addRequisition() {
 
   var data = getMgmtData();
   var reqs = data.requisitions || [];
-  var newReq = {
-    id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-    candidateName: '',
-    position: pos,
-    department: '',
-    section: '',
-    contractType: contract || 'inhouse',
-    projectName: proj,
-    platformName: plat,
-    requestType: reqType,
-    replacementFor: replacementEmp,
-    currentStage: 'initiated',
-    stageHistory: [{ stage: 'initiated', date: new Date().toISOString(), notes: 'تم إنشاء الطلب' }],
-    requestedBy: CURRENT_USER_PERMS ? (CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username || '') : 'المسؤول',
-    createdAt: new Date().toISOString(),
-    notes: notes
-  };
-  reqs.push(newReq);
+  for (var i = 0; i < count; i++) {
+    var newReq = {
+      id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4) + '_' + i,
+      candidateName: '',
+      position: pos,
+      department: '',
+      section: '',
+      contractType: contract || 'inhouse',
+      projectName: proj,
+      platformName: plat,
+      requestType: reqType,
+      replacementFor: replacementEmp,
+      currentStage: 'initiated',
+      stageHistory: [{ stage: 'initiated', date: new Date().toISOString(), notes: 'تم إنشاء الطلب' }],
+      requestedBy: CURRENT_USER_PERMS ? (CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username || '') : 'المسؤول',
+      createdAt: new Date().toISOString(),
+      notes: notes
+    };
+    reqs.push(newReq);
+  }
   saveMgmtList('requisitions', reqs);
-  showMgmtToast('تم إضافة طلب التوظيف: ' + pos + ' - ' + plat, 'success');
-  renderRequisitions();
+  var msg = count > 1 ? 'تم إضافة ' + count + ' طلبات توظيف: ' + pos + ' - ' + plat : 'تم إضافة طلب التوظيف: ' + pos + ' - ' + plat;
+  showMgmtToast(msg, 'success');
+
+  if (addAnother) {
+    // Save form values before re-render
+    var savedForm = { plat: plat, proj: proj, contract: contract, reqType: reqType, replacementEmp: replacementEmp };
+    renderRequisitions();
+    // Restore form values and keep form open
+    setTimeout(function() {
+      var details = document.querySelector('.req-add-form');
+      if (details) details.open = true;
+      var platEl = document.getElementById('reqPlatform');
+      if (platEl) { platEl.value = savedForm.plat; updateReqProjectsByPlatform(); }
+      setTimeout(function() {
+        var projEl = document.getElementById('reqProject');
+        if (projEl) projEl.value = savedForm.proj;
+        var contractEl = document.getElementById('reqContractType');
+        if (contractEl) contractEl.value = savedForm.contract;
+        var typeEl = document.getElementById('reqType');
+        if (typeEl) { typeEl.value = savedForm.reqType; toggleReqReplacementDropdown(); }
+        if (savedForm.reqType === 'replacement') {
+          var replEl = document.getElementById('reqReplacementEmp');
+          if (replEl) replEl.value = savedForm.replacementEmp;
+        }
+        var countEl = document.getElementById('reqCount');
+        if (countEl) countEl.value = '1';
+        var chk = document.getElementById('reqAddAnother');
+        if (chk) chk.checked = true;
+      }, 50);
+    }, 0);
+  } else {
+    renderRequisitions();
+  }
 }
 
 function advanceRequisitionStage(reqId) {
