@@ -8549,6 +8549,15 @@ var reqFilterStage = '';
 function renderRequisitions() {
   var data = getMgmtData();
   var reqs = data.requisitions || [];
+  // Migrate old placeholder candidateNames like "مرشح 2", "مرشح 3" etc.
+  var migrated = false;
+  reqs.forEach(function(req) {
+    if (req.candidateName && /^مرشح\s*\d+$/.test(req.candidateName.trim())) {
+      req.candidateName = '';
+      migrated = true;
+    }
+  });
+  if (migrated) { data.requisitions = reqs; saveMgmtList('requisitions', reqs); }
   var projects = data.projects || [];
   var html = '';
   var canManage = isAdmin(); // only admin can advance/revert/edit/delete
