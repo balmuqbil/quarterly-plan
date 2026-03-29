@@ -6681,6 +6681,7 @@ function saveMgmtList(key, list) {
 // ===== Firebase Sync for Management Data =====
 var mgmtFirebaseListenerActive = false;
 var mgmtSyncInProgress = false; // prevent feedback loops
+var MGMT_SYNC_FLAG = MGMT_STORAGE_PREFIX + 'firebase_synced'; // tracks if initial sync done
 
 function syncMgmtToFirebase(key, data) {
   if (!firebaseReady || !firebaseDb) return;
@@ -6694,61 +6695,101 @@ function syncMgmtToFirebase(key, data) {
 
 var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions'];
 
+function mgmtDataSize(val) {
+  if (!val) return 0;
+  if (Array.isArray(val)) return val.length;
+  if (typeof val === 'object') return Object.keys(val).length;
+  return 1;
+}
+
+function fixFbArray(fbVal, localVal) {
+  // Firebase converts arrays to objects with numeric keys — convert back
+  if (Array.isArray(localVal) && !Array.isArray(fbVal) && typeof fbVal === 'object') {
+    var arr = [];
+    Object.keys(fbVal).forEach(function(k) { arr[parseInt(k)] = fbVal[k]; });
+    return arr.filter(function(v) { return v !== undefined && v !== null; });
+  }
+  return fbVal;
+}
+
 function loadMgmtFromFirebase(callback) {
   if (!firebaseReady || !firebaseDb) { if (callback) callback(); return; }
+  var isFirstSync = !localStorage.getItem(MGMT_SYNC_FLAG);
+
   firebaseDb.ref('management').once('value').then(function(snapshot) {
     var fbData = snapshot.val() || {};
     var localData = getMgmtData();
-    var toUpload = {}; // local keys missing from Firebase
+    var toUpload = {}; // keys where local wins and needs to push to Firebase
 
     mgmtSyncInProgress = true;
 
-    MGMT_ALL_KEYS.forEach(function(key) {
-      var fbVal = fbData[key];
-      var localVal = localData[key];
-      var fbHasData = fbVal !== undefined && fbVal !== null &&
-        (Array.isArray(fbVal) ? fbVal.length > 0 : typeof fbVal === 'object' ? Object.keys(fbVal).length > 0 : true);
-      var localHasData = localVal !== undefined && localVal !== null &&
-        (Array.isArray(localVal) ? localVal.length > 0 : typeof localVal === 'object' ? Object.keys(localVal).length > 0 : true);
+    // First sync from this machine: push ALL local data to Firebase
+    // (local is richer because it has the real user data)
+    if (isFirstSync) {
+      console.log('🔄 First sync from this machine — local data takes priority');
+      MGMT_ALL_KEYS.forEach(function(key) {
+        var localVal = localData[key];
+        var localSize = mgmtDataSize(localVal);
+        var fbVal = fbData[key];
+        if (fbVal) fbVal = fixFbArray(fbVal, localVal);
+        var fbSize = mgmtDataSize(fbVal);
 
-      if (fbHasData) {
-        // Firebase has this data — use it (cloud is source of truth)
-        // Firebase converts arrays to objects with numeric keys — convert back
-        if (Array.isArray(localVal) && !Array.isArray(fbVal) && typeof fbVal === 'object') {
-          var arr = [];
-          Object.keys(fbVal).forEach(function(k) { arr[parseInt(k)] = fbVal[k]; });
-          fbVal = arr.filter(function(v) { return v !== undefined && v !== null; });
+        if (localSize > 0) {
+          if (localSize >= fbSize) {
+            // Local has same or more data — push to Firebase
+            toUpload[key] = localVal;
+          } else {
+            // Firebase has more — use Firebase
+            localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbVal));
+            console.log('📊 ' + key + ': Firebase (' + fbSize + ') > local (' + localSize + ') — using Firebase');
+          }
+        } else if (fbSize > 0) {
+          // Local empty, Firebase has data — use Firebase
+          localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbVal));
         }
-        localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbVal));
-      } else if (localHasData) {
-        // Firebase is missing this key but local has it — queue for upload
-        toUpload[key] = localVal;
-      }
-    });
+      });
+      localStorage.setItem(MGMT_SYNC_FLAG, new Date().toISOString());
+    } else {
+      // Subsequent syncs: Firebase is source of truth (data was already synced)
+      MGMT_ALL_KEYS.forEach(function(key) {
+        var fbVal = fbData[key];
+        var localVal = localData[key];
+        if (fbVal) fbVal = fixFbArray(fbVal, localVal);
+        var fbSize = mgmtDataSize(fbVal);
+        var localSize = mgmtDataSize(localVal);
+
+        if (fbSize === 0 && localSize > 0) {
+          // Firebase missing this key — push local
+          toUpload[key] = localVal;
+        } else if (fbSize > 0) {
+          // Firebase has data — use it
+          localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbVal));
+        }
+      });
+    }
 
     // Update employee autocomplete caches
-    var empData = fbData.employees || localData.employees;
-    if (empData && (Array.isArray(empData) ? empData.length > 0 : true)) {
-      var empArr = Array.isArray(empData) ? empData : Object.keys(empData).map(function(k) { return empData[k]; });
-      var names = empArr.map(function(e) { return typeof e === 'string' ? e : e.name; });
+    var finalEmpData = getMgmtData().employees || [];
+    if (finalEmpData.length > 0) {
+      var names = finalEmpData.map(function(e) { return typeof e === 'string' ? e : e.name; });
       localStorage.setItem('qplan_employees', JSON.stringify(names));
-      localStorage.setItem('qplan_employees_full', JSON.stringify(empArr));
+      localStorage.setItem('qplan_employees_full', JSON.stringify(finalEmpData));
     }
 
     mgmtSyncInProgress = false;
-    console.log('🔥 Management data loaded from Firebase:', Object.keys(fbData).join(', '));
+    console.log('🔥 Management data merge complete (' + (isFirstSync ? 'first sync' : 'refresh') + '). Firebase keys:', Object.keys(fbData).join(', '));
 
-    // Push any missing local data to Firebase
+    // Push data to Firebase
     if (Object.keys(toUpload).length > 0) {
-      console.log('☁️ Pushing missing local data to Firebase:', Object.keys(toUpload).join(', '));
+      console.log('☁️ Pushing data to Firebase:', Object.keys(toUpload).join(', '));
       var updates = {};
       Object.keys(toUpload).forEach(function(key) {
         updates['management/' + key] = toUpload[key];
       });
       firebaseDb.ref().update(updates).then(function() {
-        console.log('🔥 Missing data pushed to Firebase:', Object.keys(toUpload).join(', '));
+        console.log('🔥 Data pushed to Firebase:', Object.keys(toUpload).join(', '));
       }).catch(function(err) {
-        console.error('❌ Failed to push missing data:', err);
+        console.error('❌ Failed to push data:', err);
       });
     }
 
@@ -6764,6 +6805,8 @@ function forceSyncMgmtToCloud() {
     showMgmtToast('⚠️ Firebase غير متصل — تحقق من الإعدادات', 'error');
     return;
   }
+  // Reset sync flag so next load does first-sync (local priority)
+  localStorage.removeItem(MGMT_SYNC_FLAG);
   pushAllMgmtToFirebase();
 }
 
