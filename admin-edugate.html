@@ -8336,12 +8336,29 @@ function renderDeptsAndSections() {
   }
   if (deptYearVal !== 'all') filterLabel += ' ' + deptYearVal;
 
-  // Calculate usage per dept and section
+  // Build lookup of active employees per month for filtering
+  var empActiveCache = {};
+  var allEmps = mgmt.employees || [];
+  function isEmpActiveInFilterMonths(empName) {
+    if (empActiveCache[empName] !== undefined) return empActiveCache[empName];
+    var emp = allEmps.find(function(e) { return typeof e === 'object' && e.name === empName; });
+    if (!emp) { empActiveCache[empName] = true; return true; } // unknown employee, include
+    // Active if active in ANY of the selected filter months
+    var active = filterMonths.some(function(m) {
+      return isEmployeeActiveInMonth(emp, m, filterYear);
+    });
+    empActiveCache[empName] = active;
+    return active;
+  }
+
+  // Calculate usage per dept and section (only from active employees)
   var usageByDeptSec = {};
   var usageByDept = {};
   var empCountByDeptSec = {};
   var empCountByDept = {};
   localData.forEach(function(r) {
+    // Skip tasks from employees who are not active in the selected period
+    if (!isEmpActiveInFilterMonths(r.name)) return;
     var dk = r.department || '';
     var sk = r.section || '';
     usageByDept[dk] = (usageByDept[dk] || 0) + (parseFloat(r.occupancy) || 0);
@@ -8515,11 +8532,23 @@ function showCapacityDrill() {
   // Get dynamic capacity
   var capData = getCapacityDataForMonths(filterMonths, filterYear);
 
-  // Only count approved tasks for capacity calculations (uses global approvedData)
+  // Filter approved data to only active employees in the selected period
+  var mgmtDrill = getMgmtData();
+  var allEmpsDrill = mgmtDrill.employees || [];
+  var drillEmpCache = {};
+  function isDrillEmpActive(empName) {
+    if (drillEmpCache[empName] !== undefined) return drillEmpCache[empName];
+    var emp = allEmpsDrill.find(function(e) { return typeof e === 'object' && e.name === empName; });
+    if (!emp) { drillEmpCache[empName] = true; return true; }
+    var active = filterMonths.some(function(m) { return isEmployeeActiveInMonth(emp, m, filterYear); });
+    drillEmpCache[empName] = active;
+    return active;
+  }
+  var activeApproved = approvedData.filter(function(r) { return isDrillEmpActive(r.name); });
 
   var totalActive = Object.values(capData).reduce(function(s,d){return s+d.totalActiveEmployees;},0);
   var totalCap = Object.values(capData).reduce(function(s,d){return s+d.totalCapacity;},0);
-  var totalUsed = approvedData.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+  var totalUsed = activeApproved.reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
   var util = totalCap > 0 ? (totalUsed/totalCap*100).toFixed(1) : 0;
 
   var html = '<div class="drill-stats-row">';
@@ -8536,7 +8565,7 @@ function showCapacityDrill() {
   var deptStats = {};
   Object.entries(capData).forEach(function(entry) {
     var dept = entry[0], d = entry[1];
-    var used = approvedData.filter(function(r){return r.department === dept;}).reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
+    var used = activeApproved.filter(function(r){return r.department === dept;}).reduce(function(s,r){return s+(parseFloat(r.occupancy)||0);},0);
     var cap = d.totalCapacity;
     var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
     var color = getOccColor(pct);
@@ -8554,7 +8583,7 @@ function showCapacityDrill() {
     var dept = entry[0], d = entry[1];
     Object.entries(d.sections).forEach(function(secEntry) {
       var sec = secEntry[0], s = secEntry[1];
-      var used = approvedData.filter(function(r){return r.department === dept && r.section === sec;}).reduce(function(sum,r){return sum+(parseFloat(r.occupancy)||0);},0);
+      var used = activeApproved.filter(function(r){return r.department === dept && r.section === sec;}).reduce(function(sum,r){return sum+(parseFloat(r.occupancy)||0);},0);
       var cap = s.totalCapacity;
       var pct = cap > 0 ? (used/cap*100).toFixed(1) : '—';
       var color = getOccColor(pct);
