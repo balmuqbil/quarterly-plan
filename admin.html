@@ -5139,6 +5139,7 @@ function rpEnablePool(platform) {
   var pools = rpGetPoolPlatforms();
   pools[platform] = true;
   localStorage.setItem(MGMT_STORAGE_PREFIX + 'poolPlatforms', JSON.stringify(pools));
+  syncMgmtToFirebase('poolPlatforms', pools);
   renderResourcePlanner();
   showMgmtToast('تم إضافة قسم الموارد غير المخصصة لـ ' + platform, 'success');
 }
@@ -5146,6 +5147,7 @@ function rpDisablePool(platform) {
   var pools = rpGetPoolPlatforms();
   delete pools[platform];
   localStorage.setItem(MGMT_STORAGE_PREFIX + 'poolPlatforms', JSON.stringify(pools));
+  syncMgmtToFirebase('poolPlatforms', pools);
   renderResourcePlanner();
 }
 
@@ -5154,12 +5156,14 @@ function rpGetSquadCounts() {
 }
 function rpSaveSquadCounts(counts) {
   localStorage.setItem(MGMT_STORAGE_PREFIX + 'platformSquads', JSON.stringify(counts));
+  syncMgmtToFirebase('platformSquads', counts);
 }
 function rpGetSquadNames() {
   return JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'squadNames') || '{}');
 }
 function rpSaveSquadNames(names) {
   localStorage.setItem(MGMT_STORAGE_PREFIX + 'squadNames', JSON.stringify(names));
+  syncMgmtToFirebase('squadNames', names);
 }
 function rpGetSquadName(platform, squadNum) {
   var names = rpGetSquadNames();
@@ -6719,7 +6723,7 @@ function syncMgmtToFirebase(key, data) {
   });
 }
 
-var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions', 'managed_users'];
+var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions', 'managed_users', 'taskTypeNoPlatform', 'platformSquads', 'squadNames', 'poolPlatforms'];
 
 function mgmtDataSize(val) {
   if (!val) return 0;
@@ -6753,8 +6757,12 @@ function loadMgmtFromFirebase(callback) {
     function getLocalStorageKey(key) {
       return key === 'managed_users' ? STORAGE_PREFIX + 'managed_users' : MGMT_STORAGE_PREFIX + key;
     }
+    var directLocalKeys = ['managed_users', 'taskTypeNoPlatform', 'platformSquads', 'squadNames', 'poolPlatforms'];
     function getLocalVal(key) {
       if (key === 'managed_users') return getManagedUsers();
+      if (directLocalKeys.indexOf(key) !== -1) {
+        try { return JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + key) || '{}'); } catch(e) { return {}; }
+      }
       return localData[key];
     }
 
@@ -6852,7 +6860,11 @@ function pushAllMgmtToFirebase() {
   var payload = {};
   var hasData = false;
   MGMT_ALL_KEYS.forEach(function(key) {
-    var val = key === 'managed_users' ? getManagedUsers() : data[key];
+    var directKeys = ['managed_users', 'taskTypeNoPlatform', 'platformSquads', 'squadNames', 'poolPlatforms'];
+    var val;
+    if (key === 'managed_users') { val = getManagedUsers(); }
+    else if (directKeys.indexOf(key) !== -1) { try { val = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + key) || '{}'); } catch(e) { val = {}; } }
+    else { val = data[key]; }
     if (val !== undefined && val !== null) {
       if (Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0) {
         payload[key] = val;
@@ -8337,6 +8349,7 @@ function toggleTaskTypeNoPlatform(taskType, noPlatform) {
     delete mapping[taskType];
   }
   localStorage.setItem(MGMT_STORAGE_PREFIX + 'taskTypeNoPlatform', JSON.stringify(mapping));
+  syncMgmtToFirebase('taskTypeNoPlatform', mapping);
   showMgmtToast((noPlatform ? '✓ ' : '✗ ') + '"' + taskType + '" — ' + (noPlatform ? 'بدون منصة' : 'يتطلب منصة'), 'success');
 }
 
