@@ -6503,7 +6503,7 @@ var CSV_EMPLOYEES = [
   {name:'مها محمد النفيعي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
   {name:'أروى سلطان الرزيحي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
   {name:'الهنوف عبدالله العبدالله',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
-  {name:'طارق خليفة الربيعة',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
+  {name:'طارق خليفة الربيع',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
   {name:'مشعل محمد المدبل',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
   {name:'عبدالله هارون الطراوي',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
   {name:'أفنان الدايل',department:'تطوير الحلول',section:'إدارة التسليم التقني والجودة'},
@@ -8051,6 +8051,10 @@ function saveEditMgmt(key, index) {
       contractType: contractSelect ? contractSelect.value : (existingEmp.contractType || 'inhouse'),
       jobTitle: jobTitleSelect ? jobTitleSelect.value : (existingEmp.jobTitle || '')
     };
+    // If name changed, update all task records referencing the old name
+    if (currentName !== val) {
+      renameEmployeeInTasks(currentName, val);
+    }
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
       showMgmtToast('هذا العنصر موجود بالفعل', 'error');
@@ -8061,6 +8065,49 @@ function saveEditMgmt(key, index) {
   saveMgmtList(key, data[key]);
   renderDataManagement();
   showMgmtToast('تم التعديل بنجاح', 'success');
+}
+
+// Rename employee across all task records (Firebase + local)
+function renameEmployeeInTasks(oldName, newName) {
+  if (!oldName || !newName || oldName === newName) return;
+  var count = 0;
+  // Update local allData array
+  allData.forEach(function(r) {
+    if (r.name === oldName) {
+      r.name = newName;
+      count++;
+    }
+  });
+  // Update Firebase task records
+  if (firebaseReady && firebaseDb) {
+    firebaseDb.ref('tasks').once('value').then(function(snapshot) {
+      var fbTasks = snapshot.val();
+      if (!fbTasks) return;
+      var updates = {};
+      Object.keys(fbTasks).forEach(function(key) {
+        if (fbTasks[key].name === oldName) {
+          updates['tasks/' + key + '/name'] = newName;
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        firebaseDb.ref().update(updates).then(function() {
+          console.log('✅ Renamed "' + oldName + '" → "' + newName + '" in ' + Object.keys(updates).length + ' task records');
+        }).catch(function(err) {
+          console.error('❌ Failed to rename in tasks:', err);
+        });
+      }
+    });
+  }
+  // Update requisitions too (candidateName, requestedBy)
+  var mgmt = getMgmtData();
+  var reqs = mgmt.requisitions || [];
+  var reqChanged = false;
+  reqs.forEach(function(req) {
+    if (req.candidateName === oldName) { req.candidateName = newName; reqChanged = true; }
+    if (req.replacementFor === oldName) { req.replacementFor = newName; reqChanged = true; }
+  });
+  if (reqChanged) saveMgmtList('requisitions', reqs);
+  if (count > 0) console.log('✅ Renamed "' + oldName + '" → "' + newName + '" in ' + count + ' local task records');
 }
 
 // Section CRUD
