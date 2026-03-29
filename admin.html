@@ -1576,9 +1576,10 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div class="top-bar">
       <div>
         <h1>🗂️ إدارة البيانات الأساسية</h1>
-        <div class="subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُحفظ محلياً في المتصفح وتُطبق على نموذج الموظف</div>
+        <div class="subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُطبق على نموذج الموظف</div>
       </div>
       <div class="top-actions">
+        <button class="export-btn" onclick="forceSyncMgmtToCloud()" title="رفع جميع البيانات إلى Firebase">☁️ مزامنة</button>
         <button class="export-btn" onclick="exportMgmtData()">📥 تصدير الإعدادات</button>
         <label class="export-btn" style="cursor:pointer;">📤 استيراد <input type="file" accept=".json" style="display:none" onchange="importMgmtData(event)"></label>
       </div>
@@ -1608,9 +1609,10 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div class="top-bar">
       <div>
         <h1>📋 إدارة طلبات التوظيف</h1>
-        <div class="subtitle">تتبع طلبات التوظيف من الطرح حتى المباشرة — تُحفظ محلياً في المتصفح</div>
+        <div class="subtitle">تتبع طلبات التوظيف من الطرح حتى المباشرة</div>
       </div>
       <div class="top-actions">
+        <button class="export-btn" onclick="forceSyncMgmtToCloud()" title="رفع جميع البيانات إلى Firebase">☁️ مزامنة</button>
         <button class="export-btn" onclick="exportRequisitions()">📥 تصدير</button>
       </div>
     </div>
@@ -6756,6 +6758,14 @@ function loadMgmtFromFirebase(callback) {
     console.error('❌ Failed to load management data from Firebase:', err);
     if (callback) callback();
   });
+}
+
+function forceSyncMgmtToCloud() {
+  if (!firebaseReady || !firebaseDb) {
+    showMgmtToast('⚠️ Firebase غير متصل — تحقق من الإعدادات', 'error');
+    return;
+  }
+  pushAllMgmtToFirebase();
 }
 
 function pushAllMgmtToFirebase() {
