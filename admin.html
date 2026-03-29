@@ -2516,7 +2516,7 @@ function normalizeOccupancy(val) {
 function fixPlatformValues(data) {
   // Ensure platform field has valid platform names (not department names from old swapped data)
   const mgmt = getMgmtData();
-  const knownPlatforms = new Set(mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms);
+  const knownPlatforms = new Set(mgmt.platforms || DEFAULT_MGMT.platforms);
   const knownDepartments = new Set(mgmt.departments.length ? mgmt.departments : DEFAULT_MGMT.departments);
 
   data.forEach(r => {
@@ -2647,6 +2647,27 @@ function resolveEmployeeDepartments(data) {
   });
 }
 
+// Reconcile: ensure all platforms found in task data are in the management platforms list
+function reconcilePlatformsFromTasks(taskData) {
+  var mgmt = getMgmtData();
+  var mgmtPlatforms = mgmt.platforms || [];
+  var platformSet = {};
+  mgmtPlatforms.forEach(function(p) { platformSet[p] = true; });
+  var added = [];
+  taskData.forEach(function(r) {
+    var p = (r.platform || '').trim();
+    if (p && !platformSet[p] && p !== 'إجازة') {
+      platformSet[p] = true;
+      mgmtPlatforms.push(p);
+      added.push(p);
+    }
+  });
+  if (added.length > 0) {
+    saveMgmtList('platforms', mgmtPlatforms);
+    console.log('📊 Reconciled platforms from tasks — added:', added.join(', '));
+  }
+}
+
 // ==================== DATA LOADING (Firebase) ====================
 var firebaseListenerActive = false;
 
@@ -2692,6 +2713,7 @@ function loadData() {
         allData = cleanOccupancyData(dataArray);
         remapEmployeeNames(allData);
         resolveEmployeeDepartments(allData);
+        reconcilePlatformsFromTasks(allData);
       } else {
         allData = [];
       }
@@ -2720,6 +2742,7 @@ function loadData() {
         allData = cleanOccupancyData(dataArray);
         remapEmployeeNames(allData);
         resolveEmployeeDepartments(allData);
+        reconcilePlatformsFromTasks(allData);
       } else {
         allData = [];
       }
@@ -3478,7 +3501,7 @@ function populateTaskModalDropdowns() {
   taskEmployeeList = mgmt.employees.length ? mgmt.employees.map(function(e) { return typeof e === 'string' ? e : e.name; }) : [...new Set(allData.map(function(r) { return r.name; }).filter(Boolean))];
 
   const departments = mgmt.departments.length ? mgmt.departments : DEFAULT_MGMT.departments;
-  const platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  const platforms = mgmt.platforms || DEFAULT_MGMT.platforms;
   const taskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
 
   // Department select (disabled, auto-filled)
@@ -4523,7 +4546,7 @@ function renderResourcePlanner() {
   var platFilter = (document.getElementById('rpPlatformFilter')?.value) || 'all';
   var mgmt = getMgmtData();
   var employees = mgmt.employees || [];
-  var platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  var platforms = mgmt.platforms || DEFAULT_MGMT.platforms;
   // Filter platforms by user permissions
   if (!isAdmin()) {
     platforms = platforms.filter(function(p) { return userCanAccessPlatform(p); });
@@ -6904,7 +6927,7 @@ function initializeFromCSV() {
 // ===== Generate sample tasks =====
 function generateSampleTasks(onProgress) {
   var mgmt = getMgmtData();
-  var platforms = mgmt.platforms.length ? mgmt.platforms : DEFAULT_MGMT.platforms;
+  var platforms = mgmt.platforms || DEFAULT_MGMT.platforms;
   var allTaskTypes = mgmt.taskTypes.length ? mgmt.taskTypes : DEFAULT_MGMT.taskTypes;
   var stt = mgmt.sectionTaskTypes || {};
   var allEmps = mgmt.employees.length ? mgmt.employees : CSV_EMPLOYEES;
