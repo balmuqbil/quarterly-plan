@@ -2161,6 +2161,7 @@ async function saveSettings() {
   // Re-initialize Firebase with new config
   firebaseReady = false;
   firebaseListenerActive = false;
+  mgmtFirebaseListenerActive = false;
   firebaseApp = null;
   if (dbUrl) {
     if (initFirebase()) {
@@ -2666,6 +2667,8 @@ function loadData() {
       return;
     }
   }
+  // Load management data from Firebase and start real-time listener
+  loadMgmtFromFirebase(function() { startMgmtFirebaseListener(); });
 
   const loading = document.getElementById('loadingOverlay');
   loading.classList.remove('hidden');
@@ -6670,6 +6673,102 @@ function saveMgmtList(key, list) {
     // Also save full employee data for form auto-fill
     localStorage.setItem('qplan_employees_full', JSON.stringify(list));
   }
+  // Sync to Firebase
+  syncMgmtToFirebase(key, list);
+}
+
+// ===== Firebase Sync for Management Data =====
+var mgmtFirebaseListenerActive = false;
+var mgmtSyncInProgress = false; // prevent feedback loops
+
+function syncMgmtToFirebase(key, data) {
+  if (!firebaseReady || !firebaseDb) return;
+  if (mgmtSyncInProgress) return; // avoid re-triggering from listener
+  firebaseDb.ref('management/' + key).set(data).then(function() {
+    console.log('🔥 Mgmt synced to Firebase:', key);
+  }).catch(function(err) {
+    console.error('❌ Mgmt sync failed:', key, err);
+  });
+}
+
+function loadMgmtFromFirebase(callback) {
+  if (!firebaseReady || !firebaseDb) { if (callback) callback(); return; }
+  firebaseDb.ref('management').once('value').then(function(snapshot) {
+    var fbData = snapshot.val();
+    if (fbData) {
+      mgmtSyncInProgress = true;
+      Object.keys(fbData).forEach(function(key) {
+        localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbData[key]));
+      });
+      // Also update employee autocomplete caches
+      if (fbData.employees) {
+        var names = fbData.employees.map(function(e) { return typeof e === 'string' ? e : e.name; });
+        localStorage.setItem('qplan_employees', JSON.stringify(names));
+        localStorage.setItem('qplan_employees_full', JSON.stringify(fbData.employees));
+      }
+      mgmtSyncInProgress = false;
+      console.log('🔥 Management data loaded from Firebase:', Object.keys(fbData).join(', '));
+    } else {
+      // Firebase has no management data — push local data up (first-time sync)
+      pushAllMgmtToFirebase();
+    }
+    if (callback) callback();
+  }).catch(function(err) {
+    console.error('❌ Failed to load management data from Firebase:', err);
+    if (callback) callback();
+  });
+}
+
+function pushAllMgmtToFirebase() {
+  if (!firebaseReady || !firebaseDb) return;
+  var data = getMgmtData();
+  var mgmtKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions'];
+  var payload = {};
+  var hasData = false;
+  mgmtKeys.forEach(function(key) {
+    if (data[key] !== undefined && data[key] !== null) {
+      var val = data[key];
+      // Only push non-empty data
+      if (Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0) {
+        payload[key] = val;
+        hasData = true;
+      }
+    }
+  });
+  if (!hasData) { console.log('📭 No local management data to push'); return; }
+  firebaseDb.ref('management').set(payload).then(function() {
+    console.log('🔥 Local management data pushed to Firebase:', Object.keys(payload).join(', '));
+    showMgmtToast('☁️ تم رفع بيانات الإدارة إلى Firebase', 'success');
+  }).catch(function(err) {
+    console.error('❌ Failed to push management data:', err);
+  });
+}
+
+function startMgmtFirebaseListener() {
+  if (!firebaseReady || !firebaseDb || mgmtFirebaseListenerActive) return;
+  mgmtFirebaseListenerActive = true;
+  firebaseDb.ref('management').on('value', function(snapshot) {
+    var fbData = snapshot.val();
+    if (!fbData) return;
+    mgmtSyncInProgress = true;
+    Object.keys(fbData).forEach(function(key) {
+      localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbData[key]));
+    });
+    if (fbData.employees) {
+      var names = fbData.employees.map(function(e) { return typeof e === 'string' ? e : e.name; });
+      localStorage.setItem('qplan_employees', JSON.stringify(names));
+      localStorage.setItem('qplan_employees_full', JSON.stringify(fbData.employees));
+    }
+    mgmtSyncInProgress = false;
+    console.log('🔥 Management data updated from Firebase (real-time)');
+    // Re-render current section if it depends on management data
+    var currentSection = document.querySelector('.section-view.active');
+    if (currentSection) {
+      var secId = currentSection.id.replace('section-', '');
+      if (secId === 'data-management') renderDataManagement();
+      else if (secId === 'requisitions') renderRequisitions();
+    }
+  });
 }
 
 // ===== Initialize management data from CSV (replaces all existing data) =====
