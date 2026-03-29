@@ -2184,6 +2184,8 @@ function getManagedUsers() {
 }
 function saveManagedUsers(users) {
   localStorage.setItem(STORAGE_PREFIX + 'managed_users', JSON.stringify(users));
+  // Sync to Firebase
+  syncMgmtToFirebase('managed_users', users);
 }
 
 // Modified login — checks admin first, then managed users
@@ -6716,7 +6718,7 @@ function syncMgmtToFirebase(key, data) {
   });
 }
 
-var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions'];
+var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions', 'managed_users'];
 
 function mgmtDataSize(val) {
   if (!val) return 0;
@@ -6746,12 +6748,21 @@ function loadMgmtFromFirebase(callback) {
 
     mgmtSyncInProgress = true;
 
+    // Helper to get/set localStorage for a key (managed_users uses different prefix)
+    function getLocalStorageKey(key) {
+      return key === 'managed_users' ? STORAGE_PREFIX + 'managed_users' : MGMT_STORAGE_PREFIX + key;
+    }
+    function getLocalVal(key) {
+      if (key === 'managed_users') return getManagedUsers();
+      return localData[key];
+    }
+
     // First sync from this machine: push ALL local data to Firebase
     // (local is richer because it has the real user data)
     if (isFirstSync) {
       console.log('🔄 First sync from this machine — local data takes priority');
       MGMT_ALL_KEYS.forEach(function(key) {
-        var localVal = localData[key];
+        var localVal = getLocalVal(key);
         var localSize = mgmtDataSize(localVal);
         var fbVal = fbData[key];
         if (fbVal) fbVal = fixFbArray(fbVal, localVal);
@@ -6763,12 +6774,12 @@ function loadMgmtFromFirebase(callback) {
             toUpload[key] = localVal;
           } else {
             // Firebase has more — use Firebase
-            localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbVal));
+            localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
             console.log('📊 ' + key + ': Firebase (' + fbSize + ') > local (' + localSize + ') — using Firebase');
           }
         } else if (fbSize > 0) {
           // Local empty, Firebase has data — use Firebase
-          localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbVal));
+          localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
         }
       });
       localStorage.setItem(MGMT_SYNC_FLAG, new Date().toISOString());
@@ -6776,7 +6787,7 @@ function loadMgmtFromFirebase(callback) {
       // Subsequent syncs: Firebase is source of truth (data was already synced)
       MGMT_ALL_KEYS.forEach(function(key) {
         var fbVal = fbData[key];
-        var localVal = localData[key];
+        var localVal = getLocalVal(key);
         if (fbVal) fbVal = fixFbArray(fbVal, localVal);
         var fbSize = mgmtDataSize(fbVal);
         var localSize = mgmtDataSize(localVal);
@@ -6786,7 +6797,7 @@ function loadMgmtFromFirebase(callback) {
           toUpload[key] = localVal;
         } else if (fbSize > 0) {
           // Firebase has data — use it
-          localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(fbVal));
+          localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
         }
       });
     }
@@ -6839,8 +6850,8 @@ function pushAllMgmtToFirebase() {
   var payload = {};
   var hasData = false;
   MGMT_ALL_KEYS.forEach(function(key) {
-    if (data[key] !== undefined && data[key] !== null) {
-      var val = data[key];
+    var val = key === 'managed_users' ? getManagedUsers() : data[key];
+    if (val !== undefined && val !== null) {
       if (Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0) {
         payload[key] = val;
         hasData = true;
@@ -6871,7 +6882,7 @@ function startMgmtFirebaseListener() {
   if (!firebaseReady || !firebaseDb || mgmtFirebaseListenerActive) return;
   mgmtFirebaseListenerActive = true;
   // Array keys that Firebase may convert to objects
-  var arrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'employees', 'projects', 'requisitions'];
+  var arrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'employees', 'projects', 'requisitions', 'managed_users'];
 
   firebaseDb.ref('management').on('value', function(snapshot) {
     var fbData = snapshot.val();
@@ -6881,7 +6892,12 @@ function startMgmtFirebaseListener() {
       var val = fbData[key];
       // Fix Firebase array→object conversion
       if (arrayKeys.indexOf(key) !== -1) val = fbToArray(val);
-      localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(val));
+      // managed_users uses STORAGE_PREFIX, not MGMT_STORAGE_PREFIX
+      if (key === 'managed_users') {
+        localStorage.setItem(STORAGE_PREFIX + 'managed_users', JSON.stringify(val));
+      } else {
+        localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(val));
+      }
     });
     if (fbData.employees) {
       var empArr = fbToArray(fbData.employees);
