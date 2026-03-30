@@ -4610,7 +4610,7 @@ function renderResourcePlanner() {
     return selVal <= endVal; // employee was still active during or before their end month
   }
 
-  // Check for time-off: both from tasks (any status) and from employee absences
+  // Check for time-off: tasks, employee absences, and isEmployeeActiveInMonth cross-check
   var empOnLeave = {};
   allData.forEach(function(r) {
     if (r.month === month && String(r.year) === year &&
@@ -4621,21 +4621,20 @@ function renderResourcePlanner() {
   employees.forEach(function(emp) {
     if (typeof emp !== 'object') return;
     var name = emp.name;
+    // Check absences array
     (emp.absences || []).forEach(function(a) {
-      // Check if selected month/year falls within the absence from-to range
       if (!a.from) return;
-      var fromParts = a.from.split(/\s+/);
-      var toParts = (a.to || a.from).split(/\s+/);
-      var fromMonth = fromParts[0], fromYear = fromParts[1] || year;
-      var toMonth = toParts[0], toYear = toParts[1] || year;
-      var mi = MONTHS.indexOf(month), fi = MONTHS.indexOf(fromMonth), ti = MONTHS.indexOf(toMonth);
-      var selVal = parseInt(year) * 12 + mi;
-      var fromVal = parseInt(fromYear) * 12 + fi;
-      var toVal = parseInt(toYear) * 12 + ti;
-      if (selVal >= fromVal && selVal <= toVal) {
+      var fromIdx = monthToIndex(a.from);
+      var toIdx = monthToIndex(a.to || a.from);
+      var selIdx = monthToIndex(month + ' ' + year);
+      if (selIdx >= fromIdx && selIdx <= toIdx) {
         empOnLeave[name] = true;
       }
     });
+    // Cross-check: if employed (wasActiveInMonth) but isEmployeeActiveInMonth says no → on leave
+    if (!empOnLeave[name] && wasActiveInMonth(emp, month, year) && !isEmployeeActiveInMonth(emp, month, year)) {
+      empOnLeave[name] = true;
+    }
   });
 
   // Available employees (occ < 100%, active, and not on leave)
