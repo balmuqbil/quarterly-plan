@@ -1770,13 +1770,13 @@ const STORAGE_PREFIX = 'qplan_admin_';
 // 2. Go to Realtime Database > Create Database > Start in test mode
 // 3. Paste your config values below or enter them in Settings
 var FIREBASE_CONFIG = {
-  apiKey: localStorage.getItem(STORAGE_PREFIX + 'fb_apiKey') || '',
-  authDomain: localStorage.getItem(STORAGE_PREFIX + 'fb_authDomain') || '',
-  databaseURL: localStorage.getItem(STORAGE_PREFIX + 'fb_databaseURL') || '',
-  projectId: localStorage.getItem(STORAGE_PREFIX + 'fb_projectId') || '',
-  storageBucket: localStorage.getItem(STORAGE_PREFIX + 'fb_storageBucket') || '',
-  messagingSenderId: localStorage.getItem(STORAGE_PREFIX + 'fb_messagingSenderId') || '',
-  appId: localStorage.getItem(STORAGE_PREFIX + 'fb_appId') || ''
+  apiKey: localStorage.getItem(STORAGE_PREFIX + 'fb_apiKey') || 'AIzaSyDWOxepSIsUCvb-Tg03cGy3dWayzKCUrxw',
+  authDomain: localStorage.getItem(STORAGE_PREFIX + 'fb_authDomain') || 'quarterly-plan-9bbb1.firebaseapp.com',
+  databaseURL: localStorage.getItem(STORAGE_PREFIX + 'fb_databaseURL') || 'https://quarterly-plan-9bbb1-default-rtdb.europe-west1.firebasedatabase.app/',
+  projectId: localStorage.getItem(STORAGE_PREFIX + 'fb_projectId') || 'quarterly-plan-9bbb1',
+  storageBucket: localStorage.getItem(STORAGE_PREFIX + 'fb_storageBucket') || 'quarterly-plan-9bbb1.appspot.com',
+  messagingSenderId: localStorage.getItem(STORAGE_PREFIX + 'fb_messagingSenderId') || '652787338827',
+  appId: localStorage.getItem(STORAGE_PREFIX + 'fb_appId') || '1:652787338827:web:7d00244441f69fffea87ce'
 };
 
 var firebaseApp = null;
