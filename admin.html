@@ -8460,7 +8460,8 @@ function renderDeptsAndSections() {
   var sections = mgmt.sections || {};
   var totalCap = Object.values(capData).reduce(function(s, d) { return s + d.totalCapacity; }, 0);
   var totalActiveEmp = Object.values(capData).reduce(function(s, d) { return s + d.totalActiveEmployees; }, 0);
-  var totalUsed = localData.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
+  // Sum usage only from active employees (consistent with per-department calculation)
+  var totalUsed = Object.values(usageByDept).reduce(function(s, v) { return s + v; }, 0);
   var totalUtil = totalCap > 0 ? (totalUsed / totalCap * 100).toFixed(1) : 0;
   var totalSections = 0;
   departments.forEach(function(d) { totalSections += (sections[d] || []).length; });
