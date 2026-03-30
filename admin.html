@@ -2671,6 +2671,41 @@ function reconcilePlatformsFromTasks(taskData) {
   }
 }
 
+// Reconcile: ensure all employee names found in task data are in the management employee list
+function reconcileEmployeesFromTasks(taskData) {
+  var mgmt = getMgmtData();
+  var empList = mgmt.employees || [];
+  var empNames = {};
+  empList.forEach(function(e) {
+    var name = typeof e === 'object' ? e.name : e;
+    if (name) empNames[name] = true;
+  });
+
+  // Collect info about missing employees from their task records
+  var missingEmps = {};
+  taskData.forEach(function(r) {
+    var name = (r.name || '').trim();
+    if (!name || empNames[name] || missingEmps[name]) return;
+    missingEmps[name] = {
+      name: name,
+      department: r.department || '',
+      section: r.section || '',
+      contractType: 'inhouse',
+      startDate: 'يناير 2026',
+      endDate: '',
+      absences: [],
+      jobTitle: ''
+    };
+  });
+
+  var added = Object.values(missingEmps);
+  if (added.length > 0) {
+    added.forEach(function(emp) { empList.push(emp); });
+    saveMgmtList('employees', empList);
+    console.log('👥 Reconciled employees from tasks — added ' + added.length + ':', added.map(function(e) { return e.name; }).join(', '));
+  }
+}
+
 // ==================== DATA LOADING (Firebase) ====================
 var firebaseListenerActive = false;
 
@@ -2717,6 +2752,7 @@ function loadData() {
         remapEmployeeNames(allData);
         resolveEmployeeDepartments(allData);
         reconcilePlatformsFromTasks(allData);
+        reconcileEmployeesFromTasks(allData);
       } else {
         allData = [];
       }
@@ -2746,6 +2782,7 @@ function loadData() {
         remapEmployeeNames(allData);
         resolveEmployeeDepartments(allData);
         reconcilePlatformsFromTasks(allData);
+        reconcileEmployeesFromTasks(allData);
       } else {
         allData = [];
       }
