@@ -1578,6 +1578,7 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
         <div class="subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُطبق على نموذج الموظف</div>
       </div>
       <div class="top-actions">
+        <button class="export-btn" onclick="showGhostEmployees()" title="البحث عن أسماء في المهام غير موجودة في قائمة الموظفين">👻 أسماء شبحية</button>
         <button class="export-btn" onclick="forceSyncMgmtToCloud()" title="رفع جميع البيانات إلى Firebase">☁️ مزامنة</button>
         <button class="export-btn" onclick="exportMgmtData()">📥 تصدير الإعدادات</button>
         <label class="export-btn" style="cursor:pointer;">📤 استيراد <input type="file" accept=".json" style="display:none" onchange="importMgmtData(event)"></label>
@@ -8438,7 +8439,7 @@ function renderDeptsAndSections() {
   function isEmpActiveInFilterMonths(empName) {
     if (empActiveCache[empName] !== undefined) return empActiveCache[empName];
     var emp = allEmps.find(function(e) { return typeof e === 'object' && e.name === empName; });
-    if (!emp) { empActiveCache[empName] = true; return true; } // unknown employee, include
+    if (!emp) { empActiveCache[empName] = false; return false; } // unknown employee (ghost), exclude
     // Active if active in ANY of the selected filter months
     var active = filterMonths.some(function(m) {
       return isEmployeeActiveInMonth(emp, m, filterYear);
@@ -8671,7 +8672,7 @@ function showCapacityDrill() {
   function isDrillEmpActive(empName) {
     if (drillEmpCache[empName] !== undefined) return drillEmpCache[empName];
     var emp = allEmpsDrill.find(function(e) { return typeof e === 'object' && e.name === empName; });
-    if (!emp) { drillEmpCache[empName] = true; return true; }
+    if (!emp) { drillEmpCache[empName] = false; return false; } // ghost employee, exclude
     var active = filterMonths.some(function(m) { return isEmployeeActiveInMonth(emp, m, filterYear); });
     drillEmpCache[empName] = active;
     return active;
@@ -8790,6 +8791,103 @@ function exportEmployeesExcel() {
   a.download = 'employees_' + new Date().toISOString().slice(0,10) + '.xls';
   a.click();
   showMgmtToast('تم تصدير ' + employees.length + ' موظف إلى Excel', 'success');
+}
+
+// ==================== GHOST EMPLOYEE CLEANUP ====================
+function showGhostEmployees() {
+  var mgmt = getMgmtData();
+  var mgmtNames = new Set();
+  (mgmt.employees || []).forEach(function(e) {
+    var name = typeof e === 'object' ? e.name : e;
+    if (name) mgmtNames.add(name);
+  });
+
+  var taskNames = new Set();
+  allData.forEach(function(r) { if (r.name) taskNames.add(r.name); });
+
+  var ghosts = [];
+  taskNames.forEach(function(name) {
+    if (!mgmtNames.has(name)) ghosts.push(name);
+  });
+
+  var ghostTaskCount = {};
+  allData.forEach(function(r) {
+    if (ghosts.indexOf(r.name) !== -1) {
+      ghostTaskCount[r.name] = (ghostTaskCount[r.name] || 0) + 1;
+    }
+  });
+
+  if (ghosts.length === 0) {
+    showMgmtToast('✅ لا توجد أسماء شبحية — جميع المهام تتطابق مع قائمة الموظفين', 'success');
+    return;
+  }
+
+  var overlay = document.createElement('div');
+  overlay.className = 'req-history-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+
+  var html = '<div class="req-history-modal" style="max-width:600px;">';
+  html += '<div class="req-history-header">';
+  html += '<h3>👻 أسماء شبحية في المهام (' + ghosts.length + ')</h3>';
+  html += '<button onclick="this.closest(\'.req-history-overlay\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>';
+  html += '</div>';
+  html += '<p style="font-size:13px;color:var(--text-light);margin:0 0 16px;">هذه الأسماء موجودة في سجلات المهام لكنها غير مسجلة في قائمة الموظفين. قد تكون أسماء قديمة، أخطاء إملائية، أو موظفين لم تتم إضافتهم.</p>';
+
+  html += '<div style="margin-bottom:16px;">';
+  html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="ghostSelectAll" onchange="document.querySelectorAll(\'.ghost-cb\').forEach(function(c){c.checked=this.checked}.bind(this))"> تحديد الكل</label>';
+  html += '</div>';
+
+  html += '<div style="max-height:400px;overflow-y:auto;">';
+  ghosts.sort(function(a, b) { return a.localeCompare(b, 'ar'); });
+  ghosts.forEach(function(name) {
+    var count = ghostTaskCount[name] || 0;
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;">';
+    html += '<input type="checkbox" class="ghost-cb" value="' + escapeAttr(name) + '" style="cursor:pointer;">';
+    html += '<span style="flex:1;font-weight:600;">' + escapeHtml(name) + '</span>';
+    html += '<span style="color:var(--text-light);font-size:11px;">' + count + ' مهمة</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  html += '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">';
+  html += '<button class="mgmt-action-btn" onclick="this.closest(\'.req-history-overlay\').remove()" style="padding:8px 20px;">إغلاق</button>';
+  html += '<button class="mgmt-add-btn" onclick="deleteGhostTasks()" style="padding:8px 20px;background:var(--danger);">🗑️ حذف مهام المحددين</button>';
+  html += '</div>';
+  html += '</div>';
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+}
+
+function deleteGhostTasks() {
+  var checkboxes = document.querySelectorAll('.ghost-cb:checked');
+  if (checkboxes.length === 0) { showMgmtToast('اختر اسماً واحداً على الأقل', 'error'); return; }
+
+  var namesToDelete = [];
+  checkboxes.forEach(function(cb) { namesToDelete.push(cb.value); });
+
+  if (!confirm('سيتم حذف جميع المهام لـ ' + namesToDelete.length + ' اسم شبحي. هل تريد المتابعة؟')) return;
+
+  var deleteCount = 0;
+  var remaining = [];
+  allData.forEach(function(r, i) {
+    if (namesToDelete.indexOf(r.name) !== -1) {
+      deleteCount++;
+      if (firebaseReady && r._firebaseKey) {
+        firebaseDb.ref('tasks/' + r._firebaseKey).remove().catch(function(err) { console.error(err); });
+      }
+    } else {
+      remaining.push(r);
+    }
+  });
+
+  allData = remaining;
+  applyFilters();
+
+  var overlay = document.querySelector('.req-history-overlay');
+  if (overlay) overlay.remove();
+
+  showMgmtToast('✅ تم حذف ' + deleteCount + ' مهمة لـ ' + namesToDelete.length + ' اسم شبحي', 'success');
 }
 
 function exportMgmtData() {
