@@ -8266,12 +8266,13 @@ function isEmployeeEmployedInMonth(emp, monthName, year) {
 }
 
 // Get monthly capacity for a section: count active employees (employed and not absent)
-function getSectionMonthlyCapacity(sectionName, monthName, year) {
+function getSectionMonthlyCapacity(sectionName, monthName, year, deptName) {
   var data = getMgmtData();
   var count = 0;
   data.employees.forEach(function(emp) {
     if (typeof emp === 'string') return;
     if (emp.section !== sectionName) return;
+    if (deptName && emp.department !== deptName) return; // filter by department if provided
     if (isEmployeeActiveInMonth(emp, monthName, year)) count++;
   });
   return count;
@@ -8574,21 +8575,56 @@ function renderDeptsAndSections() {
 // Capacity = active employees × 100% per month
 function getCapacityDataForMonths(monthsList, year) {
   var mgmt = getMgmtData();
+  var allEmps = mgmt.employees || [];
   var result = {};
   (mgmt.departments || []).forEach(function(dept) {
     var secs = (mgmt.sections || {})[dept] || [];
     result[dept] = { sections: {}, totalCapacity: 0, totalActiveEmployees: 0 };
+    // Track employees counted via sections to avoid double-counting
+    var countedEmps = {};
     secs.forEach(function(sec) {
       var totalCap = 0;
       var maxActive = 0;
       monthsList.forEach(function(m) {
-        var active = getSectionMonthlyCapacity(sec, m, year);
+        var active = getSectionMonthlyCapacity(sec, m, year, dept);
         totalCap += active * 100; // 100% per employee per month
         if (active > maxActive) maxActive = active;
+      });
+      // Track which employees belong to this section
+      allEmps.forEach(function(emp) {
+        if (typeof emp === 'object' && emp.section === sec && emp.department === dept) {
+          countedEmps[emp.name] = true;
+        }
       });
       result[dept].sections[sec] = { totalCapacity: totalCap, activeEmployees: maxActive };
       result[dept].totalCapacity += totalCap;
       result[dept].totalActiveEmployees += maxActive;
+    });
+    // Count employees who belong to this department but have no section or unmatched section
+    allEmps.forEach(function(emp) {
+      if (typeof emp !== 'object') return;
+      if (emp.department !== dept) return;
+      if (countedEmps[emp.name]) return; // already counted via section
+      // Employee in this dept but not in any of its sections
+      var unsecCap = 0;
+      var unsecMax = 0;
+      monthsList.forEach(function(m) {
+        if (isEmployeeActiveInMonth(emp, m, year)) {
+          unsecCap += 100;
+          unsecMax = 1;
+        }
+      });
+      if (unsecCap > 0) {
+        // Add to a virtual "(بدون قسم)" section
+        var noSecKey = '(بدون قسم)';
+        if (!result[dept].sections[noSecKey]) {
+          result[dept].sections[noSecKey] = { totalCapacity: 0, activeEmployees: 0 };
+        }
+        result[dept].sections[noSecKey].totalCapacity += unsecCap;
+        result[dept].sections[noSecKey].activeEmployees += unsecMax;
+        result[dept].totalCapacity += unsecCap;
+        result[dept].totalActiveEmployees += unsecMax;
+      }
     });
   });
   return result;
