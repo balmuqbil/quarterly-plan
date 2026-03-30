@@ -2797,7 +2797,10 @@ function calcAvgOccPerMonth(data) {
 
 function updateKPIs() {
   const d = approvedData;
-  const employees = [...new Set(d.map(r => r.name))];
+  // Use management employee list as source of truth for employee count
+  var mgmtEmps = getMgmtData().employees || [];
+  var activeEmps = mgmtEmps.filter(function(e) { return typeof e === 'object' ? !e.endDate : true; });
+  const employees = activeEmps;
   const platforms = [...new Set(d.map(r => r.platform))];
   const departments = [...new Set(d.map(r => r.department))];
   const avgOcc = calcAvgOccPerMonth(d);
@@ -2815,7 +2818,8 @@ function updateKPIs() {
   animateValue('kpiHighOcc', highOccEmployees.size);
   animateValue('kpiDepartments', departments.length);
 
-  document.getElementById('kpiEmpChange').textContent = 'اضغط لعرض الموظفين';
+  var inactiveCount = mgmtEmps.length - activeEmps.length;
+  document.getElementById('kpiEmpChange').textContent = activeEmps.length + ' نشط' + (inactiveCount > 0 ? ' · ' + inactiveCount + ' غير نشط' : '');
   // Task change: show status breakdown
   document.getElementById('kpiTaskChange').innerHTML =
     '<span style="color:#2e7d32">✅ ' + statusCounts.approved + '</span> · ' +
@@ -3011,9 +3015,16 @@ function renderEmployeesSection() {
     });
   }
 
+  // Build employee map from management list (source of truth), then enrich with task data
   var empMap = {};
+  var empMgmtList = getMgmtData().employees || [];
+  empMgmtList.forEach(function(emp) {
+    if (typeof emp !== 'object' || !emp.name) return;
+    var isActive = !emp.endDate;
+    empMap[emp.name] = { name: emp.name, department: emp.department || '', section: emp.section || '', tasks: [], totalOcc: 0, months: new Set(), platforms: new Set(), isActive: isActive };
+  });
   data.forEach(function(r) {
-    if (!empMap[r.name]) empMap[r.name] = { name: r.name, department: r.department, section: r.section || '', tasks: [], totalOcc: 0, months: new Set(), platforms: new Set() };
+    if (!empMap[r.name]) return; // skip task records for employees not in management list
     empMap[r.name].tasks.push(r);
     empMap[r.name].totalOcc += parseFloat(r.occupancy) || 0;
     empMap[r.name].months.add(r.month);
