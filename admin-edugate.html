@@ -2668,10 +2668,30 @@ function reconcilePlatformsFromTasks(taskData) {
   }
 }
 
+// Track renamed employees to prevent reconciliation from re-adding old names
+var recentRenames = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'renames') || '{}');
+
 // Reconcile: ensure all employee names found in task data are in the management employee list
 function reconcileEmployeesFromTasks(taskData) {
   var mgmt = getMgmtData();
   var empList = mgmt.employees || [];
+
+  // Clean up: remove any employee whose name is a known old-rename
+  var cleanedCount = 0;
+  if (Object.keys(recentRenames).length > 0) {
+    for (var i = empList.length - 1; i >= 0; i--) {
+      var eName = typeof empList[i] === 'object' ? empList[i].name : empList[i];
+      if (recentRenames[eName]) {
+        empList.splice(i, 1);
+        cleanedCount++;
+      }
+    }
+    if (cleanedCount > 0) {
+      saveMgmtList('employees', empList);
+      console.log('🧹 Removed ' + cleanedCount + ' renamed employee(s) from management list');
+    }
+  }
+
   var empNames = {};
   empList.forEach(function(e) {
     var name = typeof e === 'object' ? e.name : e;
@@ -2683,6 +2703,8 @@ function reconcileEmployeesFromTasks(taskData) {
   taskData.forEach(function(r) {
     var name = (r.name || '').trim();
     if (!name || empNames[name] || missingEmps[name]) return;
+    // Skip if this name was recently renamed (old name still in some task records)
+    if (recentRenames[name]) return;
     missingEmps[name] = {
       name: name,
       department: r.department || '',
@@ -8124,6 +8146,11 @@ function saveEditMgmt(key, index) {
     if (currentName !== val) {
       renameEmployeeInTasks(currentName, val);
     }
+    // Update department/section in task records for this employee
+    var empFinalName = val;
+    var empNewDept = data.employees[index].department;
+    var empNewSec = data.employees[index].section;
+    updateEmployeeDeptInTasks(empFinalName, empNewDept, empNewSec);
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
       showMgmtToast('هذا العنصر موجود بالفعل', 'error');
@@ -8136,18 +8163,50 @@ function saveEditMgmt(key, index) {
   showMgmtToast('تم التعديل بنجاح', 'success');
 }
 
+function updateEmployeeDeptInTasks(empName, newDept, newSection) {
+  if (!empName) return;
+  var localCount = 0;
+  allData.forEach(function(r) {
+    if (r.name === empName && (r.department !== newDept || r.section !== newSection)) {
+      r.department = newDept;
+      r.section = newSection;
+      localCount++;
+    }
+  });
+  if (firebaseReady && firebaseDb && localCount > 0) {
+    firebaseDb.ref('tasks').once('value').then(function(snapshot) {
+      var fbTasks = snapshot.val();
+      if (!fbTasks) return;
+      var updates = {};
+      Object.keys(fbTasks).forEach(function(key) {
+        if (fbTasks[key].name === empName) {
+          if (fbTasks[key].department !== newDept) updates['tasks/' + key + '/department'] = newDept;
+          if (fbTasks[key].section !== newSection) updates['tasks/' + key + '/section'] = newSection;
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        firebaseDb.ref().update(updates).then(function() {
+          console.log('✅ Updated dept/section for "' + empName + '" in task records');
+        }).catch(function(err) { console.error('❌ Failed to update dept in tasks:', err); });
+      }
+    });
+  }
+  if (localCount > 0) applyFilters();
+}
+
 // Rename employee across all task records (Firebase + local)
 function renameEmployeeInTasks(oldName, newName) {
   if (!oldName || !newName || oldName === newName) return;
+  // Track rename so reconciliation doesn't re-add the old name
+  recentRenames[oldName] = newName;
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'renames', JSON.stringify(recentRenames));
   var count = 0;
-  // Update local allData array
   allData.forEach(function(r) {
     if (r.name === oldName) {
       r.name = newName;
       count++;
     }
   });
-  // Update Firebase task records
   if (firebaseReady && firebaseDb) {
     firebaseDb.ref('tasks').once('value').then(function(snapshot) {
       var fbTasks = snapshot.val();
@@ -8161,6 +8220,7 @@ function renameEmployeeInTasks(oldName, newName) {
       if (Object.keys(updates).length > 0) {
         firebaseDb.ref().update(updates).then(function() {
           console.log('✅ Renamed "' + oldName + '" → "' + newName + '" in ' + Object.keys(updates).length + ' task records');
+          showMgmtToast('✅ تم تحديث ' + Object.keys(updates).length + ' مهمة من "' + oldName + '" إلى "' + newName + '"', 'success');
         }).catch(function(err) {
           console.error('❌ Failed to rename in tasks:', err);
         });
