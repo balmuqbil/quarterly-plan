@@ -2673,6 +2673,11 @@ function reconcilePlatformsFromTasks(taskData) {
 
 // Track renamed employees to prevent reconciliation from re-adding old names
 var recentRenames = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'renames') || '{}');
+// Seed renames that happened before tracking was added
+if (!recentRenames['ريم صالح القرشي']) {
+  recentRenames['ريم صالح القرشي'] = 'ريم صالح القريشي';
+  localStorage.setItem(MGMT_STORAGE_PREFIX + 'renames', JSON.stringify(recentRenames));
+}
 
 // Reconcile: ensure all employee names found in task data are in the management employee list
 function reconcileEmployeesFromTasks(taskData) {
