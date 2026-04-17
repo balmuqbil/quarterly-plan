@@ -9878,16 +9878,43 @@ function renderRequisitions() {
     });
   }
 
-  // Pipeline summary bar
-  html += '<div class="req-pipeline-bar">';
+  // Summary + stage pipeline (matches تخطيط المتطلبات header style)
+  var totalCount = reqs.length;
+  var byStage = {};
+  reqs.forEach(function(r) { var s = r.currentStage || REQ_STAGES[0].key; byStage[s] = (byStage[s] || 0) + 1; });
+  var filteredCount = reqFilterStage ? (byStage[reqFilterStage] || 0) : totalCount;
+
+  // Top row: two summary cards
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;min-width:140px;">' +
+          '<div style="font-size:11px;color:var(--text-light);">إجمالي الطلبات</div>' +
+          '<div style="font-size:22px;font-weight:800;color:var(--accent);">' + totalCount + '</div></div>';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;min-width:140px;">' +
+          '<div style="font-size:11px;color:var(--text-light);">عرض مفلتر</div>' +
+          '<div style="font-size:22px;font-weight:800;color:var(--text);">' + filteredCount + '</div></div>';
+  html += '</div>';
+
+  // Stage pipeline — one clickable tile per stage. Active tile = current filter.
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">';
   REQ_STAGES.forEach(function(st) {
-    var count = reqs.filter(function(r) { return r.currentStage === st.key; }).length;
-    var isActive = reqFilterStage === st.key;
-    html += '<div class="req-pipeline-stage' + (isActive ? ' active' : '') + '" onclick="reqFilterStage=' + (isActive ? "''" : "'" + st.key + "'") + ';renderRequisitions();" style="background:' + st.color + '10;">';
-    html += '<span class="stage-icon">' + st.icon + '</span>';
-    html += '<span class="stage-count" style="color:' + st.color + ';">' + count + '</span>';
-    html += '<span class="stage-label">' + st.label + '</span>';
-    html += '</div>';
+    var count = byStage[st.key] || 0;
+    var isActive = (reqFilterStage === st.key);
+    var color = st.color;
+    var onclick = 'reqFilterStage=' + (isActive ? "''" : "'" + escapeJS(st.key) + "'") + ';renderRequisitions();';
+    html += '<div onclick="' + onclick + '" ' +
+            'style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid ' + (isActive ? color : 'var(--border)') + ';' +
+            (isActive ? 'background:' + color + '12;box-shadow:0 0 0 2px ' + color + '30;' : 'background:var(--bg);') +
+            'transition:all 0.15s;" ' +
+            'onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 10px rgba(0,0,0,0.08)\'" ' +
+            'onmouseout="this.style.transform=\'\';this.style.boxShadow=\'' + (isActive ? '0 0 0 2px ' + color + '30' : '') + '\'">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">' +
+                '<div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">' +
+                  '<span style="font-size:14px;flex-shrink:0;">' + st.icon + '</span>' +
+                  '<span style="font-size:11px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(st.label) + '</span>' +
+                '</div>' +
+                '<span style="font-size:18px;font-weight:800;color:' + color + ';">' + count + '</span>' +
+              '</div>' +
+            '</div>';
   });
   html += '</div>';
 
