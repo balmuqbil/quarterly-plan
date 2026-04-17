@@ -6729,10 +6729,27 @@ function getMgmtData() {
       data.employees = [];
     }
   } catch(e) { data.employees = []; }
-  // Projects
+  // Projects — with dedup pass to clean up damage from earlier merge bug (where 'projects' was
+  // incorrectly added to simpleArrayKeys and got duplicated on every Firebase listener firing).
   try {
     const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + 'projects');
     data.projects = stored ? JSON.parse(stored) : [];
+    if (Array.isArray(data.projects) && data.projects.length > 0) {
+      var seen = {};
+      var deduped = [];
+      data.projects.forEach(function(p) {
+        if (!p || !p.name) return;
+        if (seen[p.name]) return;
+        seen[p.name] = true;
+        deduped.push(p);
+      });
+      if (deduped.length < data.projects.length) {
+        console.log('🧹 Dedup projects: ' + data.projects.length + ' → ' + deduped.length);
+        data.projects = deduped;
+        // Persist the cleaned list back (also syncs to Firebase)
+        saveMgmtList('projects', deduped);
+      }
+    }
   } catch(e) { data.projects = []; }
   // Requisitions
   try {
@@ -6916,7 +6933,7 @@ function loadMgmtFromFirebase(callback) {
       localStorage.setItem(MGMT_SYNC_VERSION_KEY, String(MGMT_SYNC_VERSION));
     } else {
       // Subsequent syncs: Firebase is source of truth, but merge simple arrays to avoid losing local additions
-      var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'projects'];
+      var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles'];
       MGMT_ALL_KEYS.forEach(function(key) {
         var fbVal = fbData[key];
         var localVal = getLocalVal(key);
@@ -7038,7 +7055,9 @@ function startMgmtFirebaseListener() {
   var arrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'employees', 'projects', 'requisitions', 'managed_users', 'demands'];
 
   // Simple string array keys that should be merged (union) to avoid losing local additions
-  var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'projects'];
+  // NOTE: Only for string arrays! Object arrays like 'projects' use reference equality in indexOf
+  // and would duplicate endlessly on every listener firing.
+  var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles'];
 
   firebaseDb.ref('management').on('value', function(snapshot) {
     var fbData = snapshot.val();
