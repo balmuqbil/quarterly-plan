@@ -2980,10 +2980,12 @@ function reconcilePlatformsFromTasks(taskData) {
   var mgmtPlatforms = mgmt.platforms || [];
   var platformSet = {};
   mgmtPlatforms.forEach(function(p) { platformSet[p] = true; });
+  // Platforms the user explicitly deleted must not be re-added, even if tasks still reference them.
+  var deletedPlats = (typeof getMgmtDeletes === 'function' ? (getMgmtDeletes().platforms || {}) : {});
   var added = [];
   taskData.forEach(function(r) {
     var p = (r.platform || '').trim();
-    if (p && !platformSet[p] && p !== 'إجازة') {
+    if (p && !platformSet[p] && p !== 'إجازة' && !deletedPlats[p]) {
       platformSet[p] = true;
       mgmtPlatforms.push(p);
       added.push(p);
@@ -7496,20 +7498,25 @@ function loadMgmtFromFirebase(callback) {
           // Firebase missing this key — push local
           toUpload[key] = localVal;
         } else if (fbSize > 0) {
-          // For simple string arrays: merge (union) to avoid losing locally-added items
+          // For simple string arrays: merge (union) to avoid losing locally-added items.
+          // Items recently deleted on this client are filtered out so they don't come back from Firebase.
           if (simpleArrayKeys.indexOf(key) !== -1 && Array.isArray(fbVal) && Array.isArray(localVal)) {
-            var merged = fbVal.slice();
+            var deletes = (getMgmtDeletes()[key]) || {};
+            var filteredFb = fbVal.filter(function(item) { return !deletes[String(item)]; });
+            var merged = filteredFb.slice();
             var hasNew = false;
             localVal.forEach(function(item) {
+              if (deletes[String(item)]) return; // locally deleted — skip
               if (merged.indexOf(item) === -1) {
                 merged.push(item);
                 hasNew = true;
               }
             });
+            var hasDeletion = filteredFb.length < fbVal.length;
             localStorage.setItem(getLocalStorageKey(key), JSON.stringify(merged));
-            if (hasNew) {
+            if (hasNew || hasDeletion) {
               toUpload[key] = merged;
-              console.log('🔀 ' + key + ': merged local additions → ' + merged.length + ' items (was FB:' + fbSize + ' local:' + localSize + ')');
+              console.log('🔀 ' + key + ': ' + merged.length + ' items (FB:' + fbSize + ' local:' + localSize + (hasDeletion ? ' ∖deletes' : '') + ')');
             }
           } else {
             // Firebase has data — use it
@@ -7620,22 +7627,27 @@ function startMgmtFirebaseListener() {
       // Fix Firebase array→object conversion
       if (arrayKeys.indexOf(key) !== -1) val = fbToArray(val);
       var storageKey = (key === 'managed_users') ? STORAGE_PREFIX + 'managed_users' : MGMT_STORAGE_PREFIX + key;
-      // For simple string arrays: merge local additions to avoid losing unsaved items
+      // For simple string arrays: merge local additions to avoid losing unsaved items.
+      // Items recently deleted on this client are filtered out so they don't come back from Firebase.
       if (simpleArrayKeys.indexOf(key) !== -1 && Array.isArray(val)) {
         try {
           var localVal = JSON.parse(localStorage.getItem(storageKey) || '[]');
           if (Array.isArray(localVal)) {
-            var merged = val.slice();
+            var deletes = (getMgmtDeletes()[key]) || {};
+            var filteredFb = val.filter(function(item) { return !deletes[String(item)]; });
+            var merged = filteredFb.slice();
             var hasNew = false;
             localVal.forEach(function(item) {
+              if (deletes[String(item)]) return; // locally deleted — skip
               if (merged.indexOf(item) === -1) {
                 merged.push(item);
                 hasNew = true;
               }
             });
-            if (hasNew) {
+            var hasDeletion = filteredFb.length < val.length;
+            if (hasNew || hasDeletion) {
               needsUpload[key] = merged;
-              console.log('🔀 Listener merge ' + key + ': ' + merged.length + ' items (FB:' + val.length + ' + local extras)');
+              console.log('🔀 Listener ' + key + ': ' + merged.length + ' items (FB:' + val.length + (hasNew ? ' +local' : '') + (hasDeletion ? ' ∖deletes' : '') + ')');
               val = merged;
             }
           }
@@ -8647,6 +8659,8 @@ function addMgmtItem(key) {
     var jobTitleSelect = document.getElementById('mgmt-emp-jobtitle');
     var jobTitle = jobTitleSelect ? jobTitleSelect.value : '';
     data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [], contractType: contractType, jobTitle: jobTitle });
+    // User is re-adding an employee that was previously deleted — forget the tombstone.
+    clearMgmtDelete('employees', name);
     saveMgmtList('employees', data.employees);
     nameInput.value = '';
     deptSelect.selectedIndex = 0;
@@ -8660,11 +8674,41 @@ function addMgmtItem(key) {
       return;
     }
     data[key].push(val);
+    // User is re-adding an item that was previously deleted — forget the tombstone.
+    clearMgmtDelete(key, val);
     saveMgmtList(key, data[key]);
     input.value = '';
   }
   renderDataManagement();
   showMgmtToast('تمت الإضافة بنجاح', 'success');
+}
+
+// Track deletions so the merge-sync logic and reconcile helpers don't resurrect removed items.
+// Local-only; scoped by category. An item here means "this client deleted it" — when the merge
+// sees it in Firebase still, it skips it instead of adding it back.
+var MGMT_DELETES_KEY = MGMT_STORAGE_PREFIX + 'recent_deletes';
+function getMgmtDeletes() {
+  try { return JSON.parse(localStorage.getItem(MGMT_DELETES_KEY) || '{}') || {}; }
+  catch(e) { return {}; }
+}
+function recordMgmtDelete(key, value) {
+  if (!value) return;
+  var d = getMgmtDeletes();
+  d[key] = d[key] || {};
+  d[key][String(value)] = Date.now();
+  try { localStorage.setItem(MGMT_DELETES_KEY, JSON.stringify(d)); } catch(e) {}
+}
+function isMgmtDeleted(key, value) {
+  if (!value) return false;
+  var d = getMgmtDeletes();
+  return !!(d[key] && d[key][String(value)]);
+}
+function clearMgmtDelete(key, value) {
+  var d = getMgmtDeletes();
+  if (d[key] && d[key][String(value)]) {
+    delete d[key][String(value)];
+    try { localStorage.setItem(MGMT_DELETES_KEY, JSON.stringify(d)); } catch(e) {}
+  }
 }
 
 function deleteMgmtItem(key, index) {
@@ -8673,6 +8717,9 @@ function deleteMgmtItem(key, index) {
   const displayName = (key === 'employees' && typeof item === 'object') ? item.name : item;
   if (!confirm('هل تريد حذف "' + displayName + '"؟')) return;
   data[key].splice(index, 1);
+  // Record the deletion so the Firebase merge + reconcile helpers don't bring it back.
+  var deletedValue = (key === 'employees' && typeof item === 'object') ? item.name : item;
+  recordMgmtDelete(key, deletedValue);
   saveMgmtList(key, data[key]);
   renderDataManagement();
   showMgmtToast('تم الحذف', 'success');
