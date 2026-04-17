@@ -1863,10 +1863,11 @@ var SHARED_FILTER_KEY = STORAGE_PREFIX + 'sharedFilters';
 
 // Map from pageType → {year, quarter, month} element IDs. Missing keys = page has no such filter.
 var SHARED_FILTER_ELEMENTS = {
-  dashboard:       { year: 'yearFilter',      quarter: 'quarterFilter',      month: 'monthFilter' },
-  platforms:       { year: 'platYearFilter',  quarter: 'platQuarterFilter',  month: 'platMonthFilter' },
-  tasks:           { year: 'taskFilterYear',  quarter: 'taskFilterQuarter' },
-  resourcePlanner: { year: 'rpYear',          quarter: 'rpQuarter',          month: 'rpMonth' }
+  dashboard:        { year: 'yearFilter',      quarter: 'quarterFilter',      month: 'monthFilter' },
+  platforms:        { year: 'platYearFilter',  quarter: 'platQuarterFilter',  month: 'platMonthFilter' },
+  tasks:            { year: 'taskFilterYear',  quarter: 'taskFilterQuarter' },
+  resourcePlanner:  { year: 'rpYear',          quarter: 'rpQuarter',          month: 'rpMonth' },
+  deptsAndSections: { year: 'deptYearFilter',  quarter: 'deptQuarterFilter',  month: 'deptMonthFilter' }
 };
 
 function getSharedFilters() {
