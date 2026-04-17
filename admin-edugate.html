@@ -5189,6 +5189,17 @@ function renderResourcePlanner() {
       '</div>' +
       '<div class="rp-plat-body">' + npCards + '</div></div>';
   }
+
+  // Footer action: copy everything to next month (only show if there are tasks)
+  if (allData.some(function(r) {
+    return (r.status || 'pending') === 'approved' && r.month === month && String(r.year) === year;
+  })) {
+    platEl.innerHTML += '<div style="margin-top:20px;padding:16px;background:var(--bg-card);border:2px dashed var(--accent);border-radius:12px;text-align:center;">' +
+      '<div style="font-size:13px;color:var(--text-light);margin-bottom:10px;">نسخ جميع تخصيصات ' + escapeHtml(month) + ' ' + year + ' (جميع المنصات) إلى الشهر التالي</div>' +
+      '<button class="rp-copy-btn" onclick="rpCopyAllToNextMonth()" style="padding:10px 24px;font-size:14px;font-weight:700;background:var(--accent);color:#fff;border:none;">📋 نسخ الكل إلى الشهر التالي</button>' +
+      '</div>';
+  }
+
   // Restore collapse states and scroll position after re-render
   document.querySelectorAll('.rp-plat-card').forEach(function(card) {
     var nameEl = card.querySelector('.rp-plat-name');
@@ -5931,6 +5942,225 @@ function rpExecuteCopy(items, platform, nextMonth, nextQuarter, nextYear, month,
   applyFilters();
 
   showMgmtToast('تم نسخ ' + copied + ' تخصيص من ' + month + ' → ' + nextMonth, copied > 0 ? 'success' : 'error');
+
+  if (copied > 0) {
+    var monthSel = document.getElementById('rpMonth');
+    var quarterSel = document.getElementById('rpQuarter');
+    var yearSel = document.getElementById('rpYear');
+    if (nextQuarter !== quarter) { quarterSel.value = nextQuarter; updateRpMonths(); }
+    if (nextYear !== year) yearSel.value = nextYear;
+    monthSel.value = nextMonth;
+    renderResourcePlanner();
+  }
+}
+
+// ---- Copy ALL platforms to next month ----
+function rpCopyAllToNextMonth() {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية لنسخ الموارد', 'error'); return; }
+  var year = document.getElementById('rpYear')?.value || '2026';
+  var quarter = document.getElementById('rpQuarter')?.value || 'الأول';
+  var month = document.getElementById('rpMonth')?.value || 'يناير';
+  var months = QUARTER_MONTHS[quarter] || [];
+  var curIdx = months.indexOf(month);
+
+  var nextMonth, nextQuarter, nextYear;
+  nextYear = year;
+  if (curIdx < months.length - 1) {
+    nextMonth = months[curIdx + 1];
+    nextQuarter = quarter;
+  } else {
+    var qKeys = Object.keys(QUARTER_MONTHS);
+    var qIdx = qKeys.indexOf(quarter);
+    if (qIdx < qKeys.length - 1) {
+      nextQuarter = qKeys[qIdx + 1];
+      nextMonth = QUARTER_MONTHS[nextQuarter][0];
+    } else {
+      nextQuarter = qKeys[0];
+      nextMonth = QUARTER_MONTHS[nextQuarter][0];
+      nextYear = String(parseInt(year) + 1);
+    }
+  }
+
+  var currentTasks = allData.filter(function(r) {
+    return (r.status || 'pending') === 'approved' && r.month === month && String(r.year) === year;
+  });
+
+  if (currentTasks.length === 0) {
+    showMgmtToast('لا يوجد تخصيصات لنسخها', 'error');
+    return;
+  }
+
+  var reviewItems = [];
+  currentTasks.forEach(function(t) {
+    var tPlatform = t.platform || '';
+    var existingSamePlat = [];
+    var empTotalNextMonth = 0;
+    allData.forEach(function(r, idx) {
+      if (r.name === t.name && r.month === nextMonth && String(r.year) === nextYear && (r.status||'pending') === 'approved') {
+        empTotalNextMonth += parseFloat(r.occupancy) || 0;
+        if ((r.platform || '') === tPlatform) {
+          existingSamePlat.push({ task: r, idx: idx });
+        }
+      }
+    });
+    var occ = parseFloat(t.occupancy) || 0;
+    var totalAfter = empTotalNextMonth + occ;
+    reviewItems.push({
+      source: t, occ: occ,
+      hasDuplicate: existingSamePlat.length > 0,
+      exceedsLimit: totalAfter > 120,
+      existingSamePlat: existingSamePlat,
+      empTotalNextMonth: empTotalNextMonth,
+      totalAfter: totalAfter,
+      platform: tPlatform
+    });
+  });
+
+  var hasConflicts = reviewItems.some(function(r) { return r.hasDuplicate || r.exceedsLimit; });
+  var cleanItems = reviewItems.filter(function(r) { return !r.hasDuplicate && !r.exceedsLimit; });
+
+  if (!hasConflicts) {
+    if (!confirm('نسخ ' + currentTasks.length + ' تخصيص من جميع المنصات: ' + month + ' → ' + nextMonth + '؟')) return;
+    rpExecuteCopyAll(cleanItems, nextMonth, nextQuarter, nextYear, month, quarter, year);
+    return;
+  }
+
+  var conflictItems = reviewItems.filter(function(r) { return r.hasDuplicate || r.exceedsLimit; });
+  var cleanByPlat = {};
+  cleanItems.forEach(function(r) {
+    var p = r.platform || '(بدون منصة)';
+    (cleanByPlat[p] = cleanByPlat[p] || []).push(r);
+  });
+  var conflictByPlat = {};
+  conflictItems.forEach(function(r) {
+    var p = r.platform || '(بدون منصة)';
+    (conflictByPlat[p] = conflictByPlat[p] || []).push(r);
+  });
+
+  var html = '<div style="max-height:70vh;overflow-y:auto;">';
+  html += '<p style="font-size:14px;margin-bottom:12px;">نسخ جميع التخصيصات من <strong>' + month + '</strong> → <strong>' + nextMonth + '</strong></p>';
+  html += '<p style="font-size:12px;color:var(--text-light);margin-bottom:12px;">إجمالي: ' + currentTasks.length + ' تخصيص · ✅ بلا تعارض: ' + cleanItems.length + ' · ⚠️ تعارض: ' + conflictItems.length + '</p>';
+
+  if (cleanItems.length > 0) {
+    html += '<div style="margin-bottom:12px;padding:10px;background:rgba(16,185,129,0.08);border-radius:8px;border:1px solid rgba(16,185,129,0.2);">';
+    html += '<div style="font-size:13px;font-weight:700;color:var(--success);margin-bottom:6px;">✅ سيتم نسخها (' + cleanItems.length + ')</div>';
+    Object.keys(cleanByPlat).sort().forEach(function(p) {
+      html += '<div style="font-size:12px;font-weight:600;margin-top:6px;color:var(--text);">💻 ' + escapeHtml(p) + ' (' + cleanByPlat[p].length + ')</div>';
+      cleanByPlat[p].forEach(function(r) {
+        html += '<div style="font-size:12px;padding:2px 0 2px 14px;">' + escapeHtml(r.source.name) + ' — ' + escapeHtml(r.source.taskType) + ' (' + r.occ + '%)</div>';
+      });
+    });
+    html += '</div>';
+  }
+
+  if (conflictItems.length > 0) {
+    html += '<div style="margin-bottom:12px;padding:10px;background:rgba(239,68,68,0.06);border-radius:8px;border:1px solid rgba(239,68,68,0.2);">';
+    html += '<div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:6px;">⚠️ تعارضات (' + conflictItems.length + ')</div>';
+    var globalCI = 0;
+    Object.keys(conflictByPlat).sort().forEach(function(p) {
+      html += '<div style="font-size:12px;font-weight:600;margin-top:8px;color:var(--text);">💻 ' + escapeHtml(p) + ' (' + conflictByPlat[p].length + ')</div>';
+      conflictByPlat[p].forEach(function(r) {
+        var thisCI = globalCI++;
+        var reason = r.hasDuplicate ? 'موجود مسبقاً في ' + nextMonth : 'يتجاوز 120% (' + r.totalAfter + '%)';
+        html += '<div style="padding:6px 0 6px 14px;border-bottom:1px solid rgba(0,0,0,0.05);font-size:12px;">';
+        html += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">';
+        html += '<input type="checkbox" class="rp-copy-all-conflict-check" data-ci="' + thisCI + '" checked>';
+        html += '<span><strong>' + escapeHtml(r.source.name) + '</strong> — ' + escapeHtml(r.source.taskType) + ' (' + r.occ + '%) — <span style="color:var(--danger)">' + reason + '</span></span>';
+        html += '</label>';
+        if (r.existingSamePlat.length > 0) {
+          html += '<div style="margin:4px 0 0 24px;font-size:11px;color:var(--text-light);">المهام الحالية التي ستُستبدل:';
+          r.existingSamePlat.forEach(function(e) {
+            html += '<div>• ' + escapeHtml(e.task.taskType) + ' (' + e.task.occupancy + '%)</div>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+    });
+    html += '<div style="font-size:11px;color:var(--text-light);margin-top:6px;">✓ المحدد = استبدال المهام الحالية بالنسخة الجديدة</div>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+
+  var flatConflicts = [];
+  Object.keys(conflictByPlat).sort().forEach(function(p) {
+    conflictByPlat[p].forEach(function(r) { flatConflicts.push(r); });
+  });
+
+  window._rpCopyAllReview = {
+    cleanItems: cleanItems,
+    conflictItems: flatConflicts,
+    nextMonth: nextMonth, nextQuarter: nextQuarter, nextYear: nextYear,
+    month: month, quarter: quarter, year: year
+  };
+
+  var drillTitle = document.getElementById('drillTitle');
+  var drillSubtitle = document.getElementById('drillSubtitle');
+  var drillBody = document.getElementById('drillBody');
+  drillTitle.textContent = '📋 نسخ الكل إلى ' + nextMonth;
+  drillSubtitle.textContent = 'جميع المنصات — مراجعة التعارضات';
+  drillBody.innerHTML = html +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">' +
+      '<button onclick="closeDrill()" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);font-family:inherit;font-size:13px;cursor:pointer;">إلغاء</button>' +
+      '<button onclick="rpExecuteCopyAllFromReview()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">✅ تأكيد النسخ</button>' +
+    '</div>';
+  document.getElementById('drillModal').classList.add('show');
+}
+
+function rpExecuteCopyAllFromReview() {
+  var review = window._rpCopyAllReview;
+  if (!review) return;
+  closeDrill();
+
+  var checks = document.querySelectorAll('.rp-copy-all-conflict-check:checked');
+  var checkedIndices = {};
+  checks.forEach(function(cb) { checkedIndices[cb.dataset.ci] = true; });
+
+  var toDelete = [];
+  var conflictsToAdd = [];
+  review.conflictItems.forEach(function(r, ci) {
+    if (!checkedIndices[ci]) return;
+    r.existingSamePlat.forEach(function(e) { toDelete.push(e.idx); });
+    conflictsToAdd.push(r);
+  });
+
+  toDelete.sort(function(a,b){return b-a;});
+  toDelete.forEach(function(idx) {
+    var task = allData[idx];
+    if (task && firebaseReady && task._firebaseKey) {
+      firebaseDb.ref('tasks/' + task._firebaseKey).remove().catch(function(e){console.error(e);});
+    }
+    allData.splice(idx, 1);
+  });
+
+  var allToCopy = review.cleanItems.concat(conflictsToAdd);
+  rpExecuteCopyAll(allToCopy, review.nextMonth, review.nextQuarter, review.nextYear, review.month, review.quarter, review.year);
+  window._rpCopyAllReview = null;
+}
+
+function rpExecuteCopyAll(items, nextMonth, nextQuarter, nextYear, month, quarter, year) {
+  var copied = 0;
+  items.forEach(function(r) {
+    var t = r.source;
+    var newTask = {
+      name: t.name, department: t.department, section: t.section,
+      platform: t.platform || '', taskType: t.taskType,
+      month: nextMonth, quarter: nextQuarter, year: nextYear,
+      occupancy: t.occupancy, description: t.description || 'تخطيط موارد',
+      service: t.service || '', status: 'approved',
+      timestamp: new Date().toISOString(),
+      squad: rpGetSquad(t)
+    };
+    allData.push(newTask);
+    syncTaskToFirebase(newTask, -1, null);
+    copied++;
+  });
+
+  syncTestData();
+  applyFilters();
+
+  showMgmtToast('تم نسخ ' + copied + ' تخصيص من جميع المنصات إلى ' + nextMonth, copied > 0 ? 'success' : 'error');
 
   if (copied > 0) {
     var monthSel = document.getElementById('rpMonth');
