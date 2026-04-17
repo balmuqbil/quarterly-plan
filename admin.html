@@ -1838,6 +1838,75 @@ var REQ_STAGES = [
 ];
 
 // Set default year/quarter filters to current period
+// ========== SHARED FILTER STATE (year/quarter/month linked across
+//            نظرة عامة · المنصات · المهام · تخطيط الموارد) ==========
+var SHARED_FILTER_KEY = STORAGE_PREFIX + 'sharedFilters';
+
+// Map from pageType → {year, quarter, month} element IDs. Missing keys = page has no such filter.
+var SHARED_FILTER_ELEMENTS = {
+  dashboard:       { year: 'yearFilter',      quarter: 'quarterFilter',      month: 'monthFilter' },
+  platforms:       { year: 'platYearFilter',  quarter: 'platQuarterFilter',  month: 'platMonthFilter' },
+  tasks:           { year: 'taskFilterYear',  quarter: 'taskFilterQuarter' },
+  resourcePlanner: { year: 'rpYear',          quarter: 'rpQuarter',          month: 'rpMonth' }
+};
+
+function getSharedFilters() {
+  try { return JSON.parse(localStorage.getItem(SHARED_FILTER_KEY) || '{}') || {}; }
+  catch(e) { return {}; }
+}
+function setSharedFilter(patch) {
+  var cur = getSharedFilters();
+  Object.keys(patch).forEach(function(k) {
+    var v = patch[k];
+    // Skip sentinel "all-values" selections — we want the shared state to hold a specific value
+    if (v === 'all' || v === '' || v == null) return;
+    cur[k] = v;
+  });
+  try { localStorage.setItem(SHARED_FILTER_KEY, JSON.stringify(cur)); } catch(e) {}
+}
+function setSelectIfHasOption(id, val) {
+  var el = document.getElementById(id);
+  if (!el || val == null) return false;
+  for (var i = 0; i < el.options.length; i++) {
+    if (String(el.options[i].value) === String(val)) { el.value = val; return true; }
+  }
+  return false;
+}
+function applySharedFiltersTo(pageType) {
+  var map = SHARED_FILTER_ELEMENTS[pageType];
+  if (!map) return;
+  var f = getSharedFilters();
+  // Year first so any quarter/month options dependent on year are correct
+  if (f.year && map.year) setSelectIfHasOption(map.year, f.year);
+  if (f.quarter && map.quarter) {
+    var changedQ = setSelectIfHasOption(map.quarter, f.quarter);
+    // RP re-populates its month options based on the quarter — invoke the updater
+    if (changedQ && pageType === 'resourcePlanner' && typeof updateRpMonths === 'function') {
+      updateRpMonths();
+    }
+  }
+  if (f.month && map.month) setSelectIfHasOption(map.month, f.month);
+}
+
+// Capture changes on any of the linked filter elements and save to shared state.
+// Uses event delegation so we don't need to touch each onchange attribute.
+document.addEventListener('change', function(e) {
+  var target = e.target;
+  if (!target || !target.id) return;
+  // Find which shared slot this element maps to
+  for (var pageType in SHARED_FILTER_ELEMENTS) {
+    var map = SHARED_FILTER_ELEMENTS[pageType];
+    for (var slot in map) {
+      if (map[slot] === target.id) {
+        var patch = {};
+        patch[slot] = target.value;
+        setSharedFilter(patch);
+        return;
+      }
+    }
+  }
+}, true); // capture phase so we run before any inline onchange that re-renders
+
 function setDefaultFilters() {
   var now = new Date();
   var currentYear = String(now.getFullYear());
@@ -2090,11 +2159,15 @@ function navigateTo(section) {
   if (sectionEl) sectionEl.classList.add('active');
   const navEl = document.querySelector(`.nav-item[data-section="${section}"]`);
   if (navEl) navEl.classList.add('active');
+  // Sync year/quarter/month selections across the 4 linked pages BEFORE their render runs
+  // (resourcePlanner is handled separately below because initRpDefaults would overwrite otherwise)
+  if (SHARED_FILTER_ELEMENTS[section] && section !== 'resourcePlanner') applySharedFiltersTo(section);
   if (section === 'employees') renderEmployeesSection();
   if (section === 'platforms') renderPlatformsSection();
   if (section === 'tasks') renderTasksSection();
   if (section === 'deptsAndSections') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDeptsAndSections(); }
-  if (section === 'resourcePlanner') { initRpDefaults(); renderResourcePlanner(); }
+  if (section === 'resourcePlanner') { initRpDefaults(); applySharedFiltersTo('resourcePlanner'); renderResourcePlanner(); }
+  if (section === 'dashboard') applyFilters();
   if (section === 'dataManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDataManagement(); }
   if (section === 'employeeManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderEmployeeManagement(); }
   if (section === 'requisitions') { if (!isAdmin() && CURRENT_USER_ROLE !== 'planner') { navigateTo('dashboard'); return; } renderRequisitions(); }
