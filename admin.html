@@ -10516,8 +10516,9 @@ function renderDemands() {
   // Stage tallies (use canonical list plus any legacy stage values present in data)
   var byStage = {};
   demands.forEach(function(d) { var s = d.stage || 'متطلب جديد'; byStage[s] = (byStage[s] || 0) + 1; });
+  // Only show canonical stages. Legacy values (e.g. التخطيط) that were removed from the Excel
+  // no longer appear as pipeline tiles or filter options.
   var stagesToShow = DEMAND_STAGES.slice();
-  Object.keys(byStage).forEach(function(s) { if (stagesToShow.indexOf(s) === -1) stagesToShow.push(s); });
 
   // Summary bar (top row: totals only)
   html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
