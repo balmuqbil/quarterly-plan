@@ -816,6 +816,24 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 .dark-mode-btn { background:transparent; border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.7); padding:6px 12px; border-radius:8px; font-size:18px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
 .dark-mode-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
 .dark-mode-btn .btn-label { font-size:12px; }
+.lang-btn { margin-top:8px; width:100%; padding:6px 12px; border:1px solid #E5E7EB; background:transparent; color:#6C737F; border-radius:8px; font-family:inherit; font-size:16px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+.lang-btn:hover { background:#F0F7FA; color:#1a3a4a; border-color:#8FBCD4; }
+.lang-btn .btn-label { font-size:12px; font-weight:600; }
+html.dark-mode .lang-btn { background:#2a2a3a; color:#e0e0e0; border-color:#3e3e4e; }
+html.dark-mode .lang-btn:hover { background:#3e3e4e; color:#fff; }
+
+/* ========== LTR (English) layout overrides ========== */
+html[dir="ltr"] .sidebar { right:auto; left:0; border-left:none; border-right:1px solid #E5E7EB; box-shadow:2px 0 12px rgba(0,0,0,0.06); }
+html[dir="ltr"] .main { margin-right:0; margin-left:var(--sidebar-width); }
+html[dir="ltr"] body { text-align:left; }
+html[dir="ltr"] .section-view { text-align:left; }
+html[dir="ltr"] .top-bar { direction:ltr; }
+html[dir="ltr"] .top-bar > div:first-child { text-align:left; }
+html[dir="ltr"] .sidebar-header, html[dir="ltr"] .sidebar-nav, html[dir="ltr"] .sidebar-footer { text-align:left; }
+html[dir="ltr"] .nav-item { direction:ltr; }
+html[dir="ltr"] .nav-item.active { border-right:none; border-left:3px solid #5BA4C9; }
+html[dir="ltr"] .user-info { direction:ltr; }
+
 /* ========== RESOURCE PLANNER ========== */
 .rp-container { display:flex; gap:20px; min-height:500px; align-items:flex-start; }
 .rp-left { width:320px; flex-shrink:0; position:-webkit-sticky; position:sticky; top:16px; max-height:calc(100vh - 32px); display:flex; flex-direction:column; }
@@ -905,18 +923,18 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
     <div class="logo">📊</div>
-    <h1>لوحة تحكم خطة العمل</h1>
-    <p>الربعية — تسجيل دخول المسؤول</p>
+    <h1 data-i18n="login.title">لوحة تحكم خطة العمل</h1>
+    <p data-i18n="login.subtitle">الربعية — تسجيل دخول المسؤول</p>
     <form id="loginForm" onsubmit="event.preventDefault();attemptLogin();" autocomplete="on">
     <div class="login-field">
-      <label>اسم المستخدم</label>
+      <label data-i18n="login.username">اسم المستخدم</label>
       <input type="text" id="loginUser" placeholder="admin" autocomplete="username">
     </div>
     <div class="login-field">
-      <label>كلمة المرور</label>
+      <label data-i18n="login.password">كلمة المرور</label>
       <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <button type="submit" class="login-btn">تسجيل الدخول</button>
+    <button type="submit" class="login-btn" data-i18n="login.submit">تسجيل الدخول</button>
     <div class="login-error" id="loginError"></div>
     </form>
   </div>
@@ -925,62 +943,63 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 <!-- LOADING OVERLAY -->
 <div class="loading-overlay hidden" id="loadingOverlay">
   <div class="spinner"></div>
-  <div class="loading-text">جاري تحميل البيانات...</div>
+  <div class="loading-text" data-i18n="loading">جاري تحميل البيانات...</div>
 </div>
 
 <!-- SIDEBAR -->
 <div class="sidebar">
   <div class="sidebar-header">
     <div class="logo">📊</div>
-    <h2>خطة العمل الربعية</h2>
-    <span>لوحة تحكم المسؤول</span>
+    <h2 data-i18n="sidebar.app">خطة العمل الربعية</h2>
+    <span data-i18n="sidebar.admin">لوحة تحكم المسؤول</span>
   </div>
   <div class="sidebar-nav">
     <div class="nav-item active" data-section="dashboard">
-      <span class="icon">🏠</span> نظرة عامة
+      <span class="icon">🏠</span> <span data-i18n="nav.dashboard">نظرة عامة</span>
     </div>
     <div class="nav-item" data-section="employees">
-      <span class="icon">👥</span> الموظفون
+      <span class="icon">👥</span> <span data-i18n="nav.employees">الموظفون</span>
     </div>
     <div class="nav-item" data-section="platforms">
-      <span class="icon">💻</span> المنصات
+      <span class="icon">💻</span> <span data-i18n="nav.platforms">المنصات</span>
     </div>
     <div class="nav-item" data-section="tasks">
-      <span class="icon">📋</span> المهام <span class="nav-badge" id="pendingBadge"></span>
+      <span class="icon">📋</span> <span data-i18n="nav.tasks">المهام</span> <span class="nav-badge" id="pendingBadge"></span>
     </div>
     <div class="nav-item" data-section="demands" id="navDemands" style="display:none;">
-      <span class="icon">🎯</span> تخطيط المتطلبات
+      <span class="icon">🎯</span> <span data-i18n="nav.demands">تخطيط المتطلبات</span>
     </div>
     <div class="nav-item" data-section="deptsAndSections">
-      <span class="icon">🏢</span> الإدارات والأقسام
+      <span class="icon">🏢</span> <span data-i18n="nav.depts">الإدارات والأقسام</span>
     </div>
     <div class="nav-item" data-section="dataManagement">
-      <span class="icon">🗂️</span> إدارة البيانات
+      <span class="icon">🗂️</span> <span data-i18n="nav.dataMgmt">إدارة البيانات</span>
     </div>
     <div class="nav-item" data-section="employeeManagement" id="navEmpMgmt" style="display:none;">
-      <span class="icon">👥</span> إدارة الموظفين
+      <span class="icon">👥</span> <span data-i18n="nav.empMgmt">إدارة الموظفين</span>
     </div>
     <div class="nav-item" data-section="requisitions" id="navReqMgmt" style="display:none;">
-      <span class="icon">📋</span> طلبات التوظيف
+      <span class="icon">📋</span> <span data-i18n="nav.reqMgmt">طلبات التوظيف</span>
     </div>
-    <div class="nav-item" data-section="resourcePlanner"><span class="icon">📋</span> تخطيط الموارد</div>
+    <div class="nav-item" data-section="resourcePlanner"><span class="icon">📋</span> <span data-i18n="nav.resourcePlanner">تخطيط الموارد</span></div>
     <div class="nav-item" data-section="userManagement" id="navUserMgmt" style="display:none;">
-      <span class="icon">👤</span> إدارة المستخدمين
+      <span class="icon">👤</span> <span data-i18n="nav.userMgmt">إدارة المستخدمين</span>
     </div>
     <div class="nav-item" data-section="settings">
-      <span class="icon">⚙️</span> الإعدادات
+      <span class="icon">⚙️</span> <span data-i18n="nav.settings">الإعدادات</span>
     </div>
   </div>
   <div class="sidebar-footer">
     <div class="user-info">
       <div class="avatar">م</div>
       <div>
-        <div class="user-name">المسؤول</div>
-        <div class="user-role">مدير النظام</div>
+        <div class="user-name" data-i18n="sidebar.userName">المسؤول</div>
+        <div class="user-role" data-i18n="sidebar.role.admin">مدير النظام</div>
       </div>
     </div>
-    <button class="dark-mode-btn" id="darkModeBtn" onclick="toggleDarkMode()"><span id="darkModeIcon">🌙</span><span class="btn-label" id="darkModeLabel">الوضع الداكن</span></button>
-    <button class="logout-btn" onclick="logout()">🚪 تسجيل الخروج</button>
+    <button class="lang-btn" id="langBtn" onclick="setLanguage(CURRENT_LANG === 'ar' ? 'en' : 'ar')"><span id="langBtnFlag">🇺🇸</span><span class="btn-label" id="langBtnLabel">English</span></button>
+    <button class="dark-mode-btn" id="darkModeBtn" onclick="toggleDarkMode()"><span id="darkModeIcon">🌙</span><span class="btn-label" id="darkModeLabel" data-i18n="sidebar.darkMode">الوضع الداكن</span></button>
+    <button class="logout-btn" onclick="logout()" data-i18n="sidebar.logout">🚪 تسجيل الخروج</button>
   </div>
 </div>
 
@@ -1000,8 +1019,8 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
   <div class="section-view active" id="section-dashboard">
     <div class="top-bar">
       <div>
-        <h1>نظرة عامة على الخطة <span class="status-dot green"></span></h1>
-        <div class="subtitle">لوحة مؤشرات الأداء — خطة العمل الربعية</div>
+        <h1><span data-i18n="page.dashboard.title">نظرة عامة على الخطة</span> <span class="status-dot green"></span></h1>
+        <div class="subtitle" data-i18n="page.dashboard.subtitle">لوحة مؤشرات الأداء — خطة العمل الربعية</div>
       </div>
       <div class="top-actions">
         <span class="last-update" id="lastUpdate"></span>
@@ -1188,11 +1207,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== EMPLOYEES SECTION ===== -->
   <div class="section-view" id="section-employees">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>👥 إدارة الموظفين</h1>
-        <div class="subtitle">عرض تفصيلي لجميع الموظفين — اضغط على أي بطاقة لعرض التفاصيل</div>
+        <h1>👥 <span data-i18n="page.employees.title">إدارة الموظفين</span></h1>
+        <div class="subtitle" data-i18n="page.employees.subtitle">عرض تفصيلي لجميع الموظفين — اضغط على أي بطاقة لعرض التفاصيل</div>
       </div>
       <div class="top-actions">
         <input type="text" class="search-box" id="empSearch" placeholder="🔍 بحث عن موظف..." oninput="renderEmployeesSection()">
@@ -1243,11 +1262,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== PLATFORMS SECTION ===== -->
   <div class="section-view" id="section-platforms">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>💻 المنصات</h1>
-        <div class="subtitle">عرض تفصيلي لجميع المنصات — اضغط على أي بطاقة للتفاصيل</div>
+        <h1>💻 <span data-i18n="page.platforms.title">المنصات</span></h1>
+        <div class="subtitle" data-i18n="page.platforms.subtitle">عرض تفصيلي لجميع المنصات — اضغط على أي بطاقة للتفاصيل</div>
       </div>
       <div class="top-actions">
         <select class="quarter-filter" id="platYearFilter" onchange="renderPlatformsSection()">
@@ -1288,11 +1307,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== TASKS SECTION ===== -->
   <div class="section-view" id="section-tasks">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>📋 المهام</h1>
-        <div class="subtitle">عرض تفصيلي لجميع أنواع المهام — إضافة، تعديل، وحذف</div>
+        <h1>📋 <span data-i18n="page.tasks.title">المهام</span></h1>
+        <div class="subtitle" data-i18n="page.tasks.subtitle">عرض تفصيلي لجميع أنواع المهام — إضافة، تعديل، وحذف</div>
       </div>
       <div class="top-actions">
         <button class="export-btn" onclick="openTaskModal()">➕ إضافة مهمة</button>
@@ -1467,11 +1486,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== DEPARTMENTS & SECTIONS ===== -->
   <div class="section-view" id="section-deptsAndSections">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>🏢 الإدارات والأقسام</h1>
-        <div class="subtitle">هيكل الإدارات والأقسام مع تقارير السعة والإشغال</div>
+        <h1>🏢 <span data-i18n="page.depts.title">الإدارات والأقسام</span></h1>
+        <div class="subtitle" data-i18n="page.depts.subtitle">هيكل الإدارات والأقسام مع تقارير السعة والإشغال</div>
       </div>
       <div class="top-actions">
         <select class="quarter-filter" id="deptYearFilter" onchange="renderDeptsAndSections()">
@@ -1501,11 +1520,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== RESOURCE PLANNER SECTION ===== -->
   <div class="section-view" id="section-resourcePlanner">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>📋 تخطيط الموارد</h1>
-        <div class="subtitle">تخصيص الموظفين للمنصات — اسحب الموظف وأفلته على المنصة المطلوبة</div>
+        <h1>📋 <span data-i18n="page.resourcePlanner.title">تخطيط الموارد</span></h1>
+        <div class="subtitle" data-i18n="page.resourcePlanner.subtitle">تخصيص الموظفين للمنصات — اسحب الموظف وأفلته على المنصة المطلوبة</div>
       </div>
       <div class="top-actions">
         <select class="quarter-filter" id="rpYear" onchange="renderResourcePlanner()">
@@ -1596,11 +1615,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== DATA MANAGEMENT SECTION ===== -->
   <div class="section-view" id="section-dataManagement">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>🗂️ إدارة البيانات الأساسية</h1>
-        <div class="subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُطبق على نموذج الموظف</div>
+        <h1>🗂️ <span data-i18n="page.dataMgmt.title">إدارة البيانات الأساسية</span></h1>
+        <div class="subtitle" data-i18n="page.dataMgmt.subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُطبق على نموذج الموظف</div>
       </div>
       <div class="top-actions">
         <button class="export-btn" onclick="showGhostEmployees()" title="البحث عن أسماء في المهام غير موجودة في قائمة الموظفين">👻 أسماء شبحية</button>
@@ -1615,11 +1634,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== EMPLOYEE MANAGEMENT SECTION ===== -->
   <div class="section-view" id="section-employeeManagement">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>👥 إدارة الموظفين</h1>
-        <div class="subtitle">إضافة، تعديل، وحذف بيانات الموظفين — تُحفظ محلياً في المتصفح</div>
+        <h1>👥 <span data-i18n="page.empMgmt.title">إدارة الموظفين</span></h1>
+        <div class="subtitle" data-i18n="page.empMgmt.subtitle">إضافة، تعديل، وحذف بيانات الموظفين — تُحفظ محلياً في المتصفح</div>
       </div>
       <div class="top-actions">
         <button class="export-btn" onclick="exportEmployeesExcel()">📊 تصدير Excel</button>
@@ -1630,11 +1649,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== JOB REQUISITIONS SECTION ===== -->
   <div class="section-view" id="section-requisitions">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>📋 إدارة طلبات التوظيف</h1>
-        <div class="subtitle">تتبع طلبات التوظيف من الطرح حتى المباشرة</div>
+        <h1>📋 <span data-i18n="page.reqMgmt.title">إدارة طلبات التوظيف</span></h1>
+        <div class="subtitle" data-i18n="page.reqMgmt.subtitle">تتبع طلبات التوظيف من الطرح حتى المباشرة</div>
       </div>
       <div class="top-actions">
         <button class="export-btn" onclick="forceSyncMgmtToCloud()" title="رفع جميع البيانات إلى Firebase">☁️ مزامنة</button>
@@ -1646,11 +1665,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== DEMAND PLANNING SECTION ===== -->
   <div class="section-view" id="section-demands">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>🎯 تخطيط المتطلبات</h1>
-        <div class="subtitle">تخطيط الإصدارات والمتطلبات لكل منصة لكل ربع</div>
+        <h1>🎯 <span data-i18n="page.demands.title">تخطيط المتطلبات</span></h1>
+        <div class="subtitle" data-i18n="page.demands.subtitle">تخطيط الإصدارات والمتطلبات لكل منصة لكل ربع</div>
       </div>
       <div class="top-actions">
         <button class="export-btn" onclick="document.getElementById('demandImportFile').click()" title="استيراد من Excel">📥 استيراد Excel</button>
@@ -1664,11 +1683,11 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 
   <!-- ===== USER MANAGEMENT SECTION ===== -->
   <div class="section-view" id="section-userManagement">
-    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <button class="section-back" onclick="navigateTo('dashboard')" data-i18n="btn.back">→ العودة للوحة الرئيسية</button>
     <div class="top-bar">
       <div>
-        <h1>👤 إدارة المستخدمين</h1>
-        <div class="subtitle">إضافة مستخدمين مع صلاحيات محددة للوصول إلى لوحة التحكم</div>
+        <h1>👤 <span data-i18n="page.userMgmt.title">إدارة المستخدمين</span></h1>
+        <div class="subtitle" data-i18n="page.userMgmt.subtitle">إضافة مستخدمين مع صلاحيات محددة للوصول إلى لوحة التحكم</div>
       </div>
     </div>
 
@@ -1787,13 +1806,190 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
 </div>
 
 <script>
+// ========== I18N (English / Arabic UI shell) ==========
+var LANG_KEY = 'qplan_admin_lang';
+var CURRENT_LANG = localStorage.getItem(LANG_KEY) || 'ar';
+var I18N = {
+  ar: {
+    'login.title': 'لوحة تحكم خطة العمل',
+    'login.subtitle': 'الربعية — تسجيل دخول المسؤول',
+    'login.username': 'اسم المستخدم',
+    'login.password': 'كلمة المرور',
+    'login.submit': 'تسجيل الدخول',
+    'loading': 'جاري تحميل البيانات...',
+    'sidebar.app': 'خطة العمل الربعية',
+    'sidebar.admin': 'لوحة تحكم المسؤول',
+    'sidebar.userName': 'المسؤول',
+    'sidebar.role.admin': 'مدير النظام',
+    'sidebar.role.planner': 'مخطط موارد',
+    'sidebar.role.viewer': 'مشاهد',
+    'sidebar.darkMode': 'الوضع الداكن',
+    'sidebar.lightMode': 'الوضع الفاتح',
+    'sidebar.lang': 'English',
+    'sidebar.logout': '🚪 تسجيل الخروج',
+    'nav.dashboard': 'نظرة عامة',
+    'nav.employees': 'الموظفون',
+    'nav.platforms': 'المنصات',
+    'nav.tasks': 'المهام',
+    'nav.demands': 'تخطيط المتطلبات',
+    'nav.depts': 'الإدارات والأقسام',
+    'nav.dataMgmt': 'إدارة البيانات',
+    'nav.empMgmt': 'إدارة الموظفين',
+    'nav.reqMgmt': 'طلبات التوظيف',
+    'nav.resourcePlanner': 'تخطيط الموارد',
+    'nav.userMgmt': 'إدارة المستخدمين',
+    'nav.settings': 'الإعدادات',
+    'page.dashboard.title': 'نظرة عامة على الخطة',
+    'page.dashboard.subtitle': 'لوحة مؤشرات الأداء — خطة العمل الربعية',
+    'page.employees.title': 'إدارة الموظفين',
+    'page.employees.subtitle': 'عرض تفصيلي لجميع الموظفين — اضغط على أي بطاقة لعرض التفاصيل',
+    'page.platforms.title': 'المنصات',
+    'page.platforms.subtitle': 'عرض تفصيلي لجميع المنصات — اضغط على أي بطاقة للتفاصيل',
+    'page.tasks.title': 'إدارة المهام',
+    'page.tasks.subtitle': 'عرض تفصيلي لجميع أنواع المهام — إضافة، تعديل، وحذف',
+    'page.demands.title': 'تخطيط المتطلبات',
+    'page.demands.subtitle': 'تخطيط الإصدارات والمتطلبات لكل منصة لكل ربع',
+    'page.depts.title': 'الإدارات والأقسام',
+    'page.depts.subtitle': 'هيكل الإدارات والأقسام مع تقارير السعة والإشغال',
+    'page.dataMgmt.title': 'إدارة البيانات',
+    'page.dataMgmt.subtitle': 'إضافة، تعديل، وحذف البيانات المرجعية — تُطبق على نموذج الموظف',
+    'page.empMgmt.title': 'إدارة الموظفين',
+    'page.empMgmt.subtitle': 'إضافة، تعديل، وحذف بيانات الموظفين — تُحفظ محلياً في المتصفح',
+    'page.reqMgmt.title': 'إدارة طلبات التوظيف',
+    'page.reqMgmt.subtitle': 'تتبع طلبات التوظيف من الطرح حتى المباشرة',
+    'page.resourcePlanner.title': 'تخطيط الموارد',
+    'page.resourcePlanner.subtitle': 'تخصيص الموظفين للمنصات — اسحب الموظف وأفلته على المنصة المطلوبة',
+    'page.userMgmt.title': 'إدارة المستخدمين',
+    'page.userMgmt.subtitle': 'إضافة مستخدمين مع صلاحيات محددة للوصول إلى لوحة التحكم',
+    'btn.refresh': '🔄 تحديث',
+    'btn.testData': '🧪 بيانات تجريبية',
+    'btn.exportCSV': '📥 تصدير CSV',
+    'btn.sync': '☁️ مزامنة',
+    'btn.importExcel': '📥 استيراد Excel',
+    'btn.export': '📤 تصدير',
+    'btn.back': '→ العودة للوحة الرئيسية'
+  },
+  en: {
+    'login.title': 'Quarterly Plan Admin',
+    'login.subtitle': 'Quarterly — Admin Login',
+    'login.username': 'Username',
+    'login.password': 'Password',
+    'login.submit': 'Sign in',
+    'loading': 'Loading data...',
+    'sidebar.app': 'Quarterly Plan',
+    'sidebar.admin': 'Admin Dashboard',
+    'sidebar.userName': 'Admin',
+    'sidebar.role.admin': 'System Admin',
+    'sidebar.role.planner': 'Resource Planner',
+    'sidebar.role.viewer': 'Viewer',
+    'sidebar.darkMode': 'Dark mode',
+    'sidebar.lightMode': 'Light mode',
+    'sidebar.lang': 'العربية',
+    'sidebar.logout': '🚪 Sign out',
+    'nav.dashboard': 'Overview',
+    'nav.employees': 'Employees',
+    'nav.platforms': 'Platforms',
+    'nav.tasks': 'Tasks',
+    'nav.demands': 'Demand Planning',
+    'nav.depts': 'Departments & Sections',
+    'nav.dataMgmt': 'Data Management',
+    'nav.empMgmt': 'Employee Management',
+    'nav.reqMgmt': 'Job Requisitions',
+    'nav.resourcePlanner': 'Resource Planner',
+    'nav.userMgmt': 'User Management',
+    'nav.settings': 'Settings',
+    'page.dashboard.title': 'Plan Overview',
+    'page.dashboard.subtitle': 'KPI dashboard — Quarterly Plan',
+    'page.employees.title': 'Employee Management',
+    'page.employees.subtitle': 'Detailed view of all employees — click any card for details',
+    'page.platforms.title': 'Platforms',
+    'page.platforms.subtitle': 'Detailed view of all platforms — click any card for details',
+    'page.tasks.title': 'Task Management',
+    'page.tasks.subtitle': 'Review and manage all recorded tasks — add, edit, delete',
+    'page.demands.title': 'Demand Planning',
+    'page.demands.subtitle': 'Plan releases and requirements per platform per quarter',
+    'page.depts.title': 'Departments & Sections',
+    'page.depts.subtitle': 'Org structure with capacity and utilization reports',
+    'page.dataMgmt.title': 'Data Management',
+    'page.dataMgmt.subtitle': 'Add, edit, delete reference data — applied to the employee form',
+    'page.empMgmt.title': 'Employee Management',
+    'page.empMgmt.subtitle': 'Add, edit, delete employee records — stored locally in the browser',
+    'page.reqMgmt.title': 'Job Requisitions',
+    'page.reqMgmt.subtitle': 'Track requisitions from posting to onboarding',
+    'page.resourcePlanner.title': 'Resource Planner',
+    'page.resourcePlanner.subtitle': 'Drag-and-drop assignment of employees to platforms',
+    'page.userMgmt.title': 'User Management',
+    'page.userMgmt.subtitle': 'Add users with scoped permissions to the admin panel',
+    'btn.refresh': '🔄 Refresh',
+    'btn.testData': '🧪 Sample data',
+    'btn.exportCSV': '📥 Export CSV',
+    'btn.sync': '☁️ Sync',
+    'btn.importExcel': '📥 Import Excel',
+    'btn.export': '📤 Export',
+    'btn.back': '← Back to main dashboard'
+  }
+};
+
+function t(key, fallback) {
+  var dict = I18N[CURRENT_LANG] || I18N.ar;
+  if (dict[key] != null) return dict[key];
+  if (I18N.ar[key] != null) return I18N.ar[key];
+  return fallback != null ? fallback : key;
+}
+
+function applyI18n(root) {
+  var scope = root || document;
+  scope.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  });
+  scope.querySelectorAll('[data-i18n-attr]').forEach(function(el) {
+    el.getAttribute('data-i18n-attr').split(',').forEach(function(pair) {
+      var parts = pair.split(':');
+      if (parts.length === 2) el.setAttribute(parts[0].trim(), t(parts[1].trim()));
+    });
+  });
+}
+
+function setLanguage(lang) {
+  if (lang !== 'ar' && lang !== 'en') lang = 'ar';
+  CURRENT_LANG = lang;
+  try { localStorage.setItem(LANG_KEY, lang); } catch(e) {}
+  document.documentElement.lang = lang;
+  document.documentElement.dir = (lang === 'en') ? 'ltr' : 'rtl';
+  applyI18n();
+  var langLabel = document.getElementById('langBtnLabel');
+  if (langLabel) langLabel.textContent = (lang === 'ar') ? 'English' : 'العربية';
+  var langFlag = document.getElementById('langBtnFlag');
+  if (langFlag) langFlag.textContent = (lang === 'ar') ? '🇺🇸' : '🇸🇦';
+  var darkLabel = document.getElementById('darkModeLabel');
+  if (darkLabel) {
+    var isDark = document.documentElement.classList.contains('dark-mode');
+    darkLabel.textContent = t(isDark ? 'sidebar.lightMode' : 'sidebar.darkMode');
+  }
+  var active = document.querySelector('.section-view.active');
+  if (active && typeof navigateTo === 'function') {
+    var secId = active.id.replace('section-', '');
+    try { navigateTo(secId); } catch(e) {}
+  }
+}
+
+(function() {
+  try {
+    document.documentElement.lang = CURRENT_LANG;
+    document.documentElement.dir = (CURRENT_LANG === 'en') ? 'ltr' : 'rtl';
+  } catch(e) {}
+})();
+
+document.addEventListener('DOMContentLoaded', function() { setLanguage(CURRENT_LANG); });
+
 // ========== DARK MODE ==========
 function toggleDarkMode() {
   document.documentElement.classList.toggle('dark-mode');
   var isDark = document.documentElement.classList.contains('dark-mode');
   localStorage.setItem('qplan_darkMode', isDark ? 'true' : 'false');
   document.getElementById('darkModeIcon').textContent = isDark ? '☀️' : '🌙';
-  document.getElementById('darkModeLabel').textContent = isDark ? 'الوضع الفاتح' : 'الوضع الداكن';
+  document.getElementById('darkModeLabel').textContent = t(isDark ? 'sidebar.lightMode' : 'sidebar.darkMode');
 }
 (function() {
   var saved = localStorage.getItem('qplan_darkMode');
@@ -2401,11 +2597,11 @@ function applyUserPermissions() {
   var userRole = document.querySelector('.user-role');
   if (userName && userRole) {
     if (isAdmin) {
-      userName.textContent = 'المسؤول';
-      userRole.textContent = 'مدير النظام';
+      userName.textContent = t('sidebar.userName');
+      userRole.textContent = t('sidebar.role.admin');
     } else if (CURRENT_USER_PERMS) {
       userName.textContent = CURRENT_USER_PERMS.displayName || CURRENT_USER_PERMS.username;
-      userRole.textContent = CURRENT_USER_ROLE === 'planner' ? 'مخطط موارد' : 'مشاهد';
+      userRole.textContent = t(CURRENT_USER_ROLE === 'planner' ? 'sidebar.role.planner' : 'sidebar.role.viewer');
     }
   }
   var avatar = document.querySelector('.avatar');
