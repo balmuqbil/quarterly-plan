@@ -3382,7 +3382,7 @@ function renderEmployeesSection() {
   var yearVal = (document.getElementById('empYearFilter')?.value) || 'all';
   var monthVal = (document.getElementById('empMonthFilter')?.value) || 'all';
 
-  // Apply local filters on top of global approvedData
+  // Apply local filters on top of global approvedData (for task stats inside each card)
   var data = approvedData;
   if (deptVal !== 'all') data = data.filter(function(r) { return r.department === deptVal; });
   if (secVal !== 'all') data = data.filter(function(r) { return r.section === secVal; });
@@ -3397,21 +3397,36 @@ function renderEmployeesSection() {
     });
   }
 
-  // Build employee map from management list (source of truth), then enrich with task data
+  // Build employee map from management list (source of truth), filtered by employee-level criteria.
+  // Previously this used all employees regardless of filters, which made the filters visually useless.
   var empMap = {};
   var empMgmtList = getMgmtData().employees || [];
   empMgmtList.forEach(function(emp) {
     if (typeof emp !== 'object' || !emp.name) return;
+    // Apply employee-level filters (dept + section) to the management record directly
+    if (deptVal !== 'all' && (emp.department || '') !== deptVal) return;
+    if (secVal !== 'all' && (emp.section || '') !== secVal) return;
+    // User permission scoping on dept
+    if (!isAdmin() && !userCanAccessDept(emp.department || '')) return;
     var isActive = !emp.endDate;
     empMap[emp.name] = { name: emp.name, department: emp.department || '', section: emp.section || '', tasks: [], totalOcc: 0, months: new Set(), platforms: new Set(), isActive: isActive };
   });
   data.forEach(function(r) {
-    if (!empMap[r.name]) return; // skip task records for employees not in management list
+    if (!empMap[r.name]) return; // skip task records for employees not in the filtered list
     empMap[r.name].tasks.push(r);
     empMap[r.name].totalOcc += parseFloat(r.occupancy) || 0;
     empMap[r.name].months.add(r.month);
     empMap[r.name].platforms.add(r.platform);
   });
+
+  // If a task-scoped filter is active (platform/quarter/year/month), hide employees with no matching tasks
+  // so the filter actually narrows the visible list. Dept/section filters already scoped empMap above.
+  var hasTaskFilter = (platVal !== 'all') || (qtrVal !== 'all') || (yearVal !== 'all') || (monthVal !== 'all');
+  if (hasTaskFilter) {
+    Object.keys(empMap).forEach(function(name) {
+      if (empMap[name].tasks.length === 0) delete empMap[name];
+    });
+  }
 
   // Sort employees
   var sortBy = (document.getElementById('empSortBy')?.value) || 'avgOcc';
@@ -8080,19 +8095,19 @@ function renderEmployeeManagement() {
   '</div>';
 
   var filterHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:20px;">' +
-    '<input type="text" class="search-box" id="empSearchFilter" placeholder="🔍 بحث بالاسم..." oninput="filterEmployeeCards()" style="flex:1;min-width:180px;max-width:300px;padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;">' +
-    '<select id="empDeptFilter" class="quarter-filter" onchange="updateEmpFilterSections();filterEmployeeCards()" style="min-width:130px;">' +
+    '<input type="text" class="search-box" id="empMgmtSearchFilter" placeholder="🔍 بحث بالاسم..." oninput="filterEmployeeCards()" style="flex:1;min-width:180px;max-width:300px;padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;">' +
+    '<select id="empMgmtDeptFilter" class="quarter-filter" onchange="updateEmpFilterSections();filterEmployeeCards()" style="min-width:130px;">' +
       '<option value="all">جميع الإدارات</option>' +
       depts.map(function(d){return '<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>';}).join('') +
     '</select>' +
-    '<select id="empSecFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">' +
+    '<select id="empMgmtSecFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">' +
       '<option value="all">جميع الأقسام</option>' +
     '</select>' +
-    '<select id="empPlatFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">' +
+    '<select id="empMgmtPlatFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:130px;">' +
       '<option value="all">جميع المنصات</option>' +
       plats.map(function(p){return '<option value="'+escapeAttr(p)+'">'+escapeHtml(p)+'</option>';}).join('') +
     '</select>' +
-    '<select id="empStatusFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:110px;">' +
+    '<select id="empMgmtStatusFilter" class="quarter-filter" onchange="filterEmployeeCards()" style="min-width:110px;">' +
       '<option value="all">الكل</option>' +
       '<option value="active">نشط</option>' +
       '<option value="inactive">غير نشط</option>' +
@@ -8537,11 +8552,11 @@ function updateEmpSectionDropdown() {
 
 // Employee filter bar functions
 function filterEmployeeCards() {
-  var search = (document.getElementById('empSearchFilter')?.value || '').trim().toLowerCase();
-  var deptVal = (document.getElementById('empDeptFilter')?.value) || 'all';
-  var secVal = (document.getElementById('empSecFilter')?.value) || 'all';
-  var statusVal = (document.getElementById('empStatusFilter')?.value) || 'all';
-  var platVal = (document.getElementById('empPlatFilter')?.value) || 'all';
+  var search = (document.getElementById('empMgmtSearchFilter')?.value || '').trim().toLowerCase();
+  var deptVal = (document.getElementById('empMgmtDeptFilter')?.value) || 'all';
+  var secVal = (document.getElementById('empMgmtSecFilter')?.value) || 'all';
+  var statusVal = (document.getElementById('empMgmtStatusFilter')?.value) || 'all';
+  var platVal = (document.getElementById('empMgmtPlatFilter')?.value) || 'all';
   var grid = document.getElementById('mgmt-list-employees');
   if (!grid) return;
   var cards = grid.querySelectorAll('.emp-card');
@@ -8576,8 +8591,8 @@ function filterEmployeeCards() {
 }
 
 function updateEmpFilterSections() {
-  var deptVal = (document.getElementById('empDeptFilter')?.value) || 'all';
-  var secFilter = document.getElementById('empSecFilter');
+  var deptVal = (document.getElementById('empMgmtDeptFilter')?.value) || 'all';
+  var secFilter = document.getElementById('empMgmtSecFilter');
   if (!secFilter) return;
   var data = getMgmtData();
   var secs = [];
