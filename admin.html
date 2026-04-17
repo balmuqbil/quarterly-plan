@@ -6,6 +6,7 @@
 <title>لوحة تحكم خطة العمل الربعية</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -925,6 +926,9 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div class="nav-item" data-section="tasks">
       <span class="icon">📋</span> المهام <span class="nav-badge" id="pendingBadge"></span>
     </div>
+    <div class="nav-item" data-section="demands" id="navDemands" style="display:none;">
+      <span class="icon">🎯</span> تخطيط المتطلبات
+    </div>
     <div class="nav-item" data-section="deptsAndSections">
       <span class="icon">🏢</span> الإدارات والأقسام
     </div>
@@ -1620,6 +1624,24 @@ html.dark-mode .occupancy-bar { background:#2e2e3e; }
     <div id="reqContent"></div>
   </div>
 
+  <!-- ===== DEMAND PLANNING SECTION ===== -->
+  <div class="section-view" id="section-demands">
+    <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
+    <div class="top-bar">
+      <div>
+        <h1>🎯 تخطيط المتطلبات</h1>
+        <div class="subtitle">تخطيط الإصدارات والمتطلبات لكل منصة لكل ربع</div>
+      </div>
+      <div class="top-actions">
+        <button class="export-btn" onclick="document.getElementById('demandImportFile').click()" title="استيراد من Excel">📥 استيراد Excel</button>
+        <input type="file" id="demandImportFile" accept=".xlsx,.xls" style="display:none;" onchange="importDemandsFromExcel(this)">
+        <button class="export-btn" onclick="exportDemands()">📤 تصدير</button>
+        <button class="export-btn" onclick="openDemandAddModal()" style="background:var(--accent); color:#fff;">➕ إضافة متطلب</button>
+      </div>
+    </div>
+    <div id="demandsContent"></div>
+  </div>
+
   <!-- ===== USER MANAGEMENT SECTION ===== -->
   <div class="section-view" id="section-userManagement">
     <button class="section-back" onclick="navigateTo('dashboard')">→ العودة للوحة الرئيسية</button>
@@ -2076,6 +2098,7 @@ function navigateTo(section) {
   if (section === 'dataManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderDataManagement(); }
   if (section === 'employeeManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderEmployeeManagement(); }
   if (section === 'requisitions') { if (!isAdmin() && CURRENT_USER_ROLE !== 'planner') { navigateTo('dashboard'); return; } renderRequisitions(); }
+  if (section === 'demands') { if (!isAdmin() && CURRENT_USER_ROLE !== 'planner') { navigateTo('dashboard'); return; } renderDemands(); }
   if (section === 'userManagement') { if (!isAdmin()) { navigateTo('dashboard'); return; } renderUserManagement(); }
   if (section === 'settings') { if (!isAdmin()) { navigateTo('dashboard'); return; } openSettings(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2269,6 +2292,9 @@ function applyUserPermissions() {
 
   var navReqMgmt = document.getElementById('navReqMgmt');
   if (navReqMgmt) navReqMgmt.style.display = (isAdmin || CURRENT_USER_ROLE === 'planner') ? '' : 'none';
+
+  var navDemands = document.getElementById('navDemands');
+  if (navDemands) navDemands.style.display = (isAdmin || CURRENT_USER_ROLE === 'planner') ? '' : 'none';
 
   // Hide departments & sections for non-admin
   var navDepts = document.querySelector('.nav-item[data-section="deptsAndSections"]');
@@ -6715,6 +6741,11 @@ function getMgmtData() {
     const stored2 = localStorage.getItem(MGMT_STORAGE_PREFIX + 'requisitions');
     data.requisitions = stored2 ? JSON.parse(stored2) : [];
   } catch(e) { data.requisitions = []; }
+  // Demands (platform epics/requirements for quarterly planning)
+  try {
+    const storedD = localStorage.getItem(MGMT_STORAGE_PREFIX + 'demands');
+    data.demands = storedD ? JSON.parse(storedD) : [];
+  } catch(e) { data.demands = []; }
   return data;
 }
 
@@ -6788,20 +6819,28 @@ function saveMgmtList(key, list) {
 var mgmtFirebaseListenerActive = false;
 var mgmtSyncInProgress = false; // prevent feedback loops
 var MGMT_SYNC_FLAG = MGMT_STORAGE_PREFIX + 'firebase_synced'; // tracks if initial sync done
-var MGMT_SYNC_VERSION = 2; // bump when new keys are added to MGMT_ALL_KEYS
+var MGMT_SYNC_VERSION = 3; // bump when new keys are added to MGMT_ALL_KEYS
 var MGMT_SYNC_VERSION_KEY = MGMT_STORAGE_PREFIX + 'sync_version';
 
-function syncMgmtToFirebase(key, data) {
+function syncMgmtToFirebase(key, data, retryCount) {
   if (!firebaseReady || !firebaseDb) return;
-  if (mgmtSyncInProgress) return; // avoid re-triggering from listener
+  if (mgmtSyncInProgress) {
+    // Schedule retry after sync completes instead of silently dropping
+    setTimeout(function() { syncMgmtToFirebase(key, data, (retryCount || 0)); }, 500);
+    return;
+  }
   firebaseDb.ref('management/' + key).set(data).then(function() {
     console.log('🔥 Mgmt synced to Firebase:', key);
   }).catch(function(err) {
     console.error('❌ Mgmt sync failed:', key, err);
+    // Retry once on failure
+    if (!retryCount || retryCount < 2) {
+      setTimeout(function() { syncMgmtToFirebase(key, data, (retryCount || 0) + 1); }, 2000);
+    }
   });
 }
 
-var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions', 'managed_users', 'taskTypeNoPlatform', 'platformSquads', 'squadNames', 'poolPlatforms'];
+var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions', 'managed_users', 'taskTypeNoPlatform', 'platformSquads', 'squadNames', 'poolPlatforms', 'demands'];
 
 function mgmtDataSize(val) {
   if (!val) return 0;
@@ -6879,7 +6918,8 @@ function loadMgmtFromFirebase(callback) {
       localStorage.setItem(MGMT_SYNC_FLAG, new Date().toISOString());
       localStorage.setItem(MGMT_SYNC_VERSION_KEY, String(MGMT_SYNC_VERSION));
     } else {
-      // Subsequent syncs: Firebase is source of truth (data was already synced)
+      // Subsequent syncs: Firebase is source of truth, but merge simple arrays to avoid losing local additions
+      var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'projects'];
       MGMT_ALL_KEYS.forEach(function(key) {
         var fbVal = fbData[key];
         var localVal = getLocalVal(key);
@@ -6891,8 +6931,25 @@ function loadMgmtFromFirebase(callback) {
           // Firebase missing this key — push local
           toUpload[key] = localVal;
         } else if (fbSize > 0) {
-          // Firebase has data — use it
-          localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
+          // For simple string arrays: merge (union) to avoid losing locally-added items
+          if (simpleArrayKeys.indexOf(key) !== -1 && Array.isArray(fbVal) && Array.isArray(localVal)) {
+            var merged = fbVal.slice();
+            var hasNew = false;
+            localVal.forEach(function(item) {
+              if (merged.indexOf(item) === -1) {
+                merged.push(item);
+                hasNew = true;
+              }
+            });
+            localStorage.setItem(getLocalStorageKey(key), JSON.stringify(merged));
+            if (hasNew) {
+              toUpload[key] = merged;
+              console.log('🔀 ' + key + ': merged local additions → ' + merged.length + ' items (was FB:' + fbSize + ' local:' + localSize + ')');
+            }
+          } else {
+            // Firebase has data — use it
+            localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
+          }
         }
       });
     }
@@ -6981,23 +7038,50 @@ function startMgmtFirebaseListener() {
   if (!firebaseReady || !firebaseDb || mgmtFirebaseListenerActive) return;
   mgmtFirebaseListenerActive = true;
   // Array keys that Firebase may convert to objects
-  var arrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'employees', 'projects', 'requisitions', 'managed_users'];
+  var arrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'employees', 'projects', 'requisitions', 'managed_users', 'demands'];
+
+  // Simple string array keys that should be merged (union) to avoid losing local additions
+  var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'projects'];
 
   firebaseDb.ref('management').on('value', function(snapshot) {
     var fbData = snapshot.val();
     if (!fbData) return;
     mgmtSyncInProgress = true;
+    var needsUpload = {};
     Object.keys(fbData).forEach(function(key) {
       var val = fbData[key];
       // Fix Firebase array→object conversion
       if (arrayKeys.indexOf(key) !== -1) val = fbToArray(val);
-      // managed_users uses STORAGE_PREFIX, not MGMT_STORAGE_PREFIX
-      if (key === 'managed_users') {
-        localStorage.setItem(STORAGE_PREFIX + 'managed_users', JSON.stringify(val));
-      } else {
-        localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(val));
+      var storageKey = (key === 'managed_users') ? STORAGE_PREFIX + 'managed_users' : MGMT_STORAGE_PREFIX + key;
+      // For simple string arrays: merge local additions to avoid losing unsaved items
+      if (simpleArrayKeys.indexOf(key) !== -1 && Array.isArray(val)) {
+        try {
+          var localVal = JSON.parse(localStorage.getItem(storageKey) || '[]');
+          if (Array.isArray(localVal)) {
+            var merged = val.slice();
+            var hasNew = false;
+            localVal.forEach(function(item) {
+              if (merged.indexOf(item) === -1) {
+                merged.push(item);
+                hasNew = true;
+              }
+            });
+            if (hasNew) {
+              needsUpload[key] = merged;
+              console.log('🔀 Listener merge ' + key + ': ' + merged.length + ' items (FB:' + val.length + ' + local extras)');
+              val = merged;
+            }
+          }
+        } catch(e) {}
       }
+      localStorage.setItem(storageKey, JSON.stringify(val));
     });
+    // Push any merged data back to Firebase
+    if (Object.keys(needsUpload).length > 0) {
+      var updates = {};
+      Object.keys(needsUpload).forEach(function(k) { updates['management/' + k] = needsUpload[k]; });
+      firebaseDb.ref().update(updates).catch(function(err) { console.error('❌ Merge upload failed:', err); });
+    }
     if (fbData.employees) {
       var empArr = fbToArray(fbData.employees);
       var names = empArr.map(function(e) { return typeof e === 'string' ? e : e.name; });
@@ -9742,6 +9826,538 @@ function showMgmtToast(msg, type) {
   toast.textContent = msg;
   toast.className = 'mgmt-toast show ' + (type || '');
   setTimeout(() => toast.className = 'mgmt-toast', 2500);
+}
+
+// ==================== DEMAND PLANNING ====================
+var DEMAND_CLASSIFICATIONS = ['تطوير جديد', 'طلب تغيير', 'تحسين'];
+var DEMAND_PRIORITIES = ['عاجل جداً', 'عاجل', 'متوسط', 'عادي'];
+var DEMAND_IMPORTANCE = ['حرجة', 'عالية', 'متوسطة', 'عادية'];
+var DEMAND_BUSINESS_CATEGORIES = ['أعمال تقنية', 'متطلبات أعمال', 'التزام خارجي'];
+var DEMAND_STAGES = ['متطلب جديد', 'التخطيط', 'الدراسة والتحليل', 'التصميم والتطوير', 'الفحص والتحقق', 'قبول المستخدم', 'الأمن السيبراني', 'تم الانتهاء'];
+var DEMAND_QUARTERS = ['الأول', 'الثاني', 'الثالث', 'الرابع'];
+var DEMAND_YEARS = ['2024', '2025', '2026', '2027', '2028'];
+
+// Filter state (module-level so it persists between renders)
+var demandFilter = { platform: '', quarter: '', stage: '', priority: '', search: '' };
+
+function getVisibleDemands() {
+  var data = getMgmtData();
+  var demands = (data.demands || []).slice();
+  // Planner filter by allowed platforms
+  if (CURRENT_USER_ROLE === 'planner' && CURRENT_USER_PERMS) {
+    var allowedPlatforms = CURRENT_USER_PERMS.platforms || [];
+    demands = demands.filter(function(d) { return allowedPlatforms.indexOf(d.platform) !== -1; });
+  }
+  return demands;
+}
+
+function applyDemandFilters(demands) {
+  var f = demandFilter;
+  return demands.filter(function(d) {
+    if (f.platform && d.platform !== f.platform) return false;
+    if (f.quarter && d.expectedQuarter !== f.quarter) return false;
+    if (f.stage && d.stage !== f.stage) return false;
+    if (f.priority && d.priority !== f.priority) return false;
+    if (f.search) {
+      var q = f.search.toLowerCase();
+      var hay = ((d.reqNumber || '') + ' ' + (d.description || '') + ' ' + (d.service || '') + ' ' + (d.subService || '') + ' ' + (d.requestingEntity || '')).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function demandPriorityColor(p) {
+  if (p === 'عاجل جداً') return '#dc2626';
+  if (p === 'عاجل') return '#f59e0b';
+  if (p === 'متوسط') return '#3b82f6';
+  return '#64748b';
+}
+function demandImportanceColor(i) {
+  if (i === 'حرجة') return '#dc2626';
+  if (i === 'عالية') return '#f59e0b';
+  if (i === 'متوسطة') return '#3b82f6';
+  return '#64748b';
+}
+function demandStageColor(s) {
+  var idx = DEMAND_STAGES.indexOf(s);
+  if (idx === -1) return '#64748b';
+  var colors = ['#94a3b8', '#6366f1', '#8b5cf6', '#3b82f6', '#06b6d4', '#f59e0b', '#ec4899', '#10b981'];
+  return colors[idx] || '#64748b';
+}
+
+function renderDemands() {
+  var container = document.getElementById('demandsContent');
+  if (!container) return;
+  var data = getMgmtData();
+  var allPlatforms = data.platforms || [];
+  var userPlatforms = (CURRENT_USER_ROLE === 'planner' && CURRENT_USER_PERMS) ? (CURRENT_USER_PERMS.platforms || []) : allPlatforms;
+
+  var demands = getVisibleDemands();
+  var totalCount = demands.length;
+  var filtered = applyDemandFilters(demands);
+
+  // Build all quarter options from data
+  var quarterSet = {};
+  demands.forEach(function(d) { if (d.expectedQuarter) quarterSet[d.expectedQuarter] = true; });
+  DEMAND_YEARS.forEach(function(y) { DEMAND_QUARTERS.forEach(function(q) { quarterSet[q + ' ' + y] = true; }); });
+  var quarterOptions = Object.keys(quarterSet).sort(function(a, b) {
+    var partsA = a.split(' '); var partsB = b.split(' ');
+    var yearA = parseInt(partsA[1] || '0'); var yearB = parseInt(partsB[1] || '0');
+    if (yearA !== yearB) return yearA - yearB;
+    return DEMAND_QUARTERS.indexOf(partsA[0]) - DEMAND_QUARTERS.indexOf(partsB[0]);
+  });
+
+  var html = '';
+
+  // Summary bar
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;min-width:140px;">' +
+          '<div style="font-size:11px;color:var(--text-light);">إجمالي المتطلبات</div>' +
+          '<div style="font-size:22px;font-weight:800;color:var(--accent);">' + totalCount + '</div></div>';
+  var byStage = {};
+  demands.forEach(function(d) { byStage[d.stage || 'متطلب جديد'] = (byStage[d.stage || 'متطلب جديد'] || 0) + 1; });
+  var openCount = totalCount - (byStage['تم الانتهاء'] || 0);
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;min-width:140px;">' +
+          '<div style="font-size:11px;color:var(--text-light);">قيد التنفيذ</div>' +
+          '<div style="font-size:22px;font-weight:800;color:#f59e0b;">' + openCount + '</div></div>';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;min-width:140px;">' +
+          '<div style="font-size:11px;color:var(--text-light);">تم الانتهاء</div>' +
+          '<div style="font-size:22px;font-weight:800;color:#10b981;">' + (byStage['تم الانتهاء'] || 0) + '</div></div>';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;min-width:140px;">' +
+          '<div style="font-size:11px;color:var(--text-light);">عرض مفلتر</div>' +
+          '<div style="font-size:22px;font-weight:800;color:var(--text);">' + filtered.length + '</div></div>';
+  html += '</div>';
+
+  // Filters
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;">';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">';
+  html += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">المنصة</label>' +
+          '<select onchange="demandFilter.platform=this.value;renderDemands();" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg);color:var(--text);">' +
+          '<option value="">الكل</option>' +
+          userPlatforms.map(function(p) { return '<option value="' + escapeAttr(p) + '"' + (demandFilter.platform === p ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'; }).join('') +
+          '</select></div>';
+  html += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">الربع المتوقع</label>' +
+          '<select onchange="demandFilter.quarter=this.value;renderDemands();" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg);color:var(--text);">' +
+          '<option value="">الكل</option>' +
+          quarterOptions.map(function(q) { return '<option value="' + escapeAttr(q) + '"' + (demandFilter.quarter === q ? ' selected' : '') + '>' + escapeHtml(q) + '</option>'; }).join('') +
+          '</select></div>';
+  html += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">المرحلة</label>' +
+          '<select onchange="demandFilter.stage=this.value;renderDemands();" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg);color:var(--text);">' +
+          '<option value="">الكل</option>' +
+          DEMAND_STAGES.map(function(s) { return '<option value="' + escapeAttr(s) + '"' + (demandFilter.stage === s ? ' selected' : '') + '>' + escapeHtml(s) + '</option>'; }).join('') +
+          '</select></div>';
+  html += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">الأولوية</label>' +
+          '<select onchange="demandFilter.priority=this.value;renderDemands();" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg);color:var(--text);">' +
+          '<option value="">الكل</option>' +
+          DEMAND_PRIORITIES.map(function(p) { return '<option value="' + escapeAttr(p) + '"' + (demandFilter.priority === p ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'; }).join('') +
+          '</select></div>';
+  html += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">بحث</label>' +
+          '<input type="text" value="' + escapeAttr(demandFilter.search) + '" oninput="demandFilter.search=this.value;renderDemands();" placeholder="رقم، وصف، خدمة..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg);color:var(--text);"></div>';
+  html += '</div></div>';
+
+  // Empty state
+  if (filtered.length === 0) {
+    html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:60px 20px;text-align:center;color:var(--text-light);">';
+    html += '<div style="font-size:48px;margin-bottom:12px;">🎯</div>';
+    html += '<h3 style="margin-bottom:8px;color:var(--text);">' + (totalCount === 0 ? 'لا توجد متطلبات بعد' : 'لا توجد نتائج مطابقة للفلاتر') + '</h3>';
+    html += '<p>' + (totalCount === 0 ? 'ابدأ بإضافة متطلب جديد أو استيراد من Excel' : 'جرّب تغيير الفلاتر') + '</p>';
+    html += '</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  // Group by platform → quarter
+  var groups = {};
+  filtered.forEach(function(d) {
+    var p = d.platform || '(بدون منصة)';
+    var q = d.expectedQuarter || '(بدون ربع)';
+    if (!groups[p]) groups[p] = {};
+    if (!groups[p][q]) groups[p][q] = [];
+    groups[p][q].push(d);
+  });
+
+  Object.keys(groups).sort(function(a, b) { return a.localeCompare(b, 'ar'); }).forEach(function(platform) {
+    html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden;">';
+    html += '<div style="padding:14px 18px;background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.08));border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">';
+    html += '<h3 style="margin:0;font-size:15px;font-weight:800;color:var(--accent);">💻 ' + escapeHtml(platform) + '</h3>';
+    var platCount = 0;
+    Object.keys(groups[platform]).forEach(function(q) { platCount += groups[platform][q].length; });
+    html += '<span style="font-size:12px;color:var(--text-light);background:var(--bg);padding:4px 10px;border-radius:12px;">' + platCount + ' متطلب</span>';
+    html += '</div>';
+
+    Object.keys(groups[platform]).sort(function(a, b) {
+      var partsA = a.split(' '); var partsB = b.split(' ');
+      var yearA = parseInt(partsA[1] || '0'); var yearB = parseInt(partsB[1] || '0');
+      if (yearA !== yearB) return yearA - yearB;
+      return DEMAND_QUARTERS.indexOf(partsA[0]) - DEMAND_QUARTERS.indexOf(partsB[0]);
+    }).forEach(function(quarter) {
+      var items = groups[platform][quarter];
+      html += '<div style="padding:12px 18px;border-bottom:1px solid var(--border);">';
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text-light);margin-bottom:10px;">📅 ' + escapeHtml(quarter) + ' — ' + items.length + ' متطلب</div>';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;">';
+      items.forEach(function(d) {
+        html += buildDemandCard(d);
+      });
+      html += '</div></div>';
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function buildDemandCard(d) {
+  var canEdit = isAdmin() || CURRENT_USER_ROLE === 'planner';
+  var html = '<div class="req-card" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;gap:8px;">';
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="font-size:11px;color:var(--text-light);margin-bottom:2px;">#' + escapeHtml(String(d.reqNumber || '-')) + '</div>';
+  html += '<div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.4;">' + escapeHtml(d.description || d.service || 'بدون وصف') + '</div>';
+  html += '</div>';
+  if (canEdit) {
+    html += '<div style="display:flex;gap:4px;">';
+    html += '<button class="mgmt-action-btn edit" title="تعديل" onclick="openDemandEditModal(\'' + escapeJS(d.id) + '\')">✏️</button>';
+    html += '<button class="mgmt-action-btn delete" title="حذف" onclick="deleteDemand(\'' + escapeJS(d.id) + '\')">🗑️</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Badges
+  html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0;">';
+  if (d.priority) html += '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;color:#fff;background:' + demandPriorityColor(d.priority) + ';">' + escapeHtml(d.priority) + '</span>';
+  if (d.importance) html += '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;color:#fff;background:' + demandImportanceColor(d.importance) + ';">' + escapeHtml(d.importance) + '</span>';
+  if (d.stage) html += '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;color:#fff;background:' + demandStageColor(d.stage) + ';">' + escapeHtml(d.stage) + '</span>';
+  if (d.classification) html += '<span style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:10px;color:var(--text);background:var(--bg-card);border:1px solid var(--border);">' + escapeHtml(d.classification) + '</span>';
+  html += '</div>';
+
+  // Meta rows
+  if (d.service) html += '<div style="font-size:11px;color:var(--text-light);margin-bottom:3px;">🔧 ' + escapeHtml(d.service) + (d.subService ? ' — ' + escapeHtml(d.subService) : '') + '</div>';
+  if (d.requestingEntity) html += '<div style="font-size:11px;color:var(--text-light);margin-bottom:3px;">🏢 ' + escapeHtml(d.requestingEntity) + '</div>';
+  if (d.devTeam) html += '<div style="font-size:11px;color:var(--text-light);margin-bottom:3px;">👥 ' + escapeHtml(d.devTeam) + '</div>';
+  if (d.workSize) html += '<div style="font-size:11px;color:var(--text-light);margin-bottom:3px;">📏 ' + escapeHtml(d.workSize) + '</div>';
+  if (d.actualQuarter && d.actualQuarter !== d.expectedQuarter) html += '<div style="font-size:11px;color:#10b981;margin-bottom:3px;">✅ انتهى في ' + escapeHtml(d.actualQuarter) + '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function openDemandAddModal() {
+  openDemandModal(null);
+}
+function openDemandEditModal(id) {
+  var data = getMgmtData();
+  var d = (data.demands || []).find(function(x) { return x.id === id; });
+  if (!d) { showMgmtToast('المتطلب غير موجود', 'error'); return; }
+  openDemandModal(d);
+}
+
+function openDemandModal(existing) {
+  var isEdit = !!existing;
+  var d = existing || {
+    id: '', reqNumber: '', platform: '', service: '', subService: '', description: '',
+    classification: 'تطوير جديد', priority: 'متوسط', importance: 'متوسطة', businessCategory: 'متطلبات أعمال',
+    requestingEntity: '', requestDate: '', workSize: '', stage: 'متطلب جديد', deploymentStatus: '',
+    changeRequestNumber: '', lastUpdateDate: '', devTeam: '', expectedQuarter: '', completionDate: '',
+    actualQuarter: '', affectedSystems: '', notes: ''
+  };
+
+  var data = getMgmtData();
+  var platforms = data.platforms || [];
+  if (CURRENT_USER_ROLE === 'planner' && CURRENT_USER_PERMS) {
+    platforms = CURRENT_USER_PERMS.platforms || [];
+  }
+
+  // Quarter options
+  var quarterOpts = '<option value="">—</option>';
+  DEMAND_YEARS.forEach(function(y) {
+    DEMAND_QUARTERS.forEach(function(q) {
+      var val = q + ' ' + y;
+      quarterOpts += '<option value="' + escapeAttr(val) + '"' + (val === d.expectedQuarter ? ' selected' : '') + '>' + escapeHtml(val) + '</option>';
+    });
+  });
+  var actualQOpts = '<option value="">—</option>';
+  DEMAND_YEARS.forEach(function(y) {
+    DEMAND_QUARTERS.forEach(function(q) {
+      var val = q + ' ' + y;
+      actualQOpts += '<option value="' + escapeAttr(val) + '"' + (val === d.actualQuarter ? ' selected' : '') + '>' + escapeHtml(val) + '</option>';
+    });
+  });
+
+  function selOptions(arr, current) {
+    return arr.map(function(v) { return '<option value="' + escapeAttr(v) + '"' + (v === current ? ' selected' : '') + '>' + escapeHtml(v) + '</option>'; }).join('');
+  }
+
+  var overlay = document.getElementById('demandModal');
+  if (overlay) overlay.remove();
+
+  var html = '<div id="demandModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:800px;width:100%;max-height:90vh;overflow-y:auto;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">';
+  html += '<h2 style="margin:0;font-size:18px;color:var(--accent);">' + (isEdit ? '✏️ تعديل متطلب' : '➕ إضافة متطلب جديد') + '</h2>';
+  html += '<button onclick="closeDemandModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-light);">×</button>';
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;">';
+
+  function fld(label, input) {
+    return '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;font-weight:600;">' + label + '</label>' + input + '</div>';
+  }
+  var inputStyle = 'style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg);color:var(--text);font-size:13px;"';
+
+  html += fld('رقم المتطلب *', '<input id="dmReqNumber" type="text" value="' + escapeAttr(d.reqNumber) + '" ' + inputStyle + '>');
+  html += fld('المنصة / النظام *', '<select id="dmPlatform" ' + inputStyle + '><option value="">— اختر —</option>' + platforms.map(function(p) { return '<option value="' + escapeAttr(p) + '"' + (p === d.platform ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'; }).join('') + '</select>');
+  html += fld('الخدمة', '<input id="dmService" type="text" value="' + escapeAttr(d.service) + '" ' + inputStyle + '>');
+  html += fld('الخدمة الفرعية', '<input id="dmSubService" type="text" value="' + escapeAttr(d.subService) + '" ' + inputStyle + '>');
+  html += '<div style="grid-column:1/-1;">' + fld('الوصف *', '<textarea id="dmDescription" rows="2" ' + inputStyle + '>' + escapeHtml(d.description) + '</textarea>') + '</div>';
+  html += fld('التصنيف', '<select id="dmClassification" ' + inputStyle + '>' + selOptions(DEMAND_CLASSIFICATIONS, d.classification) + '</select>');
+  html += fld('الأولوية', '<select id="dmPriority" ' + inputStyle + '>' + selOptions(DEMAND_PRIORITIES, d.priority) + '</select>');
+  html += fld('الأهمية', '<select id="dmImportance" ' + inputStyle + '>' + selOptions(DEMAND_IMPORTANCE, d.importance) + '</select>');
+  html += fld('تصنيف الأعمال', '<select id="dmBusinessCategory" ' + inputStyle + '>' + selOptions(DEMAND_BUSINESS_CATEGORIES, d.businessCategory) + '</select>');
+  html += fld('الجهة الطالبة', '<input id="dmRequestingEntity" type="text" value="' + escapeAttr(d.requestingEntity) + '" ' + inputStyle + '>');
+  html += fld('تاريخ الطلب', '<input id="dmRequestDate" type="date" value="' + escapeAttr(d.requestDate) + '" ' + inputStyle + '>');
+  html += fld('حجم العمل', '<input id="dmWorkSize" type="text" value="' + escapeAttr(d.workSize) + '" placeholder="عالي جداً (ثلاثة اشهر فأكثر)" ' + inputStyle + '>');
+  html += fld('مرحلة الطلب', '<select id="dmStage" ' + inputStyle + '>' + selOptions(DEMAND_STAGES, d.stage) + '</select>');
+  html += fld('حالة النشر', '<input id="dmDeploymentStatus" type="text" value="' + escapeAttr(d.deploymentStatus) + '" ' + inputStyle + '>');
+  html += fld('رقم طلب التغيير', '<input id="dmChangeRequestNumber" type="text" value="' + escapeAttr(d.changeRequestNumber) + '" ' + inputStyle + '>');
+  html += fld('تاريخ آخر تحديث', '<input id="dmLastUpdateDate" type="date" value="' + escapeAttr(d.lastUpdateDate) + '" ' + inputStyle + '>');
+  html += fld('فريق التطوير', '<input id="dmDevTeam" type="text" value="' + escapeAttr(d.devTeam) + '" ' + inputStyle + '>');
+  html += fld('الربع المتوقع للانتهاء', '<select id="dmExpectedQuarter" ' + inputStyle + '>' + quarterOpts + '</select>');
+  html += fld('تاريخ الانتهاء', '<input id="dmCompletionDate" type="date" value="' + escapeAttr(d.completionDate) + '" ' + inputStyle + '>');
+  html += fld('الربع الفعلي للانتهاء', '<select id="dmActualQuarter" ' + inputStyle + '>' + actualQOpts + '</select>');
+  html += '<div style="grid-column:1/-1;">' + fld('الأنظمة المتأثرة', '<input id="dmAffectedSystems" type="text" value="' + escapeAttr(d.affectedSystems) + '" ' + inputStyle + '>') + '</div>';
+  html += '<div style="grid-column:1/-1;">' + fld('ملاحظات', '<textarea id="dmNotes" rows="2" ' + inputStyle + '>' + escapeHtml(d.notes) + '</textarea>') + '</div>';
+
+  html += '</div>'; // grid
+
+  html += '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">';
+  html += '<button onclick="closeDemandModal()" class="mgmt-action-btn" style="padding:8px 18px;background:var(--bg);border:1px solid var(--border);color:var(--text);">إلغاء</button>';
+  html += '<button onclick="saveDemand(\'' + escapeJS(d.id) + '\')" class="mgmt-action-btn" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;">' + (isEdit ? '💾 حفظ التغييرات' : '➕ إضافة') + '</button>';
+  html += '</div>';
+
+  html += '</div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeDemandModal() {
+  var m = document.getElementById('demandModal');
+  if (m) m.remove();
+}
+
+function saveDemand(existingId) {
+  var reqNumber = sanitizeInput(document.getElementById('dmReqNumber').value);
+  var platform = document.getElementById('dmPlatform').value;
+  var description = sanitizeInput(document.getElementById('dmDescription').value);
+
+  if (!reqNumber) { showMgmtToast('رقم المتطلب مطلوب', 'error'); return; }
+  if (!platform) { showMgmtToast('المنصة مطلوبة', 'error'); return; }
+  if (!description) { showMgmtToast('الوصف مطلوب', 'error'); return; }
+
+  var data = getMgmtData();
+  var demands = data.demands || [];
+
+  var payload = {
+    id: existingId || ('d_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+    reqNumber: reqNumber,
+    platform: platform,
+    service: sanitizeInput(document.getElementById('dmService').value),
+    subService: sanitizeInput(document.getElementById('dmSubService').value),
+    description: description,
+    classification: document.getElementById('dmClassification').value,
+    priority: document.getElementById('dmPriority').value,
+    importance: document.getElementById('dmImportance').value,
+    businessCategory: document.getElementById('dmBusinessCategory').value,
+    requestingEntity: sanitizeInput(document.getElementById('dmRequestingEntity').value),
+    requestDate: document.getElementById('dmRequestDate').value,
+    workSize: sanitizeInput(document.getElementById('dmWorkSize').value),
+    stage: document.getElementById('dmStage').value,
+    deploymentStatus: sanitizeInput(document.getElementById('dmDeploymentStatus').value),
+    changeRequestNumber: sanitizeInput(document.getElementById('dmChangeRequestNumber').value),
+    lastUpdateDate: document.getElementById('dmLastUpdateDate').value,
+    devTeam: sanitizeInput(document.getElementById('dmDevTeam').value),
+    expectedQuarter: document.getElementById('dmExpectedQuarter').value,
+    completionDate: document.getElementById('dmCompletionDate').value,
+    actualQuarter: document.getElementById('dmActualQuarter').value,
+    affectedSystems: sanitizeInput(document.getElementById('dmAffectedSystems').value),
+    notes: sanitizeInput(document.getElementById('dmNotes').value)
+  };
+
+  if (existingId) {
+    var idx = demands.findIndex(function(x) { return x.id === existingId; });
+    if (idx !== -1) demands[idx] = payload; else demands.push(payload);
+  } else {
+    // Prevent duplicate reqNumber
+    if (demands.some(function(x) { return x.reqNumber === reqNumber; })) {
+      showMgmtToast('رقم المتطلب موجود بالفعل', 'error');
+      return;
+    }
+    demands.push(payload);
+  }
+
+  saveMgmtList('demands', demands);
+  closeDemandModal();
+  renderDemands();
+  showMgmtToast(existingId ? 'تم حفظ التغييرات' : 'تمت الإضافة', 'success');
+}
+
+function deleteDemand(id) {
+  if (!confirm('هل تريد حذف هذا المتطلب؟')) return;
+  var data = getMgmtData();
+  var demands = (data.demands || []).filter(function(x) { return x.id !== id; });
+  saveMgmtList('demands', demands);
+  renderDemands();
+  showMgmtToast('تم الحذف', 'success');
+}
+
+function importDemandsFromExcel(inputEl) {
+  var file = inputEl.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 2) { showMgmtToast('الملف فارغ أو بلا بيانات', 'error'); return; }
+
+      // First row is headers — map by position
+      var headers = rows[0];
+      // Expected column mapping (by Arabic header match)
+      var colMap = {
+        'رقم المتطلب': 'reqNumber',
+        'المنصة / النظام': 'platform',
+        'الخدمة': 'service',
+        'الخدمة الفرعية': 'subService',
+        'الوصف': 'description',
+        'التصنيف': 'classification',
+        'الأولوية': 'priority',
+        'الأهمية': 'importance',
+        'تصنيف الأعمال': 'businessCategory',
+        'الجهة الطالبة': 'requestingEntity',
+        'تاريخ الطلب': 'requestDate',
+        'حجم العمل': 'workSize',
+        'مرحلة الطلب': 'stage',
+        'حالة النشر': 'deploymentStatus',
+        'رقم طلب التغيير': 'changeRequestNumber',
+        'تاريخ اخر تحديث': 'lastUpdateDate',
+        'فريق التطوير': 'devTeam',
+        'الربع المتوقع للانتهاء': 'expectedQuarter',
+        'تاريخ الإنتهاء': 'completionDate',
+        'الربع الفعلي للانتهاء': 'actualQuarter',
+        'الأنظمة المتأثرة (تطوير أو تكامل)': 'affectedSystems',
+        'ملاحظات': 'notes'
+      };
+      var fieldIndex = {};
+      headers.forEach(function(h, i) {
+        var k = String(h || '').trim();
+        if (colMap[k]) fieldIndex[colMap[k]] = i;
+      });
+
+      // Build demand objects — skip rows where reqNumber is empty (those are dropdown-option rows)
+      var data = getMgmtData();
+      var existing = data.demands || [];
+      var existingNumbers = {};
+      existing.forEach(function(d) { if (d.reqNumber) existingNumbers[String(d.reqNumber)] = true; });
+
+      var newDemands = [];
+      var skipped = 0;
+      for (var r = 1; r < rows.length; r++) {
+        var row = rows[r];
+        var reqNum = fieldIndex.reqNumber !== undefined ? row[fieldIndex.reqNumber] : '';
+        if (reqNum === '' || reqNum === null || reqNum === undefined) continue; // dropdown rows
+        reqNum = String(reqNum).trim();
+        if (existingNumbers[reqNum]) { skipped++; continue; }
+
+        function gv(field) { return fieldIndex[field] !== undefined ? String(row[fieldIndex[field]] || '').trim() : ''; }
+        function excelDate(val) {
+          if (!val && val !== 0) return '';
+          if (typeof val === 'number') {
+            // Excel serial date
+            var d = new Date(Math.round((val - 25569) * 86400 * 1000));
+            return d.toISOString().slice(0, 10);
+          }
+          return String(val).trim();
+        }
+
+        newDemands.push({
+          id: 'd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '_' + r,
+          reqNumber: reqNum,
+          platform: gv('platform'),
+          service: gv('service'),
+          subService: gv('subService'),
+          description: gv('description'),
+          classification: gv('classification'),
+          priority: gv('priority'),
+          importance: gv('importance'),
+          businessCategory: gv('businessCategory'),
+          requestingEntity: gv('requestingEntity'),
+          requestDate: excelDate(fieldIndex.requestDate !== undefined ? row[fieldIndex.requestDate] : ''),
+          workSize: gv('workSize'),
+          stage: gv('stage') || 'متطلب جديد',
+          deploymentStatus: gv('deploymentStatus'),
+          changeRequestNumber: gv('changeRequestNumber'),
+          lastUpdateDate: excelDate(fieldIndex.lastUpdateDate !== undefined ? row[fieldIndex.lastUpdateDate] : ''),
+          devTeam: gv('devTeam'),
+          expectedQuarter: gv('expectedQuarter'),
+          completionDate: excelDate(fieldIndex.completionDate !== undefined ? row[fieldIndex.completionDate] : ''),
+          actualQuarter: gv('actualQuarter'),
+          affectedSystems: gv('affectedSystems'),
+          notes: gv('notes')
+        });
+        existingNumbers[reqNum] = true;
+      }
+
+      if (newDemands.length === 0) {
+        showMgmtToast('لم يتم العثور على متطلبات جديدة للاستيراد' + (skipped > 0 ? ' (' + skipped + ' مكررة)' : ''), 'error');
+        inputEl.value = '';
+        return;
+      }
+
+      if (!confirm('استيراد ' + newDemands.length + ' متطلب؟' + (skipped > 0 ? ' (' + skipped + ' مكررة سيتم تخطيها)' : ''))) {
+        inputEl.value = '';
+        return;
+      }
+
+      var merged = existing.concat(newDemands);
+      saveMgmtList('demands', merged);
+      renderDemands();
+      showMgmtToast('تم استيراد ' + newDemands.length + ' متطلب بنجاح', 'success');
+    } catch (err) {
+      console.error('Excel import error:', err);
+      showMgmtToast('خطأ في قراءة الملف: ' + err.message, 'error');
+    }
+    inputEl.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function exportDemands() {
+  var demands = applyDemandFilters(getVisibleDemands());
+  if (demands.length === 0) { showMgmtToast('لا توجد متطلبات للتصدير', 'error'); return; }
+
+  var headers = ['رقم المتطلب', 'المنصة / النظام', 'الخدمة', 'الخدمة الفرعية', 'الوصف', 'التصنيف', 'الأولوية', 'الأهمية', 'تصنيف الأعمال', 'الجهة الطالبة', 'تاريخ الطلب', 'حجم العمل', 'مرحلة الطلب', 'حالة النشر', 'رقم طلب التغيير', 'تاريخ اخر تحديث', 'فريق التطوير', 'الربع المتوقع للانتهاء', 'تاريخ الإنتهاء', 'الربع الفعلي للانتهاء', 'الأنظمة المتأثرة (تطوير أو تكامل)', 'ملاحظات'];
+  var rows = [headers];
+  demands.forEach(function(d) {
+    rows.push([
+      d.reqNumber || '', d.platform || '', d.service || '', d.subService || '', d.description || '',
+      d.classification || '', d.priority || '', d.importance || '', d.businessCategory || '', d.requestingEntity || '',
+      d.requestDate || '', d.workSize || '', d.stage || '', d.deploymentStatus || '', d.changeRequestNumber || '',
+      d.lastUpdateDate || '', d.devTeam || '', d.expectedQuarter || '', d.completionDate || '', d.actualQuarter || '',
+      d.affectedSystems || '', d.notes || ''
+    ]);
+  });
+
+  try {
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Demands');
+    XLSX.writeFile(wb, 'demands_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+    showMgmtToast('تم تصدير ' + demands.length + ' متطلب', 'success');
+  } catch (err) {
+    console.error('Export error:', err);
+    showMgmtToast('خطأ في التصدير: ' + err.message, 'error');
+  }
 }
 
 </script>
