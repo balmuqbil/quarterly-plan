@@ -750,6 +750,27 @@ html.dark-mode {
   --border: #2e2e3e;
 }
 html.dark-mode body { background:#11111b; }
+/* ---- Sidebar dark-mode (flips from white to dark) ---- */
+html.dark-mode .sidebar {
+  background:#1e1e2e;
+  border-left-color:#2e2e3e;
+  box-shadow:-2px 0 12px rgba(0,0,0,0.3);
+}
+html.dark-mode .sidebar-header { border-bottom-color:#2e2e3e; }
+html.dark-mode .sidebar-header h2 { color:#e0e0e0; }
+html.dark-mode .sidebar-header span { color:#8fbcd4; }
+html.dark-mode .nav-item { color:#a0a0b0; }
+html.dark-mode .nav-item:hover { background:rgba(91,164,201,0.10); color:#f0f0f5; }
+html.dark-mode .nav-item.active { background:rgba(91,164,201,0.20); color:#fff; border-right-color:#8fbcd4; }
+html.dark-mode .nav-item .icon { color:#8fbcd4; }
+html.dark-mode .sidebar-footer { border-top-color:#2e2e3e; }
+html.dark-mode .sidebar-footer .user-name { color:#e0e0e0; }
+html.dark-mode .sidebar-footer .user-role { color:#a0a0b0; }
+html.dark-mode .sidebar-footer .avatar { background:#5BA4C9; }
+html.dark-mode .logout-btn { background:#2a2a3a; color:#e0e0e0; border-color:#3e3e4e; }
+html.dark-mode .logout-btn:hover { background:rgba(239,68,68,0.15); color:#fca5a5; border-color:rgba(239,68,68,0.3); }
+html.dark-mode .dark-mode-btn { background:#2a2a3a; color:#e0e0e0; border-color:#3e3e4e; }
+html.dark-mode .dark-mode-btn:hover { background:#3e3e4e; color:#fff; }
 html.dark-mode .login-overlay { background:linear-gradient(135deg, #0a150d 0%, #0f2918 50%, #143d22 100%); }
 html.dark-mode .login-box { background:rgba(30,30,46,0.9); border-color:rgba(255,255,255,0.05); }
 html.dark-mode .kpi-card, html.dark-mode .chart-card, html.dark-mode .table-card, html.dark-mode .mgmt-card { background:#1e1e2e; }
