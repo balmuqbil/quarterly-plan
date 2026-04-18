@@ -3108,9 +3108,11 @@ function cleanOccupancyData(data) {
 }
 
 function seedEmployeesFromData(data) {
-  // Seed employee NAMES from task data (dept/section come from employee mapping, not tasks)
+  // Seed employee NAMES from task data (dept/section come from employee mapping, not tasks).
+  // Skip any name the user has deliberately deleted so we don't revive them from old task records.
   const mgmt = getMgmtData();
   const existingNames = new Set(mgmt.employees.map(e => e.name));
+  const deletedEmps = (typeof getMgmtDeletes === 'function' ? (getMgmtDeletes().employees || {}) : {});
   let added = 0;
 
   const uniqueNames = new Set();
@@ -3120,7 +3122,7 @@ function seedEmployeesFromData(data) {
   });
 
   uniqueNames.forEach(name => {
-    if (!existingNames.has(name)) {
+    if (!existingNames.has(name) && !deletedEmps[name]) {
       mgmt.employees.push({ name, department: '', section: '' });
       existingNames.add(name);
       added++;
@@ -3234,13 +3236,18 @@ function reconcileEmployeesFromTasks(taskData) {
     if (name) empNames[name] = true;
   });
 
-  // Collect info about missing employees from their task records
+  // Collect info about missing employees from their task records.
+  // Skip any name the user has deliberately deleted — otherwise the reconcile would revive
+  // employees immediately after deletion because their old task records still reference them.
+  var deletedEmps = (typeof getMgmtDeletes === 'function' ? (getMgmtDeletes().employees || {}) : {});
   var missingEmps = {};
   taskData.forEach(function(r) {
     var name = (r.name || '').trim();
     if (!name || empNames[name] || missingEmps[name]) return;
     // Skip if this name was recently renamed (old name still in some task records)
     if (recentRenames[name]) return;
+    // Skip if this name was deleted from the management list
+    if (deletedEmps[name]) return;
     missingEmps[name] = {
       name: name,
       department: r.department || '',
@@ -10055,6 +10062,8 @@ function mergeEmployees(newEmployees) {
       const empObj = typeof emp === 'string' ? { name: emp, department: '', section: '' } : emp;
       data.employees.push(empObj);
       existingNames.add(name);
+      // User is explicitly re-importing this name — forget any prior tombstone for it.
+      if (typeof clearMgmtDelete === 'function') clearMgmtDelete('employees', name);
       added++;
     }
   });
