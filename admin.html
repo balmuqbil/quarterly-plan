@@ -4,7 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة تحكم خطة العمل الربعية</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Theme: set data-theme before paint to avoid flash (default = edugate) -->
+<script>
+  (function(){
+    try {
+      var saved = localStorage.getItem('qplan_admin_theme');
+      document.documentElement.setAttribute('data-theme', (saved === 'classic' ? 'classic' : 'edugate'));
+    } catch(e) {
+      document.documentElement.setAttribute('data-theme', 'edugate');
+    }
+  })();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <!-- Firebase SDK -->
@@ -12,6 +23,32 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 :root {
+  /* Variables that are the same across both themes */
+  --bg-card: #ffffff;
+  --sidebar-width: 260px;
+  /* Default → edugate — edugate values live under html[data-theme="edugate"] below */
+}
+/* Default theme (Edugate green/white) */
+html[data-theme="edugate"] {
+  --bg-primary: #14532d;
+  --bg-secondary: #166534;
+  --bg-card: #ffffff;
+  --bg-card-dark: #F9FAFB;
+  --accent: #1B8354;
+  --accent-light: #22a366;
+  --accent-glow: rgba(27,131,84,0.25);
+  --success: #16a34a;
+  --warning: #DBA102;
+  --danger: #DC2626;
+  --info: #0891b2;
+  --text-primary: #161616;
+  --text-secondary: #384250;
+  --text-light: #6C737F;
+  --border: #E5E7EB;
+  --font: 'IBM Plex Sans Arabic', 'Tajawal', sans-serif;
+}
+/* Classic theme (original blue/purple) */
+html[data-theme="classic"] {
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-card: #ffffff;
@@ -27,10 +64,10 @@
   --text-secondary: #64748b;
   --text-light: #94a3b8;
   --border: #e2e8f0;
-  --sidebar-width: 260px;
+  --font: 'Tajawal', 'IBM Plex Sans Arabic', sans-serif;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Tajawal',sans-serif; background:#f1f5f9; color:var(--text-primary); min-height:100vh; }
+body { font-family:var(--font); background:#f1f5f9; color:var(--text-primary); min-height:100vh; }
 
 /* ========== LOGIN ========== */
 .login-overlay {
@@ -730,7 +767,7 @@ tr:hover td { background:rgba(99,102,241,0.03); }
   border: none;
   padding: 8px 16px;
   border-radius: 8px;
-  font-family: 'Tajawal', sans-serif;
+  font-family: var(--font);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -909,6 +946,96 @@ html[dir="ltr"] .user-info { direction:ltr; }
 .rp-squad-move:hover { border-color:var(--accent); color:var(--accent); }
 .rp-no-data { text-align:center; padding:40px; color:var(--text-light); font-size:14px; }
 @media(max-width:900px) { .rp-container { flex-direction:column; } .rp-left { width:100%; } }
+
+/* ============================================================
+   EDUGATE THEME (default) — overrides the "classic" styles above.
+   Rules here fire only when <html data-theme="edugate">.
+   ============================================================ */
+/* Login */
+html[data-theme="edugate"] .login-overlay { background:linear-gradient(135deg, #1a3a4a 0%, #2d6a7a 50%, #5BA4C9 100%); }
+html[data-theme="edugate"] .login-btn { background:linear-gradient(135deg, #5BA4C9, #3d8ab0); }
+
+/* Sidebar (light — white + accent) */
+html[data-theme="edugate"] .sidebar {
+  background:#ffffff;
+  box-shadow:-2px 0 12px rgba(0,0,0,0.06);
+  border-left:1px solid #E5E7EB;
+}
+html[data-theme="edugate"] .sidebar-header { border-bottom:1px solid #E5E7EB; }
+html[data-theme="edugate"] .sidebar-header h2 { color:#1a3a4a; }
+html[data-theme="edugate"] .sidebar-header span { color:#5BA4C9; }
+html[data-theme="edugate"] .nav-item { color:#6C737F; }
+html[data-theme="edugate"] .nav-item:hover { background:#F0F7FA; color:#1a3a4a; }
+html[data-theme="edugate"] .nav-item.active { background:#E8F4F8; color:#1a3a4a; border-right:3px solid #5BA4C9; }
+html[data-theme="edugate"] .nav-item .icon { color:#5BA4C9; }
+html[data-theme="edugate"] .sidebar-footer { border-top:1px solid #E5E7EB; }
+html[data-theme="edugate"] .sidebar-footer .avatar { background:#5BA4C9; }
+html[data-theme="edugate"] .sidebar-footer .user-name { color:#1a3a4a; }
+html[data-theme="edugate"] .sidebar-footer .user-role { color:#6C737F; }
+html[data-theme="edugate"] .logout-btn { border:1px solid #E5E7EB; color:#6C737F; }
+html[data-theme="edugate"] .logout-btn:hover { background:rgba(239,68,68,0.08); color:#ef4444; border-color:rgba(239,68,68,0.3); }
+html[data-theme="edugate"] .lang-btn { border:1px solid #E5E7EB; color:#6C737F; }
+html[data-theme="edugate"] .lang-btn:hover { background:#F0F7FA; color:#1a3a4a; border-color:#8FBCD4; }
+html[data-theme="edugate"] .dark-mode-btn { border:1px solid #E5E7EB; color:#6C737F; }
+html[data-theme="edugate"] .dark-mode-btn:hover { background:#F0F7FA; color:#1a3a4a; border-color:#8FBCD4; }
+
+/* LTR: swap the accent strip side */
+html[data-theme="edugate"][dir="ltr"] .sidebar { right:auto; left:0; border-left:none; border-right:1px solid #E5E7EB; box-shadow:2px 0 12px rgba(0,0,0,0.06); }
+html[data-theme="edugate"][dir="ltr"] .nav-item.active { border-right:none; border-left:3px solid #5BA4C9; }
+
+/* KPI card gradient accents (greens/teals) */
+html[data-theme="edugate"] .kpi-card:nth-child(1)::before { background:linear-gradient(90deg, var(--accent), #22a366); }
+html[data-theme="edugate"] .kpi-card:nth-child(2)::before { background:linear-gradient(90deg, var(--success), #4ade80); }
+html[data-theme="edugate"] .kpi-card:nth-child(5)::before { background:linear-gradient(90deg, #166a45, #1B8354); }
+html[data-theme="edugate"] .kpi-card:nth-child(6)::before { background:linear-gradient(90deg, var(--danger), #f87171); }
+html[data-theme="edugate"] .kpi-card:nth-child(7)::before { background:linear-gradient(90deg, #0891b2, #06b6d4); }
+html[data-theme="edugate"] .kpi-card:nth-child(8)::before { background:linear-gradient(90deg, var(--accent), #16a34a); }
+
+/* KPI icon tints */
+html[data-theme="edugate"] .kpi-card:nth-child(1) .kpi-icon { background:rgba(27,131,84,0.1); }
+html[data-theme="edugate"] .kpi-card:nth-child(2) .kpi-icon { background:rgba(22,163,74,0.1); }
+html[data-theme="edugate"] .kpi-card:nth-child(3) .kpi-icon { background:rgba(219,161,2,0.12); }
+html[data-theme="edugate"] .kpi-card:nth-child(4) .kpi-icon { background:rgba(8,145,178,0.1); }
+html[data-theme="edugate"] .kpi-card:nth-child(5) .kpi-icon { background:rgba(27,131,84,0.1); }
+html[data-theme="edugate"] .kpi-card:nth-child(6) .kpi-icon { background:rgba(220,38,38,0.1); }
+html[data-theme="edugate"] .kpi-card:nth-child(7) .kpi-icon { background:rgba(8,145,178,0.1); }
+html[data-theme="edugate"] .kpi-card:nth-child(8) .kpi-icon { background:rgba(27,131,84,0.1); }
+
+/* Hover/badge/misc accents */
+html[data-theme="edugate"] tr:hover td { background:rgba(27,131,84,0.03); }
+html[data-theme="edugate"] .badge-platform { background:rgba(27,131,84,0.1); color:var(--accent); }
+html[data-theme="edugate"] .badge-section { background:rgba(27,131,84,0.08); color:#166a45; }
+html[data-theme="edugate"] .bulk-actions-bar { background:linear-gradient(135deg,#f0faf5,#e8f5e9); border:1.5px solid #a5d6a7; }
+html[data-theme="edugate"] .loading-overlay { background:rgba(249,250,251,0.8); }
+html[data-theme="edugate"] .spinner { border-top-color:#1B8354; }
+html[data-theme="edugate"] .kpi-card.clickable:hover { box-shadow:0 8px 30px rgba(27,131,84,0.12); }
+html[data-theme="edugate"] .detail-card:hover { box-shadow:0 6px 20px rgba(27,131,84,0.1); }
+html[data-theme="edugate"] .drill-table tr:hover td { background:rgba(27,131,84,0.03); }
+html[data-theme="edugate"] .mgmt-action-btn.edit:hover { background:rgba(27,131,84,0.1); }
+html[data-theme="edugate"] .mgmt-dept-header:hover { background:#f0faf5; }
+html[data-theme="edugate"] .emp-card:hover { box-shadow:0 4px 14px rgba(27,131,84,0.08); }
+html[data-theme="edugate"] .mgmt-bulk-upload-btn { background:rgba(27,131,84,0.04); }
+html[data-theme="edugate"] .mgmt-bulk-upload-btn:hover { background:rgba(27,131,84,0.1); }
+html[data-theme="edugate"] .task-crud-btn.edit-btn:hover { background:rgba(27,131,84,0.1); }
+html[data-theme="edugate"] .task-autocomplete-item:hover,
+html[data-theme="edugate"] .task-autocomplete-item.highlighted { background:#f0faf5; }
+
+/* Dark mode — edugate gets a solid dark surface, not the classic deep-midnight gradient */
+html[data-theme="edugate"].dark-mode .sidebar { background:#1e1e2e; border-left-color:#2e2e3e; box-shadow:-2px 0 12px rgba(0,0,0,0.3); }
+html[data-theme="edugate"].dark-mode .sidebar-header span { color:#8fbcd4; }
+html[data-theme="edugate"].dark-mode .nav-item { color:#a0a0b0; }
+html[data-theme="edugate"].dark-mode .nav-item:hover { background:rgba(91,164,201,0.10); color:#f0f0f5; }
+html[data-theme="edugate"].dark-mode .nav-item.active { background:rgba(91,164,201,0.20); color:#fff; border-right-color:#8fbcd4; }
+html[data-theme="edugate"].dark-mode .nav-item .icon { color:#8fbcd4; }
+html[data-theme="edugate"].dark-mode .sidebar-footer .avatar { background:#5BA4C9; }
+html[data-theme="edugate"].dark-mode .logout-btn { background:#2a2a3a; color:#e0e0e0; border-color:#3e3e4e; }
+html[data-theme="edugate"].dark-mode .dark-mode-btn { background:#2a2a3a; color:#e0e0e0; border-color:#3e3e4e; }
+html[data-theme="edugate"].dark-mode .dark-mode-btn:hover { background:#3e3e4e; color:#fff; }
+html[data-theme="edugate"].dark-mode .lang-btn { background:#2a2a3a; color:#e0e0e0; border-color:#3e3e4e; }
+html[data-theme="edugate"].dark-mode .lang-btn:hover { background:#3e3e4e; color:#fff; }
+html[data-theme="edugate"].dark-mode .login-overlay { background:linear-gradient(135deg, #0a150d 0%, #0f2918 50%, #143d22 100%); }
+html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.06); }
+
 </style>
 </head>
 <body>
@@ -1785,6 +1912,17 @@ html[dir="ltr"] .user-info { direction:ltr; }
     </details>
 
     <hr style="border:none; border-top:1px solid #e2e8f0; margin:16px 0;">
+    <h3 style="font-size:16px; font-weight:600; margin-bottom:12px; color:var(--accent);">🎨 ستايل لوحة التحكم</h3>
+    <div class="setup-field">
+      <label>الستايل الافتراضي لجميع المستخدمين</label>
+      <select id="settingsTheme" style="font-size:13px;">
+        <option value="edugate">Edugate — أخضر (افتراضي)</option>
+        <option value="classic">الكلاسيكي — أزرق</option>
+      </select>
+      <small style="display:block;margin-top:4px;color:var(--text-light);font-size:11px;">يُطبَّق على جميع المستخدمين عند الحفظ — يتطلب صلاحيات المسؤول.</small>
+    </div>
+
+    <hr style="border:none; border-top:1px solid #e2e8f0; margin:16px 0;">
     <h3 style="font-size:16px; font-weight:600; margin-bottom:12px; color:var(--accent);">🔐 بيانات الدخول</h3>
     <div class="setup-field">
       <label>اسم المستخدم</label>
@@ -1990,6 +2128,37 @@ function setLanguage(lang) {
 
 // Run applyI18n once the DOM is ready (this script is below the body already, so DOM is present)
 document.addEventListener('DOMContentLoaded', function() { setLanguage(CURRENT_LANG); });
+
+// ========== THEME (edugate default vs classic) ==========
+// Note: the <html data-theme> attribute is set by the <head> IIFE *before* first paint to avoid
+// a FOUC. This block provides the runtime switcher and the admin-gated global setter.
+var THEME_KEY = STORAGE_PREFIX + 'theme';
+var THEME_FIREBASE_KEY = 'theme_default'; // synced via management/* in Firebase
+var CURRENT_THEME = (document.documentElement.getAttribute('data-theme') === 'classic') ? 'classic' : 'edugate';
+
+function applyTheme(theme, opts) {
+  if (theme !== 'edugate' && theme !== 'classic') theme = 'edugate';
+  if (CURRENT_THEME === theme && !(opts && opts.force)) return;
+  CURRENT_THEME = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem(THEME_KEY, theme); } catch(e) {}
+  // Re-render the active section so any theme-colored JS literals / Chart.js repaints pick up
+  // the new palette. Safe to call before navigateTo is defined because we guard it.
+  var active = document.querySelector('.section-view.active');
+  if (active && typeof navigateTo === 'function') {
+    var secId = active.id.replace('section-', '');
+    try { navigateTo(secId); } catch(e) {}
+  }
+}
+
+function setGlobalTheme(theme) {
+  if (typeof isAdmin === 'function' && !isAdmin()) {
+    if (typeof showMgmtToast === 'function') showMgmtToast('تحتاج صلاحيات المسؤول لتغيير الستايل', 'error');
+    return;
+  }
+  applyTheme(theme);
+  if (typeof saveMgmtList === 'function') saveMgmtList(THEME_FIREBASE_KEY, theme);
+}
 
 // ========== DARK MODE ==========
 function toggleDarkMode() {
@@ -2247,7 +2416,21 @@ function setDefaultFilters() {
   }
   // platMonthFilter defaults to "all" — user can narrow down
 }
-const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
+// Theme-aware color palettes. Access via getColors() so Chart.js reads the live palette
+// at render time instead of a frozen snapshot — makes theme switches repaint instantly.
+var COLORS_CLASSIC = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#e11d48','#0ea5e9'];
+var COLORS_EDUGATE = ['#1B8354','#16a34a','#DBA102','#DC2626','#0891b2','#166a45','#0d9488','#22a366','#f97316','#384250','#84cc16','#e11d48','#0ea5e9'];
+function getColors() { return (typeof CURRENT_THEME !== 'undefined' && CURRENT_THEME === 'classic') ? COLORS_CLASSIC : COLORS_EDUGATE; }
+// Legacy COLORS reference still used in some places — resolves to the active theme's palette.
+Object.defineProperty(window, 'COLORS', { get: function() { return getColors(); } });
+// Theme-aware accent lookup (reads the live CSS variable so hand-coded chart colors match)
+function getThemeVar(name, fallback) {
+  try {
+    var v = getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+    return v || fallback || '';
+  } catch(e) { return fallback || ''; }
+}
+function getThemeFont() { return getThemeVar('font', "'IBM Plex Sans Arabic', 'Tajawal', sans-serif"); }
 const PLATFORM_ICONS = {'SAP':'🟦','Salesforce':'☁️','ServiceNow':'🔧','Power Platform':'⚡','Oracle':'🔴','SharePoint':'📁','Dynamics':'💼','إجازة':'🏖️','بدون منصة':'📌','Other':'💻'};
 
 // ==================== OCCUPANCY COLOR (consistent everywhere) ====================
@@ -2419,6 +2602,14 @@ function openSettings() {
   document.getElementById('settingsUser').value = ADMIN_USER;
   document.getElementById('settingsPass').value = '';
 
+  // Theme selector
+  var themeSel = document.getElementById('settingsTheme');
+  if (themeSel) {
+    var current = (typeof getMgmtData === 'function' && getMgmtData().theme_default) || CURRENT_THEME || 'edugate';
+    themeSel.value = (current === 'classic') ? 'classic' : 'edugate';
+    themeSel.disabled = (typeof isAdmin === 'function' && !isAdmin());
+  }
+
   // Show Firebase status
   var statusEl = document.getElementById('firebaseStatus');
   if (firebaseReady) {
@@ -2481,6 +2672,13 @@ async function saveSettings() {
     ADMIN_PASS_HASH = h;
     localStorage.setItem(STORAGE_PREFIX + 'passHash', h);
     localStorage.setItem(STORAGE_PREFIX + 'passPlain', pass);
+  }
+
+  // Apply & publish theme (admin only — setGlobalTheme enforces the role check)
+  var themeSel2 = document.getElementById('settingsTheme');
+  if (themeSel2 && typeof setGlobalTheme === 'function' && (typeof isAdmin === 'function' && isAdmin())) {
+    var newTheme = themeSel2.value === 'classic' ? 'classic' : 'edugate';
+    if (newTheme !== CURRENT_THEME) setGlobalTheme(newTheme);
   }
 
   // Re-initialize Firebase with new config
@@ -3244,7 +3442,9 @@ function updateKPIs() {
   var capData = getCapacityDataForMonths(kpiMonths, kpiFilterYear);
   var totalActive = Object.values(capData).reduce(function(s, dept) { return s + dept.totalActiveEmployees; }, 0);
   var totalCapacity = Object.values(capData).reduce(function(s, dept) { return s + dept.totalCapacity; }, 0);
-  var totalUsed = d.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
+  // Capacity calc should only count APPROVED tasks so pending/draft entries don't inflate utilization.
+  var approvedForCap = d.filter(function(r) { return (r.status || 'pending') === 'approved'; });
+  var totalUsed = approvedForCap.reduce(function(s, r) { return s + (parseFloat(r.occupancy) || 0); }, 0);
   var capUtil = totalCapacity > 0 ? ((totalUsed / totalCapacity) * 100).toFixed(1) : '—';
   document.getElementById('kpiCapacity').textContent = totalCapacity > 0 ? capUtil + '%' : '—';
   var capEl = document.getElementById('kpiCapChange');
@@ -4738,14 +4938,14 @@ function showEmployeeDrill(name) {
     drillCharts.empMonthly = new Chart(document.getElementById('drillEmpMonthly'), {
       type: 'bar', data: { labels: mLabels, datasets: [{ data: mData, backgroundColor: mColors, borderRadius: 8 }] },
       options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'إشغال: '+c.parsed.y+'%'}}},
-        scales:{ x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}}, y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'},suggestedMax:120}} }
+        scales:{ x:{grid:{display:false},ticks:{font:{family:getThemeFont()}}}, y:{grid:{color:getThemeVar('border','#E5E7EB')},ticks:{font:{family:getThemeFont()},callback:v=>v+'%'},suggestedMax:120}} }
     });
     // Platform pie
     const platCounts = {};
     empData.forEach(r => { platCounts[r.platform] = (platCounts[r.platform]||0) + 1; });
     drillCharts.empPlat = new Chart(document.getElementById('drillEmpPlatforms'), {
       type: 'doughnut', data: { labels: Object.keys(platCounts), datasets: [{ data: Object.values(platCounts), backgroundColor: COLORS.slice(0, Object.keys(platCounts).length), borderWidth:0 }] },
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{family:'Tajawal',size:11}}}} }
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{family:getThemeFont(),size:11}}}} }
     });
   }, 100);
 }
@@ -6542,7 +6742,7 @@ function showOccupancyDrill() {
     drillCharts.occDist = new Chart(document.getElementById('drillOccDist'), {
       type:'bar', data:{labels:sorted.map(s=>s.name), datasets:[{data:sorted.map(s=>s.avg),backgroundColor:sorted.map(s=>getOccColor(s.avg)),borderRadius:6}]},
       options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
-        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}}}}
+        scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont()},callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11}}}}}
     });
   }, 100);
 }
@@ -6719,11 +6919,11 @@ function showDepartmentsDrill() {
     const labels = Object.keys(deptMap);
     drillCharts.teams = new Chart(document.getElementById('drillTeams'), {
       type:'bar', data:{labels, datasets:[
-        {label:'موظفون',data:labels.map(l=>deptMap[l].employees.size),backgroundColor:'#10b981',borderRadius:6},
-        {label:'مهام',data:labels.map(l=>deptMap[l].tasks),backgroundColor:'#6366f1',borderRadius:6},
+        {label:'موظفون',data:labels.map(l=>deptMap[l].employees.size),backgroundColor:getThemeVar('success','#10b981'),borderRadius:6},
+        {label:'مهام',data:labels.map(l=>deptMap[l].tasks),backgroundColor:getThemeVar('accent','#6366f1'),borderRadius:6},
       ]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
-        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:getThemeFont()}}}},
+        scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11}}},y:{grid:{color:getThemeVar('border','#E5E7EB')},ticks:{font:{family:getThemeFont()}}}}}
     });
   }, 100);
 }
@@ -6743,7 +6943,7 @@ function renderPlatformChart() {
   charts.platform = new Chart(document.getElementById('platformChart'), {
     type:'doughnut', data:{ labels, datasets:[{data:Object.values(counts),backgroundColor:COLORS.slice(0,labels.length),borderWidth:0,hoverOffset:8}] },
     options:{responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length){showPlatformDrill(labels[els[0].index]);}},
-      plugins:{legend:{position:'bottom',labels:{font:{family:'Tajawal',size:12},padding:16}}}}
+      plugins:{legend:{position:'bottom',labels:{font:{family:getThemeFont(),size:12},padding:16}}}}
   });
 }
 
@@ -6757,7 +6957,7 @@ function renderTaskTypeChart() {
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
       onClick:(e,els)=>{if(els.length){showTaskTypeDrill(sorted[els[0].index][0]);}},
       plugins:{legend:{display:false}},
-      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}},y:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}}}}
+      scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont()}}},y:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11}}}}}
   });
 }
 
@@ -6772,13 +6972,13 @@ function renderDepartmentChart() {
   const labels = Object.keys(taskCounts);
   charts.department = new Chart(document.getElementById('departmentChart'), {
     type:'bar', data:{labels,datasets:[
-      {label:'المهام',data:labels.map(l=>taskCounts[l]),backgroundColor:'#6366f1',borderRadius:6},
-      {label:'الموظفون',data:labels.map(l=>empSets[l]?.size||0),backgroundColor:'#10b981',borderRadius:6}
+      {label:'المهام',data:labels.map(l=>taskCounts[l]),backgroundColor:getThemeVar('accent','#6366f1'),borderRadius:6},
+      {label:'الموظفون',data:labels.map(l=>empSets[l]?.size||0),backgroundColor:getThemeVar('success','#10b981'),borderRadius:6}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       onClick:(e,els)=>{if(els.length){const department=labels[els[0].index];const emps=approvedData.filter(r=>r.department===department);if(emps.length){showDepartmentMembersDrill(department);}}},
-      plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
-      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'}}}}}
+      plugins:{legend:{labels:{font:{family:getThemeFont()}}}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11}}},y:{grid:{color:getThemeVar('border','#E5E7EB')},ticks:{font:{family:getThemeFont()}}}}}
   });
 }
 
@@ -6812,7 +7012,7 @@ function showDepartmentMembersDrill(department) {
     drillCharts.teamMembers = new Chart(document.getElementById('drillTeamMembers'), {
       type:'bar',data:{labels:names,datasets:[{data:names.map(n=>empMap[n].occ),backgroundColor:names.map(n=>getOccColor(empMap[n].occ)),borderRadius:6}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
+        scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11},maxRotation:45}},y:{grid:{color:getThemeVar('border','#E5E7EB')},ticks:{font:{family:getThemeFont()},callback:v=>v+'%'}}}}
     });
   }, 100);
 }
@@ -6833,8 +7033,8 @@ function renderMonthlyChart() {
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       onClick:(e,els)=>{if(els.length){showMonthDrill(presentMonths[els[0].index]);}},
-      plugins:{legend:{labels:{font:{family:'Tajawal'}}}},
-      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal'}}},y:{position:'right',grid:{color:'#f1f5f9'},title:{display:true,text:'عدد المهام',font:{family:'Tajawal'}}},y1:{position:'left',grid:{display:false},min:0,max:120,title:{display:true,text:'الإشغال %',font:{family:'Tajawal'}}}}}
+      plugins:{legend:{labels:{font:{family:getThemeFont()}}}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont()}}},y:{position:'right',grid:{color:getThemeVar('border','#E5E7EB')},title:{display:true,text:'عدد المهام',font:{family:getThemeFont()}}},y1:{position:'left',grid:{display:false},min:0,max:120,title:{display:true,text:'الإشغال %',font:{family:getThemeFont()}}}}}
   });
 }
 
@@ -6867,7 +7067,7 @@ function showMonthDrill(month) {
     drillCharts.month = new Chart(document.getElementById('drillMonth'), {
       type:'bar',data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1].occ),backgroundColor:sorted.map(s=>getOccColor(s[1].occ)),borderRadius:6}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-        scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
+        scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11},maxRotation:45}},y:{grid:{color:getThemeVar('border','#E5E7EB')},ticks:{font:{family:getThemeFont()},callback:v=>v+'%'}}}}
     });
   }, 100);
 }
@@ -6883,7 +7083,7 @@ function renderTopEmployeesChart() {
     options:{responsive:true,maintainAspectRatio:false,
       onClick:(e,els)=>{if(els.length){showEmployeeDrill(sorted[els[0].index][0]);}},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'إجمالي الإشغال: '+ctx.parsed.y+'%'}}},
-      scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:v=>v+'%'}}}}
+      scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11},maxRotation:45}},y:{grid:{color:getThemeVar('border','#E5E7EB')},ticks:{font:{family:getThemeFont()},callback:v=>v+'%'}}}}
   });
 }
 
@@ -7314,6 +7514,12 @@ function getMgmtData() {
     const storedD = localStorage.getItem(MGMT_STORAGE_PREFIX + 'demands');
     data.demands = storedD ? JSON.parse(storedD) : [];
   } catch(e) { data.demands = []; }
+  // Theme default — scalar string, written by admin, synced to everyone via Firebase management/
+  try {
+    const storedT = localStorage.getItem(MGMT_STORAGE_PREFIX + 'theme_default');
+    data.theme_default = storedT ? JSON.parse(storedT) : 'edugate';
+    if (data.theme_default !== 'edugate' && data.theme_default !== 'classic') data.theme_default = 'edugate';
+  } catch(e) { data.theme_default = 'edugate'; }
   return data;
 }
 
@@ -7387,7 +7593,7 @@ function saveMgmtList(key, list) {
 var mgmtFirebaseListenerActive = false;
 var mgmtSyncInProgress = false; // prevent feedback loops
 var MGMT_SYNC_FLAG = MGMT_STORAGE_PREFIX + 'firebase_synced'; // tracks if initial sync done
-var MGMT_SYNC_VERSION = 3; // bump when new keys are added to MGMT_ALL_KEYS
+var MGMT_SYNC_VERSION = 4; // bump when new keys are added to MGMT_ALL_KEYS
 var MGMT_SYNC_VERSION_KEY = MGMT_STORAGE_PREFIX + 'sync_version';
 
 function syncMgmtToFirebase(key, data, retryCount) {
@@ -7408,7 +7614,7 @@ function syncMgmtToFirebase(key, data, retryCount) {
   });
 }
 
-var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions', 'managed_users', 'taskTypeNoPlatform', 'platformSquads', 'squadNames', 'poolPlatforms', 'demands'];
+var MGMT_ALL_KEYS = ['departments', 'platforms', 'taskTypes', 'jobTitles', 'sections', 'sectionCapacity', 'sectionTaskTypes', 'platformMeta', 'employees', 'projects', 'requisitions', 'managed_users', 'taskTypeNoPlatform', 'platformSquads', 'squadNames', 'poolPlatforms', 'demands', 'theme_default'];
 
 function mgmtDataSize(val) {
   if (!val) return 0;
@@ -7536,6 +7742,11 @@ function loadMgmtFromFirebase(callback) {
     }
 
     mgmtSyncInProgress = false;
+    // Apply the admin-published theme now that it's in localStorage
+    if (typeof applyTheme === 'function') {
+      var finalTheme = (getMgmtData().theme_default === 'classic') ? 'classic' : 'edugate';
+      if (finalTheme !== CURRENT_THEME) applyTheme(finalTheme);
+    }
     console.log('🔥 Management data merge complete (' + (isFirstSync ? 'first sync' : 'refresh') + '). Firebase keys:', Object.keys(fbData).join(', '));
 
     // Push data to Firebase
@@ -7656,6 +7867,11 @@ function startMgmtFirebaseListener() {
       }
       localStorage.setItem(storageKey, JSON.stringify(val));
     });
+    // Apply the global theme immediately when admin pushes a change
+    if (fbData.theme_default && typeof applyTheme === 'function') {
+      var remoteTheme = (fbData.theme_default === 'classic') ? 'classic' : 'edugate';
+      if (remoteTheme !== CURRENT_THEME) applyTheme(remoteTheme);
+    }
     // Push any merged data back to Firebase
     if (Object.keys(needsUpload).length > 0) {
       var updates = {};
@@ -9378,14 +9594,14 @@ function renderDeptsAndSections() {
       data: {
         labels: deptLabels,
         datasets: [
-          { label: 'السعة', data: capValues, backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
+          { label: 'السعة', data: capValues, backgroundColor: 'rgba(99,102,241,0.2)', borderColor: getThemeVar('accent','#6366f1'), borderWidth: 2, borderRadius: 6 },
           { label: 'الإشغال الفعلي', data: usedValues, backgroundColor: usedValues.map(function(u, i) {
             var pct = capValues[i] > 0 ? u / capValues[i] * 100 : 0;
             return getOccColorRgba(pct);
           }), borderRadius: 6 }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { family: 'Tajawal' } } } }, scales: { x: { grid: { display: false }, ticks: { font: { family: 'Tajawal', size: 11 } } }, y: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Tajawal' }, callback: function(v) { return v + '%'; } } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { family: getThemeFont() } } } }, scales: { x: { grid: { display: false }, ticks: { font: { family: getThemeFont(), size: 11 } } }, y: { grid: { color: getThemeVar('border','#E5E7EB') }, ticks: { font: { family: getThemeFont() }, callback: function(v) { return v + '%'; } } } } }
     });
   }, 100);
 }
@@ -9546,11 +9762,11 @@ function showCapacityDrill() {
       data: {
         labels: depts,
         datasets: [
-          { label: 'السعة', data: depts.map(function(d){return deptStats[d].cap;}), backgroundColor: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 },
+          { label: 'السعة', data: depts.map(function(d){return deptStats[d].cap;}), backgroundColor: 'rgba(99,102,241,0.2)', borderColor: getThemeVar('accent','#6366f1'), borderWidth: 2, borderRadius: 6 },
           { label: 'الاستخدام', data: depts.map(function(d){return deptStats[d].used;}), backgroundColor: depts.map(function(d){return getOccColorRgba(deptStats[d].pct);}), borderRadius: 6 }
         ]
       },
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:'Tajawal'}}}}, scales:{x:{grid:{display:false},ticks:{font:{family:'Tajawal',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Tajawal'},callback:function(v){return v+'%';}}}} }
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:getThemeFont()}}}}, scales:{x:{grid:{display:false},ticks:{font:{family:getThemeFont(),size:11}}},y:{grid:{color:getThemeVar('border','#E5E7EB')},ticks:{font:{family:getThemeFont()},callback:function(v){return v+'%';}}}} }
     });
   }, 100);
 }
