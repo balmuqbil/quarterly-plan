@@ -2214,6 +2214,10 @@ function initFirebase() {
     firebaseDb = firebase.database();
     firebaseReady = true;
     console.log('🔥 Firebase initialized:', FIREBASE_CONFIG.projectId);
+    // Flush any writes that were queued while Firebase was unavailable
+    if (typeof mgmtFlushPendingWrites === 'function') {
+      setTimeout(mgmtFlushPendingWrites, 500);
+    }
     return true;
   } catch (err) {
     console.error('❌ Firebase init failed:', err);
@@ -7650,7 +7654,11 @@ function saveMgmtList(key, list) {
     // Also save full employee data for form auto-fill
     localStorage.setItem('qplan_employees_full', JSON.stringify(list));
   }
-  // Sync to Firebase
+  // Every management save is queued in a persistent pending-writes log. The queue guarantees that
+  // if Firebase is not ready / write fails / the page is closed before the async set() lands,
+  // the change isn't lost — it gets retried on the next session. It also prevents the real-time
+  // listener from overwriting local data that still hasn't been confirmed.
+  mgmtQueuePendingWrite(key, list);
   syncMgmtToFirebase(key, list);
 }
 
@@ -7660,22 +7668,63 @@ var mgmtSyncInProgress = false; // prevent feedback loops
 var MGMT_SYNC_FLAG = MGMT_STORAGE_PREFIX + 'firebase_synced'; // tracks if initial sync done
 var MGMT_SYNC_VERSION = 4; // bump when new keys are added to MGMT_ALL_KEYS
 var MGMT_SYNC_VERSION_KEY = MGMT_STORAGE_PREFIX + 'sync_version';
+var MGMT_PENDING_WRITES_KEY = MGMT_STORAGE_PREFIX + 'pending_writes';
+
+// ---------- Pending writes queue (unconfirmed Firebase writes) ----------
+function mgmtGetPendingWrites() {
+  try { return JSON.parse(localStorage.getItem(MGMT_PENDING_WRITES_KEY) || '{}') || {}; }
+  catch(e) { return {}; }
+}
+function mgmtSetPendingWrites(obj) {
+  try { localStorage.setItem(MGMT_PENDING_WRITES_KEY, JSON.stringify(obj)); } catch(e) {}
+}
+function mgmtQueuePendingWrite(key, data) {
+  var q = mgmtGetPendingWrites();
+  q[key] = { data: data, ts: Date.now() };
+  mgmtSetPendingWrites(q);
+}
+function mgmtClearPendingWrite(key, ts) {
+  var q = mgmtGetPendingWrites();
+  // Only clear if nothing newer was queued since the write started
+  if (q[key] && q[key].ts === ts) {
+    delete q[key];
+    mgmtSetPendingWrites(q);
+  }
+}
+function mgmtHasPendingWrite(key) {
+  var q = mgmtGetPendingWrites();
+  return !!q[key];
+}
+function mgmtFlushPendingWrites() {
+  if (!firebaseReady || !firebaseDb) return;
+  var q = mgmtGetPendingWrites();
+  Object.keys(q).forEach(function(key) {
+    syncMgmtToFirebase(key, q[key].data);
+  });
+}
+// Every 15s, re-try any write that's still pending (covers transient outages).
+setInterval(function() {
+  if (firebaseReady && firebaseDb) mgmtFlushPendingWrites();
+}, 15000);
 
 function syncMgmtToFirebase(key, data, retryCount) {
-  if (!firebaseReady || !firebaseDb) return;
+  if (!firebaseReady || !firebaseDb) return; // Stays in the pending queue; flushPendingWrites will retry
   if (mgmtSyncInProgress) {
-    // Schedule retry after sync completes instead of silently dropping
     setTimeout(function() { syncMgmtToFirebase(key, data, (retryCount || 0)); }, 500);
     return;
   }
+  var q = mgmtGetPendingWrites();
+  var ts = (q[key] && q[key].ts) || Date.now();
   firebaseDb.ref('management/' + key).set(data).then(function() {
     console.log('🔥 Mgmt synced to Firebase:', key);
+    mgmtClearPendingWrite(key, ts);
   }).catch(function(err) {
     console.error('❌ Mgmt sync failed:', key, err);
-    // Retry once on failure
     if (!retryCount || retryCount < 2) {
       setTimeout(function() { syncMgmtToFirebase(key, data, (retryCount || 0) + 1); }, 2000);
     }
+    // If the retry budget is exhausted, the item stays in the pending queue and the 15s interval
+    // will pick it up again.
   });
 }
 
@@ -7760,6 +7809,13 @@ function loadMgmtFromFirebase(callback) {
       // Subsequent syncs: Firebase is source of truth, but merge simple arrays to avoid losing local additions
       var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles'];
       MGMT_ALL_KEYS.forEach(function(key) {
+        // Pending local write wins. Push local up; never let Firebase overwrite it.
+        if (typeof mgmtHasPendingWrite === 'function' && mgmtHasPendingWrite(key)) {
+          var pending = mgmtGetPendingWrites()[key];
+          if (pending) toUpload[key] = pending.data;
+          console.log('⏸️ Load skipped ' + key + ' — has pending local write');
+          return;
+        }
         var fbVal = fbData[key];
         var localVal = getLocalVal(key);
         if (fbVal) fbVal = fixFbArray(fbVal, localVal);
@@ -7900,6 +7956,13 @@ function startMgmtFirebaseListener() {
     mgmtSyncInProgress = true;
     var needsUpload = {};
     Object.keys(fbData).forEach(function(key) {
+      // Skip any key that has an unconfirmed local write — our change wins until Firebase ACKs it.
+      // Without this, the listener can overwrite a just-saved employee edit (e.g. startDate/endDate)
+      // with the older Firebase state and make the save look like it disappeared after logout/login.
+      if (typeof mgmtHasPendingWrite === 'function' && mgmtHasPendingWrite(key)) {
+        console.log('⏸️ Listener skipped ' + key + ' — has pending local write');
+        return;
+      }
       var val = fbData[key];
       // Fix Firebase array→object conversion
       if (arrayKeys.indexOf(key) !== -1) val = fbToArray(val);
