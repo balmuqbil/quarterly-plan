@@ -9206,6 +9206,11 @@ function confirmDeleteEmployeeWithTasks() {
 }
 
 function editMgmtItem(key, index) {
+  // For employees, resolve the index by the card's data-emp-name so we edit the intended record
+  // even if the underlying list has shifted since render.
+  if (key === 'employees' && typeof resolveEmpIndex === 'function') {
+    index = resolveEmpIndex(index);
+  }
   var data = getMgmtData();
   if (key === 'employees') {
     var emp = data.employees[index];
@@ -9274,7 +9279,7 @@ function editMgmtItem(key, index) {
     editHtml += '</select></div>';
     // Actions
     editHtml += '<div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px;">';
-    editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 16px;font-size:12px;" onclick="renderDataManagement()">❌ إلغاء</button>';
+    editHtml += '<button class="mgmt-action-btn delete" style="padding:6px 16px;font-size:12px;" onclick="rerenderActiveMgmtView()">❌ إلغاء</button>';
     editHtml += '<button class="mgmt-add-btn" style="padding:6px 16px;" onclick="saveEditMgmt(\'employees\',' + index + ')">✅ حفظ</button>';
     editHtml += '</div></div>';
     itemEl.innerHTML = editHtml;
@@ -9298,14 +9303,44 @@ function updateEditSectionDropdown(index) {
   }).join('');
 }
 
+// Re-render whichever admin view the user is actually on — used by edit/cancel buttons to avoid
+// re-rendering the hidden Data Management view while the user is on Employee Management.
+function rerenderActiveMgmtView() {
+  var active = document.querySelector('.section-view.active');
+  var secId = active ? active.id.replace('section-', '') : '';
+  if (secId === 'employeeManagement' && typeof renderEmployeeManagement === 'function') {
+    renderEmployeeManagement();
+  } else if (typeof renderDataManagement === 'function') {
+    renderDataManagement();
+  }
+}
+
 function saveEditMgmt(key, index) {
   var input = document.getElementById('mgmt-edit-' + key + '-' + index);
+  if (!input) {
+    showMgmtToast('لم يتم العثور على نموذج التعديل — يرجى إعادة المحاولة', 'error');
+    rerenderActiveMgmtView();
+    return;
+  }
   var val = sanitizeInput(input.value);
-  if (!val) return renderDataManagement();
+  if (!val) { rerenderActiveMgmtView(); return; }
   var data = getMgmtData();
   if (key === 'employees') {
+    // Re-resolve the employee by NAME (the one baked into the form) rather than trusting the
+    // index — the dedupe or another save may have shifted positions since the form rendered.
+    var originalNameAttr = document.getElementById('mgmt-item-employees-' + index);
+    var originalName = originalNameAttr ? (originalNameAttr.getAttribute('data-emp-name') || '') : '';
+    var realIdx = index;
+    if (originalName) {
+      var foundIdx = data.employees.findIndex(function(e) {
+        return (typeof e === 'object' ? e.name : e) === originalName;
+      });
+      if (foundIdx !== -1) realIdx = foundIdx;
+    }
+
     var existing = data.employees.map(function(e) { return typeof e === 'string' ? e : e.name; });
-    var currentName = typeof data.employees[index] === 'string' ? data.employees[index] : data.employees[index].name;
+    var currentEmp = data.employees[realIdx];
+    var currentName = typeof currentEmp === 'string' ? currentEmp : (currentEmp && currentEmp.name) || '';
     if (existing.includes(val) && currentName !== val) {
       showMgmtToast('هذا العنصر موجود بالفعل', 'error');
       return;
@@ -9314,29 +9349,43 @@ function saveEditMgmt(key, index) {
     var secSelect = document.getElementById('mgmt-edit-section-' + index);
     var startSelect = document.getElementById('mgmt-edit-start-' + index);
     var endSelect = document.getElementById('mgmt-edit-end-' + index);
-    var existingEmp = data.employees[index];
-    var existingAbsences = (typeof existingEmp === 'object' && Array.isArray(existingEmp.absences)) ? existingEmp.absences : [];
     var contractSelect = document.getElementById('mgmt-edit-contract-' + index);
     var jobTitleSelect = document.getElementById('mgmt-edit-jobtitle-' + index);
-    data.employees[index] = {
+    var existingEmp = (typeof currentEmp === 'object' && currentEmp) ? currentEmp : {};
+    var existingAbsences = Array.isArray(existingEmp.absences) ? existingEmp.absences : [];
+
+    // Read form values. When a select isn't in the form, preserve the existing stored value
+    // instead of blanking it — that's what caused jobTitle/start/end to appear "not saved".
+    var readStart = startSelect ? startSelect.value : (existingEmp.startDate || '');
+    var readEnd = endSelect ? endSelect.value : (existingEmp.endDate || '');
+    var readJob = jobTitleSelect ? jobTitleSelect.value : (existingEmp.jobTitle || '');
+    var readContract = contractSelect ? contractSelect.value : (existingEmp.contractType || 'inhouse');
+    var readDept = sanitizeInput(deptSelect ? deptSelect.value : (existingEmp.department || ''));
+    var readSec = sanitizeInput(secSelect ? secSelect.value : (existingEmp.section || ''));
+
+    data.employees[realIdx] = {
       name: val,
-      department: sanitizeInput(deptSelect ? deptSelect.value : ''),
-      section: sanitizeInput(secSelect ? secSelect.value : ''),
-      startDate: startSelect ? startSelect.value : '',
-      endDate: endSelect ? endSelect.value : '',
+      department: readDept,
+      section: readSec,
+      startDate: readStart,
+      endDate: readEnd,
       absences: existingAbsences,
-      contractType: contractSelect ? contractSelect.value : (existingEmp.contractType || 'inhouse'),
-      jobTitle: jobTitleSelect ? jobTitleSelect.value : (existingEmp.jobTitle || '')
+      contractType: readContract,
+      jobTitle: readJob
     };
+    console.log('💾 Employee saved:', val, {
+      dept: readDept, section: readSec,
+      start: readStart, end: readEnd,
+      jobTitle: readJob, contract: readContract,
+      absences: existingAbsences.length
+    });
+
     // If name changed, update all task records referencing the old name
-    if (currentName !== val) {
+    if (currentName && currentName !== val) {
       renameEmployeeInTasks(currentName, val);
     }
     // Update department/section in task records for this employee
-    var empFinalName = val;
-    var empNewDept = data.employees[index].department;
-    var empNewSec = data.employees[index].section;
-    updateEmployeeDeptInTasks(empFinalName, empNewDept, empNewSec);
+    updateEmployeeDeptInTasks(val, readDept, readSec);
   } else {
     if (data[key].includes(val) && data[key][index] !== val) {
       showMgmtToast('هذا العنصر موجود بالفعل', 'error');
@@ -9345,7 +9394,7 @@ function saveEditMgmt(key, index) {
     data[key][index] = val;
   }
   saveMgmtList(key, data[key]);
-  renderDataManagement();
+  rerenderActiveMgmtView();
   showMgmtToast('تم التعديل بنجاح', 'success');
 }
 
@@ -9432,6 +9481,8 @@ function renameEmployeeInTasks(oldName, newName) {
 // Section CRUD
 // ==================== Absence Management ====================
 function manageAbsences(empIndex) {
+  // Resolve by the card's stored name in case the list was reordered since render.
+  if (typeof resolveEmpIndex === 'function') empIndex = resolveEmpIndex(empIndex);
   var data = getMgmtData();
   var emp = data.employees[empIndex];
   if (!emp || typeof emp === 'string') return;
@@ -9484,6 +9535,18 @@ function manageAbsences(empIndex) {
   document.getElementById('drillBody').innerHTML = html;
 }
 
+// Resolve an employee by its current card's data-emp-name so that index shifts from dedupe
+// or concurrent saves don't cause us to mutate the wrong record. Returns the up-to-date index
+// in data.employees, or -1 if not found.
+function resolveEmpIndex(empIndex) {
+  var card = document.getElementById('mgmt-item-employees-' + empIndex);
+  var name = card ? (card.getAttribute('data-emp-name') || '') : '';
+  if (!name) return empIndex; // fall back to the passed index
+  var data = getMgmtData();
+  var idx = data.employees.findIndex(function(e) { return (typeof e === 'object' ? e.name : e) === name; });
+  return idx === -1 ? empIndex : idx;
+}
+
 function addAbsence(empIndex) {
   var from = document.getElementById('absence-from').value;
   var to = document.getElementById('absence-to').value;
@@ -9492,24 +9555,27 @@ function addAbsence(empIndex) {
   // Validate from <= to
   if (monthToIndex(from) > monthToIndex(to)) { showMgmtToast('تاريخ البدء يجب أن يكون قبل تاريخ الانتهاء', 'error'); return; }
 
+  var realIdx = resolveEmpIndex(empIndex);
   var data = getMgmtData();
-  var emp = data.employees[empIndex];
-  if (!emp) return;
+  var emp = data.employees[realIdx];
+  if (!emp) { showMgmtToast('الموظف غير موجود', 'error'); return; }
   if (!Array.isArray(emp.absences)) emp.absences = [];
   emp.absences.push({ from: from, to: to, reason: reason });
   saveMgmtList('employees', data.employees);
-  manageAbsences(empIndex); // Refresh the dialog
+  console.log('💾 Absence added for', emp.name, '—', from, '→', to);
+  manageAbsences(realIdx); // Refresh the dialog
   showMgmtToast('تم إضافة فترة الغياب', 'success');
 }
 
 function deleteAbsence(empIndex, absIndex) {
+  var realIdx = resolveEmpIndex(empIndex);
   var data = getMgmtData();
-  var emp = data.employees[empIndex];
+  var emp = data.employees[realIdx];
   if (!emp || !Array.isArray(emp.absences)) return;
   emp.absences.splice(absIndex, 1);
   saveMgmtList('employees', data.employees);
-  manageAbsences(empIndex); // Refresh
-  renderDataManagement();
+  manageAbsences(realIdx); // Refresh
+  rerenderActiveMgmtView();
   showMgmtToast('تم حذف فترة الغياب', 'success');
 }
 
