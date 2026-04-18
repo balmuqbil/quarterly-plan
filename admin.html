@@ -5265,11 +5265,27 @@ function renderResourcePlanner() {
     }
   });
 
-  // Available employees (occ < 100%, active, and not on leave)
+  // Available employees (occ < 100%, active, and not on leave).
+  // Absences are checked DIRECTLY against this employee record (not via the empOnLeave map
+  // keyed by name) so that if there are duplicate records with slightly different names,
+  // each record's own absences are honored. The map is still consulted for task-based
+  // time-off markers (إجازة platform/taskType), which live on task records.
+  var selMonthIdx = monthToIndex(month + ' ' + year);
   var allAvailable = employees.filter(function(emp) {
     var name = typeof emp === 'string' ? emp : emp.name;
     if (!name) return false;
     if (!wasActiveInMonth(emp, month, year)) return false;
+    // Direct per-record absence check — robust to name mismatches / duplicate records
+    if (typeof emp === 'object' && Array.isArray(emp.absences)) {
+      for (var ai = 0; ai < emp.absences.length; ai++) {
+        var a = emp.absences[ai];
+        if (!a || !a.from) continue;
+        var fromIdx = monthToIndex(a.from);
+        var toIdx = monthToIndex(a.to || a.from);
+        if (fromIdx === -1 || toIdx === -1) continue;
+        if (selMonthIdx >= fromIdx && selMonthIdx <= toIdx) return false;
+      }
+    }
     if (empOnLeave[name]) return false;
     var used = empOcc[name] || 0;
     return used < 100;
