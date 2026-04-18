@@ -8939,14 +8939,18 @@ function clearMgmtDelete(key, value) {
 }
 
 function deleteMgmtItem(key, index) {
+  // Employees get a richer confirmation flow that also offers to delete their task records.
+  // Leaving orphan tasks behind is what causes reconcileEmployeesFromTasks to resurrect the name.
+  if (key === 'employees') {
+    return deleteEmployeeWithTasks(index);
+  }
   const data = getMgmtData();
   const item = data[key][index];
-  const displayName = (key === 'employees' && typeof item === 'object') ? item.name : item;
+  const displayName = item;
   if (!confirm('هل تريد حذف "' + displayName + '"؟')) return;
   data[key].splice(index, 1);
   // Record the deletion so the Firebase merge + reconcile helpers don't bring it back.
-  var deletedValue = (key === 'employees' && typeof item === 'object') ? item.name : item;
-  recordMgmtDelete(key, deletedValue);
+  recordMgmtDelete(key, item);
   saveMgmtList(key, data[key]);
   // Re-render whichever admin view is currently active. If we only refresh Data Management,
   // cards in Employee Management keep their old (now off-by-one) indices in onclick handlers,
@@ -8962,6 +8966,125 @@ function deleteMgmtItem(key, index) {
     if (typeof renderDataManagement === 'function') renderDataManagement();
   }
   showMgmtToast('تم الحذف', 'success');
+}
+
+// Employee deletion with task-cleanup confirmation. Uses the drillModal as the shell so the
+// user can see WHAT tasks will be removed before committing. Removing the tasks alongside the
+// employee is the key to making the delete "stick" — reconcileEmployeesFromTasks resurrects any
+// name still present in task records, so orphans must be cleaned up too.
+function deleteEmployeeWithTasks(index) {
+  var data = getMgmtData();
+  var emp = data.employees[index];
+  if (!emp) return;
+  var name = typeof emp === 'string' ? emp : emp.name;
+  if (!name) return;
+
+  var tasks = (typeof allData !== 'undefined' ? allData : []).filter(function(t) { return t.name === name; });
+
+  var html = '<div style="max-height:70vh;overflow-y:auto;">';
+  html += '<p style="font-size:14px;margin-bottom:12px;">هل تريد حذف الموظف <strong>' + escapeHtml(name) + '</strong>؟</p>';
+
+  if (tasks.length === 0) {
+    html += '<div style="padding:10px;background:rgba(16,185,129,0.08);border-radius:8px;border:1px solid rgba(16,185,129,0.2);font-size:13px;">' +
+            '✅ لا توجد مهام مرتبطة بهذا الموظف — سيتم الحذف مباشرة.</div>';
+  } else {
+    html += '<div style="padding:10px;background:rgba(239,68,68,0.06);border-radius:8px;border:1px solid rgba(239,68,68,0.2);margin-bottom:12px;">' +
+            '<div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:6px;">⚠️ سيتم حذف ' + tasks.length + ' مهمة مرتبطة بهذا الموظف</div>' +
+            '<div style="font-size:12px;color:var(--text-light);">حذف المهام ضروري حتى لا تُعاد إضافة الموظف تلقائياً من سجل المهام.</div>' +
+            '</div>';
+
+    // Group tasks by month-year for a compact preview
+    var grouped = {};
+    tasks.forEach(function(t) {
+      var k = (t.month || '—') + ' ' + (t.year || '—');
+      (grouped[k] = grouped[k] || []).push(t);
+    });
+    html += '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">';
+    html += '<thead><tr style="background:var(--bg-card-dark);"><th style="padding:6px 10px;text-align:right;">الشهر</th><th style="padding:6px 10px;text-align:right;">المنصة</th><th style="padding:6px 10px;text-align:right;">نوع المهمة</th><th style="padding:6px 10px;text-align:center;">%</th></tr></thead><tbody>';
+    Object.keys(grouped).forEach(function(k) {
+      grouped[k].forEach(function(t) {
+        html += '<tr style="border-top:1px solid var(--border);">' +
+                '<td style="padding:5px 10px;">' + escapeHtml((t.month || '') + ' ' + (t.year || '')) + '</td>' +
+                '<td style="padding:5px 10px;">' + escapeHtml(t.platform || '—') + '</td>' +
+                '<td style="padding:5px 10px;">' + escapeHtml(t.taskType || '—') + '</td>' +
+                '<td style="padding:5px 10px;text-align:center;">' + (t.occupancy || 0) + '</td>' +
+                '</tr>';
+      });
+    });
+    html += '</tbody></table></div>';
+  }
+
+  html += '</div>';
+
+  // Store on window so the confirm handler can read it without re-computing
+  window._empDeleteState = { index: index, name: name, tasks: tasks };
+
+  var drillTitle = document.getElementById('drillTitle');
+  var drillSubtitle = document.getElementById('drillSubtitle');
+  var drillBody = document.getElementById('drillBody');
+  if (drillTitle) drillTitle.textContent = '🗑️ حذف موظف';
+  if (drillSubtitle) drillSubtitle.textContent = name;
+  drillBody.innerHTML = html +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">' +
+      '<button onclick="closeDrill();window._empDeleteState=null;" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);font-family:inherit;font-size:13px;cursor:pointer;">إلغاء</button>' +
+      '<button onclick="confirmDeleteEmployeeWithTasks()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--danger);color:#fff;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">' + (tasks.length > 0 ? '🗑️ حذف الموظف + ' + tasks.length + ' مهمة' : '🗑️ حذف الموظف') + '</button>' +
+    '</div>';
+  document.getElementById('drillModal').classList.add('show');
+}
+
+function confirmDeleteEmployeeWithTasks() {
+  var state = window._empDeleteState;
+  if (!state) return;
+  window._empDeleteState = null;
+  closeDrill();
+
+  var data = getMgmtData();
+  var empList = data.employees || [];
+  // Find by name rather than index (list may have shifted since modal opened)
+  var realIdx = empList.findIndex(function(e) {
+    var n = typeof e === 'object' ? e.name : e;
+    return n === state.name;
+  });
+  if (realIdx === -1) { showMgmtToast('الموظف غير موجود', 'error'); return; }
+
+  // Remove matching tasks from Firebase + local allData, newest-index-first so splices don't skew.
+  var toDelete = [];
+  if (typeof allData !== 'undefined') {
+    allData.forEach(function(t, i) { if (t.name === state.name) toDelete.push(i); });
+  }
+  var firebaseUpdates = {};
+  toDelete.forEach(function(i) {
+    var t = allData[i];
+    if (t && t._firebaseKey) firebaseUpdates['tasks/' + t._firebaseKey] = null;
+  });
+  if (firebaseReady && Object.keys(firebaseUpdates).length > 0) {
+    firebaseDb.ref().update(firebaseUpdates).catch(function(err) { console.error('Task batch delete failed:', err); });
+  }
+  // Splice in reverse
+  toDelete.sort(function(a, b) { return b - a; }).forEach(function(i) { allData.splice(i, 1); });
+
+  // Now the employee record itself
+  empList.splice(realIdx, 1);
+  recordMgmtDelete('employees', state.name);
+  saveMgmtList('employees', empList);
+
+  if (typeof syncTestData === 'function') try { syncTestData(); } catch(e) {}
+  if (typeof applyFilters === 'function') try { applyFilters(); } catch(e) {}
+
+  // Re-render whichever admin view is active
+  var active = document.querySelector('.section-view.active');
+  var secId = active ? active.id.replace('section-', '') : '';
+  if (secId === 'employeeManagement' && typeof renderEmployeeManagement === 'function') {
+    renderEmployeeManagement();
+  } else if (secId === 'dataManagement' && typeof renderDataManagement === 'function') {
+    renderDataManagement();
+  } else if (typeof renderDataManagement === 'function') {
+    renderDataManagement();
+  }
+
+  var msg = 'تم حذف ' + state.name + (state.tasks.length > 0 ? ' و ' + state.tasks.length + ' مهمة' : '');
+  showMgmtToast(msg, 'success');
 }
 
 function editMgmtItem(key, index) {
