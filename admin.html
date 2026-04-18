@@ -7503,6 +7503,45 @@ function getMgmtData() {
         if (!e.contractType) e.contractType = 'inhouse';
         return e;
       });
+
+      // Dedupe by trimmed name. Reconcile + race-condition merges can leave multiple records
+      // for the same person — a "rich" one with absences/dates and a bare one re-added by
+      // reconcileEmployeesFromTasks. Keep one record per name and UNION all fields: the bare
+      // record would otherwise hide the time-off entries and confuse manageAbsences().
+      var empByName = {};
+      var dedupeChanged = false;
+      data.employees.forEach(function(e) {
+        if (!e || typeof e !== 'object' || !e.name) return;
+        var key = String(e.name).trim();
+        if (!key) return;
+        if (!empByName[key]) {
+          empByName[key] = e;
+          if (key !== e.name) { e.name = key; dedupeChanged = true; }
+        } else {
+          dedupeChanged = true;
+          var kept = empByName[key];
+          // Prefer non-empty values from either side
+          ['department','section','startDate','endDate','contractType','jobTitle'].forEach(function(f) {
+            if (!kept[f] && e[f]) kept[f] = e[f];
+          });
+          // Union absences (dedupe by from|to|reason signature)
+          var keptAbs = Array.isArray(kept.absences) ? kept.absences.slice() : [];
+          var seenAbs = {};
+          keptAbs.forEach(function(a) { seenAbs[[a.from, a.to, a.reason].join('|')] = true; });
+          (Array.isArray(e.absences) ? e.absences : []).forEach(function(a) {
+            var sig = [a.from, a.to, a.reason].join('|');
+            if (!seenAbs[sig]) { keptAbs.push(a); seenAbs[sig] = true; }
+          });
+          kept.absences = keptAbs;
+        }
+      });
+      if (dedupeChanged) {
+        var deduped = Object.keys(empByName).map(function(k) { return empByName[k]; });
+        console.log('🧹 Dedup employees: ' + data.employees.length + ' → ' + deduped.length);
+        data.employees = deduped;
+        needsSave = true;
+      }
+
       if (needsSave) saveMgmtList('employees', data.employees);
     } else {
       data.employees = [];
