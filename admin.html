@@ -8948,7 +8948,19 @@ function deleteMgmtItem(key, index) {
   var deletedValue = (key === 'employees' && typeof item === 'object') ? item.name : item;
   recordMgmtDelete(key, deletedValue);
   saveMgmtList(key, data[key]);
-  renderDataManagement();
+  // Re-render whichever admin view is currently active. If we only refresh Data Management,
+  // cards in Employee Management keep their old (now off-by-one) indices in onclick handlers,
+  // which makes the NEXT delete's confirmation dialog show the wrong employee's name.
+  var active = document.querySelector('.section-view.active');
+  var secId = active ? active.id.replace('section-', '') : '';
+  if (secId === 'employeeManagement' && typeof renderEmployeeManagement === 'function') {
+    renderEmployeeManagement();
+  } else if (secId === 'dataManagement' && typeof renderDataManagement === 'function') {
+    renderDataManagement();
+  } else {
+    // Unknown/other view — refresh Data Management as a sensible default so the underlying data is consistent.
+    if (typeof renderDataManagement === 'function') renderDataManagement();
+  }
   showMgmtToast('تم الحذف', 'success');
 }
 
