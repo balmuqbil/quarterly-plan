@@ -9243,9 +9243,16 @@ function editMgmtItem(key, index) {
     // Row 1b: Job Title
     var currentJobTitle = (typeof emp === 'object' ? emp.jobTitle : '') || '';
     var jobTitlesList = data.jobTitles || [];
+    // Ensure the employee's current value is in the dropdown even if it's no longer in the
+    // canonical jobTitles list — otherwise the select defaults to "— اختر —" and saving
+    // silently wipes the stored value.
+    var jobTitleOptions = jobTitlesList.slice();
+    if (currentJobTitle && jobTitleOptions.indexOf(currentJobTitle) === -1) {
+      jobTitleOptions.unshift(currentJobTitle);
+    }
     editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">💼 المسمى الوظيفي</label>';
     editHtml += '<select id="mgmt-edit-jobtitle-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;"><option value="">— اختر —</option>';
-    jobTitlesList.forEach(function(jt) {
+    jobTitleOptions.forEach(function(jt) {
       editHtml += '<option value="' + escapeAttr(jt) + '"' + (jt === currentJobTitle ? ' selected' : '') + '>' + escapeHtml(jt) + '</option>';
     });
     editHtml += '</select></div>';
@@ -9263,12 +9270,28 @@ function editMgmtItem(key, index) {
       editHtml += '<option value="' + escapeAttr(s) + '"' + (s === currentSec ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
     });
     editHtml += '</select></div></div>';
-    // Row 3: Start Date + End Date
+    // Row 3: Start Date + End Date. The monthOpts range (2025-2030) may not cover a stored
+    // value — if the employee's current date falls outside, we prepend it as an extra option
+    // so it stays selected and the save doesn't silently wipe it when the user clicks Save
+    // without changing the dropdown.
+    function buildDateSelect(id, currentVal, emptyLabel) {
+      var opts = monthOpts;
+      var inOpts = opts.indexOf('value="' + escapeAttr(currentVal) + '"') !== -1;
+      if (currentVal && !inOpts) {
+        opts = '<option value="' + escapeAttr(currentVal) + '" selected>' + escapeHtml(currentVal) + '</option>' + opts;
+      } else if (currentVal) {
+        opts = opts.replace('value="' + escapeAttr(currentVal) + '"', 'value="' + escapeAttr(currentVal) + '" selected');
+      }
+      var prefix = emptyLabel ? '<option value="">' + emptyLabel + '</option>' : '';
+      return '<select id="' + id + '" class="mgmt-edit-input" style="width:100%;padding:8px;">' + prefix + opts + '</select>';
+    }
     editHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
     editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">📅 تاريخ البدء</label>';
-    editHtml += '<select id="mgmt-edit-start-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;">' + monthOpts.replace('value="' + escapeAttr(currentStart) + '"', 'value="' + escapeAttr(currentStart) + '" selected') + '</select></div>';
+    editHtml += buildDateSelect('mgmt-edit-start-' + index, currentStart, '');
+    editHtml += '</div>';
     editHtml += '<div><label style="font-size:11px;color:var(--text-light);display:block;margin-bottom:4px;">📅 تاريخ الانتهاء</label>';
-    editHtml += '<select id="mgmt-edit-end-' + index + '" class="mgmt-edit-input" style="width:100%;padding:8px;"><option value="">نشط (بدون تاريخ انتهاء)</option>' + monthOpts.replace('value="' + escapeAttr(currentEnd) + '"', 'value="' + escapeAttr(currentEnd) + '" selected') + '</select></div>';
+    editHtml += buildDateSelect('mgmt-edit-end-' + index, currentEnd, 'نشط (بدون تاريخ انتهاء)');
+    editHtml += '</div>';
     editHtml += '</div>';
     // Row 4: Contract Type
     var currentContract = (typeof emp === 'object' ? emp.contractType : '') || 'inhouse';
@@ -9563,8 +9586,18 @@ function addAbsence(empIndex) {
   emp.absences.push({ from: from, to: to, reason: reason });
   saveMgmtList('employees', data.employees);
   console.log('💾 Absence added for', emp.name, '—', from, '→', to);
-  manageAbsences(realIdx); // Refresh the dialog
+  // Re-render the page behind the modal so the card's absence badges update. Then re-open the
+  // dialog (manageAbsences will also re-resolve the index in case the re-render shifted things).
+  rerenderActiveMgmtView();
+  manageAbsences(emp.name ? resolveEmpIndexByName(emp.name) : realIdx);
   showMgmtToast('تم إضافة فترة الغياب', 'success');
+}
+
+// Resolve an employee index by name directly against current storage.
+function resolveEmpIndexByName(name) {
+  if (!name) return -1;
+  var data = getMgmtData();
+  return data.employees.findIndex(function(e) { return (typeof e === 'object' ? e.name : e) === name; });
 }
 
 function deleteAbsence(empIndex, absIndex) {
