@@ -2132,7 +2132,10 @@ document.addEventListener('DOMContentLoaded', function() { setLanguage(CURRENT_L
 // ========== THEME (edugate default vs classic) ==========
 // Note: the <html data-theme> attribute is set by the <head> IIFE *before* first paint to avoid
 // a FOUC. This block provides the runtime switcher and the admin-gated global setter.
-var THEME_KEY = STORAGE_PREFIX + 'theme';
+// NOTE: inlined prefix instead of STORAGE_PREFIX — this block runs before STORAGE_PREFIX's
+// `const` declaration further down, so referencing it here would throw a TDZ error and break
+// the rest of the script (which is how login silently died).
+var THEME_KEY = 'qplan_admin_theme';
 var THEME_FIREBASE_KEY = 'theme_default'; // synced via management/* in Firebase
 var CURRENT_THEME = (document.documentElement.getAttribute('data-theme') === 'classic') ? 'classic' : 'edugate';
 
