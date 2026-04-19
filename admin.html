@@ -1746,6 +1746,7 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
       </div>
       <div class="top-actions">
         <button class="export-btn" onclick="showGhostEmployees()" title="البحث عن أسماء في المهام غير موجودة في قائمة الموظفين">👻 أسماء شبحية</button>
+        <button class="export-btn" onclick="runManualReconcile()" title="إضافة أي موظف/منصة موجود في المهام لكن غير موجود في القوائم الرئيسية">🔄 استيراد من المهام</button>
         <button class="export-btn" onclick="forceSyncMgmtToCloud()" title="رفع جميع البيانات إلى Firebase">☁️ مزامنة</button>
         <button class="export-btn" onclick="exportMgmtData()">📥 تصدير الإعدادات</button>
         <label class="export-btn" style="cursor:pointer;">📤 استيراد <input type="file" accept=".json" style="display:none" onchange="importMgmtData(event)"></label>
@@ -3334,8 +3335,14 @@ function loadData() {
         allData = cleanOccupancyData(dataArray);
         remapEmployeeNames(allData);
         resolveEmployeeDepartments(allData);
-        reconcilePlatformsFromTasks(allData);
-        reconcileEmployeesFromTasks(allData);
+        // Auto-reconcile disabled by default — it used to run every page load and kept re-adding
+        // employees/platforms that were intentionally deleted or whose Firebase copy was stale.
+        // Enable manually per-session via localStorage.setItem('qplan_mgmt_auto_reconcile', '1')
+        // or click the "🔄 استيراد من المهام" button in Data Management.
+        if (localStorage.getItem('qplan_mgmt_auto_reconcile') === '1') {
+          reconcilePlatformsFromTasks(allData);
+          reconcileEmployeesFromTasks(allData);
+        }
       } else {
         allData = [];
       }
@@ -3364,8 +3371,14 @@ function loadData() {
         allData = cleanOccupancyData(dataArray);
         remapEmployeeNames(allData);
         resolveEmployeeDepartments(allData);
-        reconcilePlatformsFromTasks(allData);
-        reconcileEmployeesFromTasks(allData);
+        // Auto-reconcile disabled by default — it used to run every page load and kept re-adding
+        // employees/platforms that were intentionally deleted or whose Firebase copy was stale.
+        // Enable manually per-session via localStorage.setItem('qplan_mgmt_auto_reconcile', '1')
+        // or click the "🔄 استيراد من المهام" button in Data Management.
+        if (localStorage.getItem('qplan_mgmt_auto_reconcile') === '1') {
+          reconcilePlatformsFromTasks(allData);
+          reconcileEmployeesFromTasks(allData);
+        }
       } else {
         allData = [];
       }
@@ -7681,6 +7694,12 @@ function saveMgmtList(key, list) {
     localStorage.setItem('qplan_employees', JSON.stringify(names));
     // Also save full employee data for form auto-fill
     localStorage.setItem('qplan_employees_full', JSON.stringify(list));
+    // Refresh the dashboard KPI card so إجمالي الموظفين / نشط / غير نشط reflect the edit
+    // immediately on the next dashboard visit — avoids the "I set endDate but total still shows
+    // 0 inactive" confusion.
+    if (typeof applyFilters === 'function') {
+      try { applyFilters(); } catch(e) {}
+    }
   }
   // Every management save is queued in a persistent pending-writes log. The queue guarantees that
   // if Firebase is not ready / write fails / the page is closed before the async set() lands,
@@ -7917,6 +7936,28 @@ function loadMgmtFromFirebase(callback) {
     console.error('❌ Failed to load management data from Firebase:', err);
     if (callback) callback();
   });
+}
+
+// Admin-triggered reconcile. Adds any employee/platform referenced in task records but missing
+// from the management lists. Used to be automatic on every page load, which caused intentionally
+// deleted records to come back (and silently wiped edits on concurrent sessions). Now opt-in only.
+function runManualReconcile() {
+  if (typeof allData === 'undefined' || !allData.length) {
+    showMgmtToast('لا توجد مهام لاستيرادها', 'error');
+    return;
+  }
+  var msg = 'هذه العملية تضيف أي موظف أو منصة موجودة في سجلات المهام لكن غير موجودة في القوائم الرئيسية. هل تريد المتابعة؟';
+  if (!confirm(msg)) return;
+  var beforeEmps = (getMgmtData().employees || []).length;
+  var beforePlats = (getMgmtData().platforms || []).length;
+  if (typeof reconcilePlatformsFromTasks === 'function') reconcilePlatformsFromTasks(allData);
+  if (typeof reconcileEmployeesFromTasks === 'function') reconcileEmployeesFromTasks(allData);
+  var afterEmps = (getMgmtData().employees || []).length;
+  var afterPlats = (getMgmtData().platforms || []).length;
+  var addedEmps = afterEmps - beforeEmps;
+  var addedPlats = afterPlats - beforePlats;
+  if (typeof renderDataManagement === 'function') renderDataManagement();
+  showMgmtToast('✅ تمت الإضافة — موظفون: ' + addedEmps + ' · منصات: ' + addedPlats, 'success');
 }
 
 function forceSyncMgmtToCloud() {
