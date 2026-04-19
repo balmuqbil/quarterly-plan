@@ -7732,8 +7732,9 @@ function mgmtQueuePendingWrite(key, data) {
 }
 function mgmtClearPendingWrite(key, ts) {
   var q = mgmtGetPendingWrites();
-  // Only clear if nothing newer was queued since the write started
-  if (q[key] && q[key].ts === ts) {
+  // Only clear if nothing newer was queued since the write started.
+  // ts===null means "clear unconditionally" (used by the transaction path — it's authoritative).
+  if (q[key] && (ts === null || q[key].ts === ts)) {
     delete q[key];
     mgmtSetPendingWrites(q);
   }
@@ -7747,6 +7748,58 @@ function mgmtFlushPendingWrites() {
   var q = mgmtGetPendingWrites();
   Object.keys(q).forEach(function(key) {
     syncMgmtToFirebase(key, q[key].data);
+  });
+}
+
+// ---------- Per-employee Firebase writes via transaction ----------
+// Problem the transaction solves: `management/employees` is a single array. Every .set() from
+// any open session REPLACES the whole array. Two sessions editing at the same time overwrite
+// each other — that's what kept wiping edits and bringing deleted names back.
+//
+// A Firebase transaction() atomically reads the CURRENT server state, lets us compute the new
+// state relative to it, then commits. If another client wrote between our read and our commit,
+// Firebase re-runs our mutator against the newer state — so concurrent edits on DIFFERENT
+// employees both land. Only true conflicts on the same employee serialize.
+//
+// op: 'upsert' or 'delete'. updater: function(arr, idx) → modifies arr in place.
+// Returns a Promise so callers can chain if needed (but updates are fire-and-forget by default).
+function updateEmployeeInFirebase(matchName, op, updater) {
+  if (!firebaseReady || !firebaseDb) return Promise.resolve(null);
+  return firebaseDb.ref('management/employees').transaction(function(current) {
+    var arr;
+    if (Array.isArray(current)) arr = current.slice();
+    else if (current && typeof current === 'object') arr = Object.values(current);
+    else arr = [];
+    var idx = arr.findIndex(function(e) { return e && (typeof e === 'object' ? e.name : e) === matchName; });
+    if (typeof updater === 'function') {
+      updater(arr, idx);
+    }
+    return arr;
+  }, function(err, committed, snap) {
+    if (err) { console.error('❌ Employee transaction failed for "' + matchName + '":', err); return; }
+    if (!committed) { console.warn('⚠️ Employee transaction aborted for "' + matchName + '"'); return; }
+    // Mirror Firebase's post-commit array back into localStorage so local matches server
+    var finalArr = snap.val();
+    if (Array.isArray(finalArr)) {
+      localStorage.setItem(MGMT_STORAGE_PREFIX + 'employees', JSON.stringify(finalArr));
+    } else if (finalArr && typeof finalArr === 'object') {
+      localStorage.setItem(MGMT_STORAGE_PREFIX + 'employees', JSON.stringify(Object.values(finalArr)));
+    }
+    // Clear pending-write marker for employees — transaction is authoritative
+    mgmtClearPendingWrite('employees', null); // null ts = clear regardless
+    console.log('🔐 Employee transaction committed for "' + matchName + '" (op: ' + op + ')');
+  });
+}
+function saveEmployeeRecord(oldName, newRecord) {
+  // Upsert: find by oldName, replace with newRecord. If oldName not found, append.
+  return updateEmployeeInFirebase(oldName, 'upsert', function(arr, idx) {
+    if (idx === -1) arr.push(newRecord);
+    else arr[idx] = newRecord;
+  });
+}
+function deleteEmployeeRecord(name) {
+  return updateEmployeeInFirebase(name, 'delete', function(arr, idx) {
+    if (idx !== -1) arr.splice(idx, 1);
   });
 }
 // Every 15s, re-try any write that's still pending (covers transient outages).
@@ -9255,6 +9308,8 @@ function confirmDeleteEmployeeWithTasks() {
   empList.splice(realIdx, 1);
   recordMgmtDelete('employees', state.name);
   saveMgmtList('employees', empList);
+  // Per-employee transaction delete — prevents a stale concurrent session from resurrecting
+  if (typeof deleteEmployeeRecord === 'function') deleteEmployeeRecord(state.name);
 
   if (typeof syncTestData === 'function') try { syncTestData(); } catch(e) {}
   if (typeof applyFilters === 'function') try { applyFilters(); } catch(e) {}
@@ -9455,7 +9510,7 @@ function saveEditMgmt(key, index) {
     var readDept = sanitizeInput(deptSelect ? deptSelect.value : (existingEmp.department || ''));
     var readSec = sanitizeInput(secSelect ? secSelect.value : (existingEmp.section || ''));
 
-    data.employees[realIdx] = {
+    var newRecord = {
       name: val,
       department: readDept,
       section: readSec,
@@ -9465,12 +9520,16 @@ function saveEditMgmt(key, index) {
       contractType: readContract,
       jobTitle: readJob
     };
+    data.employees[realIdx] = newRecord;
     console.log('💾 Employee saved:', val, {
       dept: readDept, section: readSec,
       start: readStart, end: readEnd,
       jobTitle: readJob, contract: readContract,
       absences: existingAbsences.length
     });
+
+    // Per-employee atomic write to Firebase (resists concurrent-session races that used to wipe edits)
+    if (typeof saveEmployeeRecord === 'function') saveEmployeeRecord(currentName || val, newRecord);
 
     // If name changed, update all task records referencing the old name
     if (currentName && currentName !== val) {
@@ -9654,6 +9713,8 @@ function addAbsence(empIndex) {
   if (!Array.isArray(emp.absences)) emp.absences = [];
   emp.absences.push({ from: from, to: to, reason: reason });
   saveMgmtList('employees', data.employees);
+  // Per-employee transaction write so concurrent sessions can't drop this absence
+  if (typeof saveEmployeeRecord === 'function') saveEmployeeRecord(emp.name, emp);
   console.log('💾 Absence added for', emp.name, '—', from, '→', to);
   // Re-render the page behind the modal so the card's absence badges update. Then re-open the
   // dialog (manageAbsences will also re-resolve the index in case the re-render shifted things).
@@ -9676,6 +9737,7 @@ function deleteAbsence(empIndex, absIndex) {
   if (!emp || !Array.isArray(emp.absences)) return;
   emp.absences.splice(absIndex, 1);
   saveMgmtList('employees', data.employees);
+  if (typeof saveEmployeeRecord === 'function') saveEmployeeRecord(emp.name, emp);
   manageAbsences(realIdx); // Refresh
   rerenderActiveMgmtView();
   showMgmtToast('تم حذف فترة الغياب', 'success');
