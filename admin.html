@@ -8841,6 +8841,16 @@ function renderEmployeeManagement() {
   const plats = data.platforms || [];
   const activeCount = items.filter(function(e) { return typeof e === 'string' || !e.endDate; }).length;
   const inactiveCount = items.length - activeCount;
+  // Employees with no task records — useful signal for new hires not yet assigned, or stale
+  // accounts that should be cleaned up. Counted across allData by exact name match.
+  var namesWithTasks = {};
+  if (Array.isArray(allData)) {
+    allData.forEach(function(t) { if (t && t.name) namesWithTasks[t.name] = true; });
+  }
+  var noTaskCount = items.reduce(function(acc, e) {
+    var n = typeof e === 'string' ? e : (e && e.name);
+    return acc + (n && !namesWithTasks[n] ? 1 : 0);
+  }, 0);
 
   // Build add-employee form at top (collapsible)
   var addFormHtml = '<div style="background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:20px;">' +
@@ -8906,6 +8916,7 @@ function renderEmployeeManagement() {
     '<span class="emp-card-status active">' + activeCount + ' نشط</span>' +
     (inactiveCount > 0 ? '<span class="emp-card-status inactive">' + inactiveCount + ' غير نشط</span>' : '') +
     '<span style="font-size:13px;font-weight:600;color:var(--text-light);">' + items.length + ' إجمالي</span>' +
+    (noTaskCount > 0 ? '<span title="اضغط للتصفية" onclick="(function(){var s=document.getElementById(\'empMgmtStatusFilter\');if(s){s.value=\'no-tasks\';filterEmployeeCards();}})()" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px;background:#f59e0b20;color:#b45309;cursor:pointer;">📭 ' + noTaskCount + ' بدون مهام</span>' : '') +
     '<span id="empFilterCount" style="font-size:12px;color:var(--text-light);"></span>' +
   '</div>';
 
@@ -8928,6 +8939,8 @@ function renderEmployeeManagement() {
       '<option value="inactive">غير نشط</option>' +
       '<option value="has-absence">لديه غياب</option>' +
       '<option value="no-dept">بدون إدارة</option>' +
+      '<option value="no-tasks">بدون مهام</option>' +
+      '<option value="has-tasks">لديه مهام</option>' +
     '</select>' +
     '<select id="empSortField" class="quarter-filter" onchange="empMgmtSortField=this.value;sortEmployeeCards()" style="min-width:110px;">' +
       '<option value="name"' + (empMgmtSortField==='name'?' selected':'') + '>ترتيب: الاسم</option>' +
@@ -8952,8 +8965,15 @@ function renderEmployeeManagement() {
     var contractLabel = contractType === 'offshore' ? 'Offshore' : 'Inhouse';
     var isActive = !endDate;
     var empPlats = [];
-    allData.forEach(function(t) { if (t.name === name && t.platform && empPlats.indexOf(t.platform) === -1) empPlats.push(t.platform); });
-    return '<div class="emp-card" id="mgmt-item-employees-' + i + '" data-emp-name="' + escapeAttr(name) + '" data-emp-dept="' + escapeAttr(dept) + '" data-emp-sec="' + escapeAttr(sec) + '" data-emp-active="' + (isActive ? '1' : '0') + '" data-emp-absences="' + absences.length + '" data-emp-contract="' + contractType + '" data-emp-plats="' + escapeAttr(empPlats.join(',')) + '">' +
+    var empTaskCount = 0;
+    allData.forEach(function(t) {
+      if (t.name === name) {
+        empTaskCount++;
+        if (t.platform && empPlats.indexOf(t.platform) === -1) empPlats.push(t.platform);
+      }
+    });
+    var hasTasks = empTaskCount > 0;
+    return '<div class="emp-card" id="mgmt-item-employees-' + i + '" data-emp-name="' + escapeAttr(name) + '" data-emp-dept="' + escapeAttr(dept) + '" data-emp-sec="' + escapeAttr(sec) + '" data-emp-active="' + (isActive ? '1' : '0') + '" data-emp-absences="' + absences.length + '" data-emp-contract="' + contractType + '" data-emp-plats="' + escapeAttr(empPlats.join(',')) + '" data-emp-has-tasks="' + (hasTasks ? '1' : '0') + '" data-emp-task-count="' + empTaskCount + '">' +
       '<div class="emp-card-top">' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
           '<span class="emp-card-name" id="mgmt-name-employees-' + i + '">' + escapeHtml(name) + '</span>' +
@@ -9383,6 +9403,7 @@ function filterEmployeeCards() {
     var isActive = card.getAttribute('data-emp-active') === '1';
     var absCount = parseInt(card.getAttribute('data-emp-absences')) || 0;
     var empPlats = (card.getAttribute('data-emp-plats') || '').split(',').filter(Boolean);
+    var hasTasks = card.getAttribute('data-emp-has-tasks') === '1';
     var show = true;
     if (search && name.indexOf(search) === -1) show = false;
     if (deptVal !== 'all' && dept !== deptVal) show = false;
@@ -9392,6 +9413,8 @@ function filterEmployeeCards() {
     if (statusVal === 'inactive' && isActive) show = false;
     if (statusVal === 'has-absence' && absCount === 0) show = false;
     if (statusVal === 'no-dept' && dept !== '') show = false;
+    if (statusVal === 'no-tasks' && hasTasks) show = false;
+    if (statusVal === 'has-tasks' && !hasTasks) show = false;
     card.style.display = show ? '' : 'none';
     if (show) shown++;
   });
