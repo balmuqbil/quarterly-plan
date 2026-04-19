@@ -1153,7 +1153,7 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
           <option value="2026">2026</option>
           <option value="2027">2027</option>
         </select>
-        <select class="quarter-filter" id="quarterFilter" onchange="applyFilters()">
+        <select class="quarter-filter" id="quarterFilter" onchange="updateDashboardMonthOptions();applyFilters()">
           <option value="all">جميع الأرباع</option>
           <option value="الأول">الربع الأول</option>
           <option value="الثاني">الربع الثاني</option>
@@ -2341,6 +2341,11 @@ function setDefaultFilters() {
     quarterFilter.value = currentQuarter;
   }
 
+  // Cascade the month dropdown so it only shows months in the selected quarter. Also runs
+  // on every quarterFilter change (via the select's onchange) — this first call aligns the
+  // dropdown before we try to pre-select the current month below.
+  if (typeof updateDashboardMonthOptions === 'function') updateDashboardMonthOptions();
+
   // Default the dashboard month filter to the current month too (was previously left on "all").
   var MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   var currentMonthName = MONTH_NAMES[currentMonth];
@@ -3489,10 +3494,20 @@ function updateKPIs() {
   document.getElementById('kpiHighChange').className = 'kpi-change ' + highClass;
   document.getElementById('kpiHighChange').textContent = highOccEmployees.size > 0 ? '⚠ اضغط للمراجعة' : '✓ ضمن الحدود';
 
-  // Capacity — use filtered months from current quarter/year filters (only approved tasks)
+  // Capacity — use filtered months from current year/quarter/MONTH filters (only approved tasks).
+  // Previously this always averaged over the whole quarter, so picking a specific month didn't
+  // change the KPI. Now if the month filter is set we narrow to that single month.
   var kpiQuarter = document.getElementById('quarterFilter').value;
   var kpiYear = document.getElementById('yearFilter').value;
-  var kpiMonths = (kpiQuarter !== 'all') ? (QUARTER_MONTHS[kpiQuarter] || MONTHS.slice()) : MONTHS.slice();
+  var kpiMonth = (document.getElementById('monthFilter') || {}).value || 'all';
+  var kpiMonths;
+  if (kpiMonth !== 'all') {
+    kpiMonths = [kpiMonth];
+  } else if (kpiQuarter !== 'all') {
+    kpiMonths = QUARTER_MONTHS[kpiQuarter] || MONTHS.slice();
+  } else {
+    kpiMonths = MONTHS.slice();
+  }
   var kpiFilterYear = (kpiYear !== 'all') ? kpiYear : '2026';
   var capData = getCapacityDataForMonths(kpiMonths, kpiFilterYear);
   var totalActive = Object.values(capData).reduce(function(s, dept) { return s + dept.totalActiveEmployees; }, 0);
@@ -4199,6 +4214,28 @@ var QUARTER_MONTHS = {
   'الثالث': ['يوليو','أغسطس','سبتمبر'],
   'الرابع': ['أكتوبر','نوفمبر','ديسمبر']
 };
+
+// Cascade the dashboard month dropdown from the selected quarter. When a specific quarter is
+// chosen, only show months in that quarter; when "all quarters" is selected, show all 12.
+// Preserves the user's current month selection if it's still valid in the new quarter range.
+function updateDashboardMonthOptions() {
+  var quarterEl = document.getElementById('quarterFilter');
+  var monthEl = document.getElementById('monthFilter');
+  if (!quarterEl || !monthEl) return;
+  var q = quarterEl.value;
+  var months = (q !== 'all' && QUARTER_MONTHS[q]) ? QUARTER_MONTHS[q] : ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  var current = monthEl.value;
+  var opts = '<option value="all">جميع الأشهر</option>' + months.map(function(m) {
+    return '<option value="' + m + '">' + m + '</option>';
+  }).join('');
+  monthEl.innerHTML = opts;
+  // Preserve the selection if still valid in the new range; otherwise collapse to "جميع الأشهر".
+  if (current && months.indexOf(current) !== -1) {
+    monthEl.value = current;
+  } else {
+    monthEl.value = 'all';
+  }
+}
 
 function filterTaskMonthsByQuarter() {
   var q = document.getElementById('taskField_quarter').value;
