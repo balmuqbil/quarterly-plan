@@ -7631,7 +7631,9 @@ function getMgmtData() {
         needsSave = true;
       }
 
-      if (needsSave) saveMgmtList('employees', data.employees);
+      // localOnly: these saves are purely the client-side migration/dedupe normalization.
+      // Syncing them up would let a stale-local session overwrite richer Firebase state.
+      if (needsSave) saveMgmtList('employees', data.employees, { localOnly: true });
     } else {
       data.employees = [];
     }
@@ -7654,7 +7656,7 @@ function getMgmtData() {
         console.log('🧹 Dedup projects: ' + data.projects.length + ' → ' + deduped.length);
         data.projects = deduped;
         // Persist the cleaned list back (also syncs to Firebase)
-        saveMgmtList('projects', deduped);
+        saveMgmtList('projects', deduped, { localOnly: true });
       }
     }
   } catch(e) { data.projects = []; }
@@ -7730,7 +7732,7 @@ function getPlatformManagedBadge(platformName) {
   return '<span class="badge-managed ' + managed + '">' + label + '</span>';
 }
 
-function saveMgmtList(key, list) {
+function saveMgmtList(key, list, opts) {
   localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(list));
   if (key === 'employees') {
     // Save just names for autocomplete in employee form
@@ -7745,6 +7747,12 @@ function saveMgmtList(key, list) {
       try { applyFilters(); } catch(e) {}
     }
   }
+  // localOnly: used by migration/dedupe paths inside getMgmtData. Those paths normalize data
+  // defensively on the local copy (e.g. adding contractType: 'inhouse' to records that lack it).
+  // If we push those local changes to Firebase, a session with stale/small localStorage would
+  // overwrite whichever concurrent session has the richer, larger array — losing everyone
+  // else's edits. Local-only means: fix up this client's copy and do NOT propagate.
+  if (opts && opts.localOnly) return;
   // Every management save is queued in a persistent pending-writes log. The queue guarantees that
   // if Firebase is not ready / write fails / the page is closed before the async set() lands,
   // the change isn't lost — it gets retried on the next session. It also prevents the real-time
@@ -7762,9 +7770,29 @@ var MGMT_SYNC_VERSION_KEY = MGMT_STORAGE_PREFIX + 'sync_version';
 var MGMT_PENDING_WRITES_KEY = MGMT_STORAGE_PREFIX + 'pending_writes';
 
 // ---------- Pending writes queue (unconfirmed Firebase writes) ----------
+// Entries older than this are considered abandoned (tab closed, network lost last session, etc.)
+// and silently discarded on read — they must NOT be used as a reason to overwrite Firebase, or
+// a one-week-old stale local session would keep clobbering whatever active sessions have built.
+var MGMT_PENDING_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 function mgmtGetPendingWrites() {
-  try { return JSON.parse(localStorage.getItem(MGMT_PENDING_WRITES_KEY) || '{}') || {}; }
-  catch(e) { return {}; }
+  try {
+    var raw = JSON.parse(localStorage.getItem(MGMT_PENDING_WRITES_KEY) || '{}') || {};
+    // Filter out expired entries on read. Keeps the queue fresh without a separate sweeper.
+    var now = Date.now();
+    var anyExpired = false;
+    Object.keys(raw).forEach(function(k) {
+      var entry = raw[k];
+      if (!entry || typeof entry.ts !== 'number' || (now - entry.ts) > MGMT_PENDING_TTL_MS) {
+        delete raw[k];
+        anyExpired = true;
+      }
+    });
+    if (anyExpired) {
+      try { localStorage.setItem(MGMT_PENDING_WRITES_KEY, JSON.stringify(raw)); } catch(e) {}
+    }
+    return raw;
+  } catch(e) { return {}; }
 }
 function mgmtSetPendingWrites(obj) {
   try { localStorage.setItem(MGMT_PENDING_WRITES_KEY, JSON.stringify(obj)); } catch(e) {}
@@ -7953,18 +7981,32 @@ function loadMgmtFromFirebase(callback) {
       // Subsequent syncs: Firebase is source of truth, but merge simple arrays to avoid losing local additions
       var simpleArrayKeys = ['departments', 'platforms', 'taskTypes', 'jobTitles'];
       MGMT_ALL_KEYS.forEach(function(key) {
-        // Pending local write wins. Push local up; never let Firebase overwrite it.
-        if (typeof mgmtHasPendingWrite === 'function' && mgmtHasPendingWrite(key)) {
-          var pending = mgmtGetPendingWrites()[key];
-          if (pending) toUpload[key] = pending.data;
-          console.log('⏸️ Load skipped ' + key + ' — has pending local write');
-          return;
-        }
         var fbVal = fbData[key];
         var localVal = getLocalVal(key);
         if (fbVal) fbVal = fixFbArray(fbVal, localVal);
         var fbSize = mgmtDataSize(fbVal);
         var localSize = mgmtDataSize(localVal);
+
+        // Pending local write wins — but only when we reasonably believe local is NOT drastically
+        // smaller than Firebase. Older code force-pushed the pending local up blindly, which meant
+        // a stale ~170-employee localStorage from a long-closed session kept clobbering a
+        // fresh 226-employee Firebase state when that tab happened to reopen.
+        if (typeof mgmtHasPendingWrite === 'function' && mgmtHasPendingWrite(key)) {
+          var pending = mgmtGetPendingWrites()[key];
+          // Only trust the pending write if its data isn't obviously stale compared to Firebase.
+          // Rule: if server has >10 items more than the pending version, the server wins —
+          // something bigger exists server-side and our local is almost certainly outdated.
+          var pendingSize = pending ? mgmtDataSize(pending.data) : 0;
+          if (pending && (pendingSize + 10 >= fbSize || fbSize === 0)) {
+            toUpload[key] = pending.data;
+            console.log('⏸️ Load: pending local write kept for ' + key + ' (local:' + pendingSize + ' vs FB:' + fbSize + ')');
+            return;
+          } else {
+            console.warn('🚨 Load: discarding stale pending write for ' + key + ' (local:' + pendingSize + ' << FB:' + fbSize + ')');
+            // Clear the stale marker so it can't force-push next time either
+            mgmtClearPendingWrite(key, null);
+          }
+        }
 
         if (fbSize === 0 && localSize > 0) {
           // Firebase missing this key — push local
