@@ -2283,9 +2283,11 @@ function applySharedFiltersTo(pageType) {
   if (f.year && map.year) setSelectIfHasOption(map.year, f.year);
   if (f.quarter && map.quarter) {
     var changedQ = setSelectIfHasOption(map.quarter, f.quarter);
-    // RP re-populates its month options based on the quarter — invoke the updater
-    if (changedQ && pageType === 'resourcePlanner' && typeof updateRpMonths === 'function') {
-      updateRpMonths();
+    // Pages whose month dropdown is scoped to the selected quarter need their options
+    // regenerated before we try to set the month — otherwise the cascade shows stale options.
+    if (changedQ || true) {
+      if (pageType === 'resourcePlanner' && typeof updateRpMonths === 'function') updateRpMonths();
+      if (pageType === 'dashboard' && typeof updateDashboardMonthOptions === 'function') updateDashboardMonthOptions();
     }
   }
   if (f.month && map.month) setSelectIfHasOption(map.month, f.month);
@@ -2356,16 +2358,14 @@ function setDefaultFilters() {
     }
   }
 
-  // Seed the shared-filter state with today's period the first time the user logs in, so every
-  // linked page (Employees / Platforms / Tasks / Resource Planner / Depts) defaults to the
-  // current month/quarter/year rather than "all".
+  // Reset the shared-filter state to today's period on every login. Previously we only seeded
+  // MISSING keys, which meant a stale quarter/month from a previous session would override the
+  // just-set current values the moment applySharedFiltersTo fired (via the language re-render
+  // chain). Users saw quarter=الأول while month=أبريل — impossible combination — on fresh open.
   try {
-    var shared = JSON.parse(localStorage.getItem(STORAGE_PREFIX + 'sharedFilters') || '{}') || {};
-    var seedChanged = false;
-    if (!shared.year)    { shared.year = currentYear; seedChanged = true; }
-    if (!shared.quarter) { shared.quarter = currentQuarter; seedChanged = true; }
-    if (!shared.month)   { shared.month = currentMonthName; seedChanged = true; }
-    if (seedChanged) localStorage.setItem(STORAGE_PREFIX + 'sharedFilters', JSON.stringify(shared));
+    localStorage.setItem(STORAGE_PREFIX + 'sharedFilters', JSON.stringify({
+      year: currentYear, quarter: currentQuarter, month: currentMonthName
+    }));
   } catch(e) {}
 
   // Also set department page filters
