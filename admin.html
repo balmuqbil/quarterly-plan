@@ -3243,16 +3243,25 @@ function reconcileEmployeesFromTasks(taskData) {
 
   // Clean up: remove any employee whose name is a known old-rename
   var cleanedCount = 0;
+  var removedRenamedEmps = [];
   if (Object.keys(recentRenames).length > 0) {
     for (var i = empList.length - 1; i >= 0; i--) {
-      var eName = typeof empList[i] === 'object' ? empList[i].name : empList[i];
+      var eEntry = empList[i];
+      var eName = typeof eEntry === 'object' ? eEntry.name : eEntry;
       if (recentRenames[eName]) {
+        removedRenamedEmps.push(typeof eEntry === 'object' ? eEntry : { name: eEntry });
         empList.splice(i, 1);
         cleanedCount++;
       }
     }
     if (cleanedCount > 0) {
       saveMgmtList('employees', empList);
+      // Per-record delete for each removed rename — saveMgmtList uses .update() merge for
+      // keyed collections, which cannot delete; Firebase must get explicit .remove() calls
+      // or the stale old-name record would come back on the next load.
+      if (typeof deleteEmployeeRecord === 'function') {
+        removedRenamedEmps.forEach(function(rec) { deleteEmployeeRecord(rec); });
+      }
       console.log('🧹 Removed ' + cleanedCount + ' renamed employee(s) from management list');
     }
   }
@@ -4484,6 +4493,8 @@ function quickAddTimeOff() {
 
   emp.absences.push({ from: absVal, to: absVal, reason: 'إجازة' });
   saveMgmtList('employees', mgmt.employees);
+  // Per-employee write so concurrent sessions can't drop this absence.
+  if (typeof saveEmployeeRecord === 'function') saveEmployeeRecord(emp.name, emp);
   showMgmtToast('✅ تم تسجيل شهر ' + month + ' ' + year + ' كإجازة لـ ' + empName, 'success');
 
   // Update the info display
@@ -7582,14 +7593,18 @@ function getMgmtData() {
     const stored = localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees');
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Migrate string[] to object[] and ensure startDate
+      // Migrate string[] to object[] and ensure startDate + stable id
       var needsSave = false;
       data.employees = parsed.map(function(e) {
-        if (typeof e === 'string') { needsSave = true; return { name: e, department: '', section: '', startDate: 'يناير 2026', endDate: '', absences: [] }; }
+        if (typeof e === 'string') { needsSave = true; e = { name: e, department: '', section: '', startDate: 'يناير 2026', endDate: '', absences: [] }; }
         if (!e.startDate) { needsSave = true; e.startDate = 'يناير 2026'; }
         if (!e.absences) e.absences = [];
         if (e.endDate === undefined) e.endDate = '';
         if (!e.contractType) e.contractType = 'inhouse';
+        // Assign a stable id if missing — the keyed-Firebase architecture needs it. Local-only
+        // save below prevents this defensive id assignment from being pushed as a full-array
+        // overwrite to Firebase.
+        if (!e.id && typeof ensureEmployeeId === 'function') { ensureEmployeeId(e); needsSave = true; }
         return e;
       });
 
@@ -7733,6 +7748,11 @@ function getPlatformManagedBadge(platformName) {
 }
 
 function saveMgmtList(key, list, opts) {
+  // Before persisting, make sure every record in a keyed collection has a stable id — Firebase
+  // per-record writes key off `id`, and localStorage + Firebase must agree on the value.
+  if (key === 'employees' && Array.isArray(list) && typeof ensureEmployeeId === 'function') {
+    list.forEach(function(e) { if (e && typeof e === 'object') ensureEmployeeId(e); });
+  }
   localStorage.setItem(MGMT_STORAGE_PREFIX + key, JSON.stringify(list));
   if (key === 'employees') {
     // Save just names for autocomplete in employee form
@@ -7765,7 +7785,7 @@ function saveMgmtList(key, list, opts) {
 var mgmtFirebaseListenerActive = false;
 var mgmtSyncInProgress = false; // prevent feedback loops
 var MGMT_SYNC_FLAG = MGMT_STORAGE_PREFIX + 'firebase_synced'; // tracks if initial sync done
-var MGMT_SYNC_VERSION = 4; // bump when new keys are added to MGMT_ALL_KEYS
+var MGMT_SYNC_VERSION = 5; // bump when new keys are added to MGMT_ALL_KEYS, or the Firebase storage shape changes for keyed collections (v5 = per-id nodes for employees/demands/requisitions)
 var MGMT_SYNC_VERSION_KEY = MGMT_STORAGE_PREFIX + 'sync_version';
 var MGMT_PENDING_WRITES_KEY = MGMT_STORAGE_PREFIX + 'pending_writes';
 
@@ -7823,56 +7843,177 @@ function mgmtFlushPendingWrites() {
   });
 }
 
-// ---------- Per-employee Firebase writes via transaction ----------
-// Problem the transaction solves: `management/employees` is a single array. Every .set() from
-// any open session REPLACES the whole array. Two sessions editing at the same time overwrite
-// each other — that's what kept wiping edits and bringing deleted names back.
+// ---------- Keyed-node Firebase writes for employees / demands / requisitions ----------
+// Problem the old architecture had: `management/employees` was one big array, and every edit did
+// .set(fullArray). Two sessions editing at the same time overwrote each other's work — the 226 vs
+// 169 bug, missing demands, "deleted employees coming back". All roots of the same cause.
 //
-// A Firebase transaction() atomically reads the CURRENT server state, lets us compute the new
-// state relative to it, then commits. If another client wrote between our read and our commit,
-// Firebase re-runs our mutator against the newer state — so concurrent edits on DIFFERENT
-// employees both land. Only true conflicts on the same employee serialize.
+// New architecture: each record lives at its own node `management/<key>/<id>`. Per-record writes
+// target just that node — concurrent sessions editing DIFFERENT records can no longer collide at
+// the Firebase level, because they're touching different paths. Bulk writes use `.update()` with
+// a map of {id:record} — add-only merge; never clobbers records the local session hasn't seen.
 //
-// op: 'upsert' or 'delete'. updater: function(arr, idx) → modifies arr in place.
-// Returns a Promise so callers can chain if needed (but updates are fire-and-forget by default).
-function updateEmployeeInFirebase(matchName, op, updater) {
-  if (!firebaseReady || !firebaseDb) return Promise.resolve(null);
-  return firebaseDb.ref('management/employees').transaction(function(current) {
-    var arr;
-    if (Array.isArray(current)) arr = current.slice();
-    else if (current && typeof current === 'object') arr = Object.values(current);
-    else arr = [];
-    var idx = arr.findIndex(function(e) { return e && (typeof e === 'object' ? e.name : e) === matchName; });
-    if (typeof updater === 'function') {
-      updater(arr, idx);
-    }
-    return arr;
-  }, function(err, committed, snap) {
-    if (err) { console.error('❌ Employee transaction failed for "' + matchName + '":', err); return; }
-    if (!committed) { console.warn('⚠️ Employee transaction aborted for "' + matchName + '"'); return; }
-    // Mirror Firebase's post-commit array back into localStorage so local matches server
-    var finalArr = snap.val();
-    if (Array.isArray(finalArr)) {
-      localStorage.setItem(MGMT_STORAGE_PREFIX + 'employees', JSON.stringify(finalArr));
-    } else if (finalArr && typeof finalArr === 'object') {
-      localStorage.setItem(MGMT_STORAGE_PREFIX + 'employees', JSON.stringify(Object.values(finalArr)));
-    }
-    // Clear pending-write marker for employees — transaction is authoritative
-    mgmtClearPendingWrite('employees', null); // null ts = clear regardless
-    console.log('🔐 Employee transaction committed for "' + matchName + '" (op: ' + op + ')');
-  });
+// Collections that use this per-record format (all have an `id` field on each record):
+var MGMT_KEYED_COLLECTIONS = ['employees', 'demands', 'requisitions'];
+function isKeyedCollection(key) { return MGMT_KEYED_COLLECTIONS.indexOf(key) !== -1; }
+
+// Every employee needs a stable id. Auto-generate one if missing — slug-of-name + random suffix
+// so Firebase-console inspection is readable, and random tail prevents collisions on name change
+// or two people with the same name.
+function ensureEmployeeId(emp) {
+  if (!emp || typeof emp !== 'object') return emp;
+  if (!emp.id) {
+    var slug = String(emp.name || 'unnamed')
+      .replace(/[\s\.#$\[\]\/]+/g, '_')
+      .replace(/[^\u0600-\u06FFa-zA-Z0-9_]/g, '')
+      .slice(0, 40) || 'unnamed';
+    emp.id = 'emp_' + slug + '_' + Math.random().toString(36).slice(2, 8);
+  }
+  return emp;
 }
+
+function arrayToKeyedObject(arr, idField) {
+  var obj = {};
+  if (!Array.isArray(arr)) return obj;
+  var field = idField || 'id';
+  arr.forEach(function(rec) {
+    if (!rec || typeof rec !== 'object') return;
+    var id = rec[field];
+    if (!id) return;
+    obj[id] = rec;
+  });
+  return obj;
+}
+
+function keyedObjectToArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.filter(function(v) { return v != null; });
+  if (typeof val !== 'object') return [];
+  return Object.keys(val)
+    .map(function(k) { return val[k]; })
+    .filter(function(v) { return v && typeof v === 'object'; });
+}
+
+// Firebase sometimes stores an array as an object with string-numeric keys ("0","1","2",…) —
+// that's the legacy format for these three collections. Detect it so we can migrate to id-keyed.
+function isLegacyArrayShape(val) {
+  if (Array.isArray(val)) return true;
+  if (!val || typeof val !== 'object') return false;
+  var keys = Object.keys(val);
+  if (keys.length === 0) return false;
+  return keys.every(function(k) { return /^\d+$/.test(k); });
+}
+
+// Normalize whatever Firebase returned to a plain array of records (for localStorage + callers).
+function normalizeKeyedCollection(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.filter(function(v) { return v && typeof v === 'object'; });
+  if (typeof val !== 'object') return [];
+  return Object.keys(val)
+    .map(function(k) { return val[k]; })
+    .filter(function(v) { return v && typeof v === 'object'; });
+}
+
+// ---------- Per-record Firebase write/delete helpers ----------
+// Each of these targets exactly one `management/<key>/<id>` node. A .set() on a single node is
+// atomic at the Firebase level — no other session can partially-overwrite this record. Deletes use
+// .remove() on the single node; the parent collection is untouched.
+
 function saveEmployeeRecord(oldName, newRecord) {
-  // Upsert: find by oldName, replace with newRecord. If oldName not found, append.
-  return updateEmployeeInFirebase(oldName, 'upsert', function(arr, idx) {
+  if (!firebaseReady || !firebaseDb || !newRecord || typeof newRecord !== 'object') return Promise.resolve(null);
+  ensureEmployeeId(newRecord);
+  // Mirror local first — the render paths read from localStorage.
+  try {
+    var local = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees') || '[]');
+    var arr = Array.isArray(local) ? local.slice() : [];
+    var idx = arr.findIndex(function(e) { return e && e.id === newRecord.id; });
+    if (idx === -1 && oldName) idx = arr.findIndex(function(e) { return e && e.name === oldName; });
     if (idx === -1) arr.push(newRecord);
     else arr[idx] = newRecord;
+    localStorage.setItem(MGMT_STORAGE_PREFIX + 'employees', JSON.stringify(arr));
+  } catch(e) {}
+  return firebaseDb.ref('management/employees/' + newRecord.id).set(newRecord).then(function() {
+    console.log('🔐 Employee node saved: ' + newRecord.name + ' (id=' + newRecord.id + ')');
+    mgmtClearPendingWrite('employees', null);
+  }).catch(function(err) {
+    console.error('❌ Employee node save failed for "' + newRecord.name + '":', err);
   });
 }
-function deleteEmployeeRecord(name) {
-  return updateEmployeeInFirebase(name, 'delete', function(arr, idx) {
-    if (idx !== -1) arr.splice(idx, 1);
+
+function deleteEmployeeRecord(nameOrRecord) {
+  if (!firebaseReady || !firebaseDb) return Promise.resolve(null);
+  var id = null;
+  var nameToDelete = null;
+  if (nameOrRecord && typeof nameOrRecord === 'object') {
+    id = nameOrRecord.id;
+    nameToDelete = nameOrRecord.name;
+  } else if (typeof nameOrRecord === 'string') {
+    nameToDelete = nameOrRecord;
+    try {
+      var local = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees') || '[]');
+      var match = (Array.isArray(local) ? local : []).find(function(e) { return e && e.name === nameToDelete; });
+      if (match) id = match.id;
+    } catch(e) {}
+  }
+  // Mirror local first
+  if (nameToDelete) {
+    try {
+      var local2 = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'employees') || '[]');
+      var filtered = (Array.isArray(local2) ? local2 : []).filter(function(e) {
+        return !e || (id ? e.id !== id : e.name !== nameToDelete);
+      });
+      localStorage.setItem(MGMT_STORAGE_PREFIX + 'employees', JSON.stringify(filtered));
+    } catch(e) {}
+  }
+  if (id) {
+    return firebaseDb.ref('management/employees/' + id).remove().then(function() {
+      console.log('🔐 Employee node removed: ' + (nameToDelete || '') + ' (id=' + id + ')');
+    }).catch(function(err) { console.error('❌ Employee node delete failed:', err); });
+  }
+  // No id known — fall back to name-scan cleanup under whatever shape the parent has.
+  return firebaseDb.ref('management/employees').once('value').then(function(snap) {
+    var val = snap.val();
+    if (!val) return;
+    if (Array.isArray(val)) {
+      var kept = val.filter(function(e) { return e && e.name !== nameToDelete; });
+      return firebaseDb.ref('management/employees').set(arrayToKeyedObject(kept.map(ensureEmployeeId), 'id'));
+    }
+    var updates = {};
+    Object.keys(val).forEach(function(k) {
+      if (val[k] && val[k].name === nameToDelete) updates[k] = null;
+    });
+    if (Object.keys(updates).length) return firebaseDb.ref('management/employees').update(updates);
   });
+}
+
+function saveDemandRecord(record) {
+  if (!firebaseReady || !firebaseDb || !record || !record.id) return Promise.resolve(null);
+  return firebaseDb.ref('management/demands/' + record.id).set(record).then(function() {
+    console.log('🔐 Demand node saved: ' + (record.reqNumber || '') + ' (id=' + record.id + ')');
+    mgmtClearPendingWrite('demands', null);
+  }).catch(function(err) { console.error('❌ Demand node save failed:', err); });
+}
+
+function deleteDemandRecord(id) {
+  if (!firebaseReady || !firebaseDb || !id) return Promise.resolve(null);
+  return firebaseDb.ref('management/demands/' + id).remove().then(function() {
+    console.log('🔐 Demand node removed: id=' + id);
+  }).catch(function(err) { console.error('❌ Demand node delete failed:', err); });
+}
+
+function saveRequisitionRecord(record) {
+  if (!firebaseReady || !firebaseDb || !record || !record.id) return Promise.resolve(null);
+  return firebaseDb.ref('management/requisitions/' + record.id).set(record).then(function() {
+    console.log('🔐 Requisition node saved: id=' + record.id);
+    mgmtClearPendingWrite('requisitions', null);
+  }).catch(function(err) { console.error('❌ Requisition node save failed:', err); });
+}
+
+function deleteRequisitionRecord(id) {
+  if (!firebaseReady || !firebaseDb || !id) return Promise.resolve(null);
+  return firebaseDb.ref('management/requisitions/' + id).remove().then(function() {
+    console.log('🔐 Requisition node removed: id=' + id);
+  }).catch(function(err) { console.error('❌ Requisition node delete failed:', err); });
 }
 // Every 15s, re-try any write that's still pending (covers transient outages).
 setInterval(function() {
@@ -7887,6 +8028,35 @@ function syncMgmtToFirebase(key, data, retryCount) {
   }
   var q = mgmtGetPendingWrites();
   var ts = (q[key] && q[key].ts) || Date.now();
+
+  // Keyed collections (employees / demands / requisitions) use per-record merge instead of full
+  // .set() replacement. That's the whole point of Phase 1 — a concurrent session editing a
+  // different record than us must NOT have its record dropped when we sync. `.update(keyedMap)`
+  // only touches the keys listed in the map; everything else on the server is preserved.
+  //
+  // Deletions of keyed records go through deleteEmployeeRecord / deleteDemandRecord /
+  // deleteRequisitionRecord (per-node .remove()) — saveMgmtList alone won't remove records from
+  // Firebase, by design.
+  if (isKeyedCollection(key) && Array.isArray(data)) {
+    if (key === 'employees') data.forEach(ensureEmployeeId);
+    var keyed = arrayToKeyedObject(data, 'id');
+    if (Object.keys(keyed).length === 0) {
+      // Empty or all records lack ids — nothing to merge. Clear the marker and bail.
+      mgmtClearPendingWrite(key, ts);
+      return;
+    }
+    firebaseDb.ref('management/' + key).update(keyed).then(function() {
+      console.log('🔥 Mgmt keyed-merge synced: ' + key + ' (' + Object.keys(keyed).length + ' records)');
+      mgmtClearPendingWrite(key, ts);
+    }).catch(function(err) {
+      console.error('❌ Mgmt keyed sync failed: ' + key, err);
+      if (!retryCount || retryCount < 2) {
+        setTimeout(function() { syncMgmtToFirebase(key, data, (retryCount || 0) + 1); }, 2000);
+      }
+    });
+    return;
+  }
+
   firebaseDb.ref('management/' + key).set(data).then(function() {
     console.log('🔥 Mgmt synced to Firebase:', key);
     mgmtClearPendingWrite(key, ts);
@@ -7910,11 +8080,17 @@ function mgmtDataSize(val) {
 }
 
 function fixFbArray(fbVal, localVal) {
-  // Firebase converts arrays to objects with numeric keys — convert back
-  if (Array.isArray(localVal) && !Array.isArray(fbVal) && typeof fbVal === 'object') {
-    var arr = [];
-    Object.keys(fbVal).forEach(function(k) { arr[parseInt(k)] = fbVal[k]; });
-    return arr.filter(function(v) { return v !== undefined && v !== null; });
+  // Firebase converts arrays to objects with numeric keys — convert back.
+  // Only applies when ALL keys are numeric; id-keyed objects (new keyed-collection format)
+  // have string ids like "emp_..." and must be left as-is (the load path normalizes them via
+  // normalizeKeyedCollection / localizeForStorage).
+  if (Array.isArray(localVal) && !Array.isArray(fbVal) && typeof fbVal === 'object' && fbVal !== null) {
+    var keys = Object.keys(fbVal);
+    if (keys.length > 0 && keys.every(function(k) { return /^\d+$/.test(k); })) {
+      var arr = [];
+      keys.forEach(function(k) { arr[parseInt(k)] = fbVal[k]; });
+      return arr.filter(function(v) { return v !== undefined && v !== null; });
+    }
   }
   return fbVal;
 }
@@ -7933,8 +8109,30 @@ function loadMgmtFromFirebase(callback) {
     var fbData = snapshot.val() || {};
     var localData = getMgmtData();
     var toUpload = {}; // keys where local wins and needs to push to Firebase
+    // Legacy array → id-keyed object migration: if Firebase still holds the old format for
+    // employees/demands/requisitions, we rewrite the node once to the new per-id shape so all
+    // subsequent writes can be per-record. Deferred until after the main sync logic completes.
+    var pendingLegacyMigrations = {};
 
     mgmtSyncInProgress = true;
+
+    // Phase-1 normalization: for keyed collections, convert whatever shape Firebase returned
+    // (array, numeric-keyed object, or id-keyed object) into an id-keyed object in memory.
+    // Legacy shapes get queued for migration; id-keyed stays as-is.
+    MGMT_KEYED_COLLECTIONS.forEach(function(k) {
+      var fbVal = fbData[k];
+      if (fbVal == null) return;
+      if (isLegacyArrayShape(fbVal)) {
+        var arr = normalizeKeyedCollection(fbVal);
+        if (k === 'employees') arr.forEach(ensureEmployeeId);
+        var keyed = arrayToKeyedObject(arr, 'id');
+        if (Object.keys(keyed).length > 0) {
+          fbData[k] = keyed; // use new shape for the rest of the sync
+          pendingLegacyMigrations[k] = keyed;
+          console.log('🔄 Legacy-shape detected for ' + k + ' — queued migration (' + arr.length + ' records → keyed)');
+        }
+      }
+    });
 
     // Helper to get/set localStorage for a key (managed_users uses different prefix)
     function getLocalStorageKey(key) {
@@ -7947,6 +8145,13 @@ function loadMgmtFromFirebase(callback) {
         try { return JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + key) || '{}'); } catch(e) { return {}; }
       }
       return localData[key];
+    }
+    // Value we want to persist to localStorage after sync. Keyed collections always land as a
+    // plain array so that every callsite that reads getMgmtData().employees/demands/requisitions
+    // continues to get an array — no UI changes required.
+    function localizeForStorage(key, val) {
+      if (isKeyedCollection(key)) return normalizeKeyedCollection(val);
+      return val;
     }
 
     // First sync from this machine: push ALL local data to Firebase
@@ -7967,12 +8172,12 @@ function loadMgmtFromFirebase(callback) {
           } else {
             // Firebase has more — use Firebase but don't overwrite yet
             // (rare on first sync, but possible if another machine synced first)
-            localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
+            localStorage.setItem(getLocalStorageKey(key), JSON.stringify(localizeForStorage(key, fbVal)));
             console.log('📊 ' + key + ': Firebase (' + fbSize + ') > local (' + localSize + ') — using Firebase');
           }
         } else if (fbSize > 0) {
           // Local empty, Firebase has data — use Firebase
-          localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
+          localStorage.setItem(getLocalStorageKey(key), JSON.stringify(localizeForStorage(key, fbVal)));
         }
       });
       localStorage.setItem(MGMT_SYNC_FLAG, new Date().toISOString());
@@ -8034,7 +8239,7 @@ function loadMgmtFromFirebase(callback) {
             }
           } else {
             // Firebase has data — use it
-            localStorage.setItem(getLocalStorageKey(key), JSON.stringify(fbVal));
+            localStorage.setItem(getLocalStorageKey(key), JSON.stringify(localizeForStorage(key, fbVal)));
           }
         }
       });
@@ -8056,19 +8261,49 @@ function loadMgmtFromFirebase(callback) {
     }
     console.log('🔥 Management data merge complete (' + (isFirstSync ? 'first sync' : 'refresh') + '). Firebase keys:', Object.keys(fbData).join(', '));
 
-    // Push data to Firebase
+    // Push data to Firebase. Keyed collections go through a full-node .set() using the id-keyed
+    // shape — this is the correct behavior during first-sync/local-priority push (we really do
+    // intend "this is the authoritative state right now"). Subsequent per-record edits go through
+    // saveEmployeeRecord / saveDemandRecord / saveRequisitionRecord and only touch single nodes.
     if (Object.keys(toUpload).length > 0) {
       console.log('☁️ Pushing data to Firebase:', Object.keys(toUpload).join(', '));
-      var updates = {};
+      var batchedUpdates = {};
+      var keyedSets = [];
       Object.keys(toUpload).forEach(function(key) {
-        updates['management/' + key] = toUpload[key];
+        var val = toUpload[key];
+        if (isKeyedCollection(key)) {
+          var arr = Array.isArray(val) ? val.slice() : normalizeKeyedCollection(val);
+          if (key === 'employees') arr.forEach(ensureEmployeeId);
+          var keyed = arrayToKeyedObject(arr, 'id');
+          if (Object.keys(keyed).length > 0) {
+            keyedSets.push({ key: key, keyed: keyed });
+          }
+        } else {
+          batchedUpdates['management/' + key] = val;
+        }
       });
-      firebaseDb.ref().update(updates).then(function() {
+      var pushes = [];
+      if (Object.keys(batchedUpdates).length > 0) pushes.push(firebaseDb.ref().update(batchedUpdates));
+      keyedSets.forEach(function(m) { pushes.push(firebaseDb.ref('management/' + m.key).set(m.keyed)); });
+      Promise.all(pushes).then(function() {
         console.log('🔥 Data pushed to Firebase:', Object.keys(toUpload).join(', '));
       }).catch(function(err) {
         console.error('❌ Failed to push data:', err);
       });
     }
+
+    // Persist the legacy-shape → id-keyed migration for any collection that needed it. We do this
+    // AFTER toUpload (which may have included the same collection, in which case our local-priority
+    // push already set the keyed shape). If toUpload did not cover it (e.g. Firebase had more than
+    // local), we still need to rewrite the node so future writes go through per-record helpers.
+    Object.keys(pendingLegacyMigrations).forEach(function(k) {
+      if (toUpload[k]) return; // already pushed as keyed above
+      firebaseDb.ref('management/' + k).set(pendingLegacyMigrations[k]).then(function() {
+        console.log('🔄 Legacy migration persisted for ' + k);
+      }).catch(function(err) {
+        console.error('❌ Legacy migration failed for ' + k + ':', err);
+      });
+    });
 
     if (callback) callback();
   }).catch(function(err) {
@@ -9211,10 +9446,14 @@ function addMgmtItem(key) {
     var contractType = contractSelect ? contractSelect.value : 'inhouse';
     var jobTitleSelect = document.getElementById('mgmt-emp-jobtitle');
     var jobTitle = jobTitleSelect ? jobTitleSelect.value : '';
-    data.employees.push({ name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [], contractType: contractType, jobTitle: jobTitle });
+    var newEmpRec = { name: name, department: sanitizeInput(deptSelect.value), section: sanitizeInput(secSelect.value), startDate: startDate, endDate: '', absences: [], contractType: contractType, jobTitle: jobTitle };
+    if (typeof ensureEmployeeId === 'function') ensureEmployeeId(newEmpRec);
+    data.employees.push(newEmpRec);
     // User is re-adding an employee that was previously deleted — forget the tombstone.
     clearMgmtDelete('employees', name);
     saveMgmtList('employees', data.employees);
+    // Per-employee write so concurrent sessions can't miss this addition.
+    if (typeof saveEmployeeRecord === 'function') saveEmployeeRecord(name, newEmpRec);
     nameInput.value = '';
     deptSelect.selectedIndex = 0;
     secSelect.innerHTML = '<option value="">— اختر القسم —</option>';
@@ -9706,12 +9945,19 @@ function renameEmployeeInTasks(oldName, newName) {
   // Update requisitions too (candidateName, requestedBy)
   var mgmt = getMgmtData();
   var reqs = mgmt.requisitions || [];
-  var reqChanged = false;
+  var changedReqs = [];
   reqs.forEach(function(req) {
-    if (req.candidateName === oldName) { req.candidateName = newName; reqChanged = true; }
-    if (req.replacementFor === oldName) { req.replacementFor = newName; reqChanged = true; }
+    var touched = false;
+    if (req.candidateName === oldName) { req.candidateName = newName; touched = true; }
+    if (req.replacementFor === oldName) { req.replacementFor = newName; touched = true; }
+    if (touched) changedReqs.push(req);
   });
-  if (reqChanged) saveMgmtList('requisitions', reqs);
+  if (changedReqs.length) {
+    saveMgmtList('requisitions', reqs);
+    // Per-record writes for each touched requisition — concurrent sessions editing different reqs
+    // don't get clobbered.
+    if (typeof saveRequisitionRecord === 'function') changedReqs.forEach(saveRequisitionRecord);
+  }
   if (count > 0) console.log('✅ Renamed "' + oldName + '" → "' + newName + '" in ' + count + ' local task records');
 }
 
@@ -10872,6 +11118,7 @@ function addRequisition() {
 
   var data = getMgmtData();
   var reqs = data.requisitions || [];
+  var newReqs = [];
   for (var i = 0; i < count; i++) {
     var newReq = {
       id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4) + '_' + i,
@@ -10891,8 +11138,12 @@ function addRequisition() {
       notes: notes
     };
     reqs.push(newReq);
+    newReqs.push(newReq);
   }
   saveMgmtList('requisitions', reqs);
+  // Per-record writes for each new requisition — guarantees they land even if another session's
+  // saveMgmtList runs concurrently.
+  if (typeof saveRequisitionRecord === 'function') newReqs.forEach(saveRequisitionRecord);
   var msg = count > 1 ? 'تم إضافة ' + count + ' طلبات توظيف: ' + pos + ' - ' + plat : 'تم إضافة طلب التوظيف: ' + pos + ' - ' + plat;
   showMgmtToast(msg, 'success');
 
@@ -11025,6 +11276,7 @@ function confirmAdvanceStage(reqId) {
   req.currentStage = nextStage.key;
   req.stageHistory.push({ stage: nextStage.key, date: new Date().toISOString(), notes: noteText });
   saveMgmtList('requisitions', reqs);
+  if (typeof saveRequisitionRecord === 'function') saveRequisitionRecord(req);
   var overlay = document.getElementById('reqAdvanceOverlay');
   if (overlay) overlay.remove();
   showMgmtToast('تم الانتقال إلى: ' + nextStage.label, 'success');
@@ -11053,6 +11305,7 @@ function revertRequisitionStage(reqId) {
   req.currentStage = prevStage.key;
   req.stageHistory.push({ stage: prevStage.key, date: new Date().toISOString(), notes: 'تراجع من ' + REQ_STAGES[idx].label });
   saveMgmtList('requisitions', reqs);
+  if (typeof saveRequisitionRecord === 'function') saveRequisitionRecord(req);
   showMgmtToast('تم التراجع إلى: ' + prevStage.label, 'success');
   renderRequisitions();
 }
@@ -11081,8 +11334,11 @@ function onboardRequisition(req) {
     contractType: req.contractType || 'inhouse',
     jobTitle: req.position || ''
   };
+  if (typeof ensureEmployeeId === 'function') ensureEmployeeId(newEmp);
   employees.push(newEmp);
   saveMgmtList('employees', employees);
+  // Per-employee write to Firebase — independent of any concurrent session's saveMgmtList call.
+  if (typeof saveEmployeeRecord === 'function') saveEmployeeRecord(newEmp.name, newEmp);
   showMgmtToast('🎉 تم إضافة ' + req.candidateName + ' إلى قائمة الموظفين تلقائياً', 'success');
 }
 
@@ -11171,6 +11427,7 @@ function saveRequisitionEdit(reqId) {
   if (platEl) req.platformName = platEl.value || req.platformName;
   req.notes = (document.getElementById('reqEdit_notes').value || '').trim();
   saveMgmtList('requisitions', reqs);
+  if (typeof saveRequisitionRecord === 'function') saveRequisitionRecord(req);
   showMgmtToast('تم تحديث طلب التوظيف', 'success');
   renderRequisitions();
 }
@@ -11184,6 +11441,8 @@ function deleteRequisition(reqId) {
   if (idx === -1) return;
   reqs.splice(idx, 1);
   saveMgmtList('requisitions', reqs);
+  // Per-record remove — saveMgmtList for keyed collections is add/update-only.
+  if (typeof deleteRequisitionRecord === 'function') deleteRequisitionRecord(reqId);
   showMgmtToast('تم حذف الطلب', 'success');
   renderRequisitions();
 }
@@ -11709,6 +11968,9 @@ function saveDemand(existingId) {
   }
 
   saveMgmtList('demands', demands);
+  // Per-record write — targets management/demands/<id> so concurrent sessions editing a
+  // different demand don't get overwritten by our save.
+  if (typeof saveDemandRecord === 'function') saveDemandRecord(payload);
   closeDemandModal();
   renderDemands();
   showMgmtToast(existingId ? 'تم حفظ التغييرات' : 'تمت الإضافة', 'success');
@@ -11719,6 +11981,9 @@ function deleteDemand(id) {
   var data = getMgmtData();
   var demands = (data.demands || []).filter(function(x) { return x.id !== id; });
   saveMgmtList('demands', demands);
+  // Per-record remove — saveMgmtList alone only does .update() merge for keyed collections, so it
+  // can't remove a record from Firebase. Explicit delete of the single node is required.
+  if (typeof deleteDemandRecord === 'function') deleteDemandRecord(id);
   renderDemands();
   showMgmtToast('تم الحذف', 'success');
 }
