@@ -2340,10 +2340,27 @@ function setDefaultFilters() {
     quarterFilter.value = currentQuarter;
   }
 
-  // Define month names for use by sub-page filters (dashboard month filter stays on "all"
-  // so approvedData contains all months — each sub-page filters locally)
+  // Default the dashboard month filter to the current month too (was previously left on "all").
   var MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   var currentMonthName = MONTH_NAMES[currentMonth];
+  var monthFilter = document.getElementById('monthFilter');
+  if (monthFilter) {
+    for (var mi = 0; mi < monthFilter.options.length; mi++) {
+      if (monthFilter.options[mi].value === currentMonthName) { monthFilter.value = currentMonthName; break; }
+    }
+  }
+
+  // Seed the shared-filter state with today's period the first time the user logs in, so every
+  // linked page (Employees / Platforms / Tasks / Resource Planner / Depts) defaults to the
+  // current month/quarter/year rather than "all".
+  try {
+    var shared = JSON.parse(localStorage.getItem(STORAGE_PREFIX + 'sharedFilters') || '{}') || {};
+    var seedChanged = false;
+    if (!shared.year)    { shared.year = currentYear; seedChanged = true; }
+    if (!shared.quarter) { shared.quarter = currentQuarter; seedChanged = true; }
+    if (!shared.month)   { shared.month = currentMonthName; seedChanged = true; }
+    if (seedChanged) localStorage.setItem(STORAGE_PREFIX + 'sharedFilters', JSON.stringify(shared));
+  } catch(e) {}
 
   // Also set department page filters
   var deptYearFilter = document.getElementById('deptYearFilter');
@@ -3402,11 +3419,22 @@ function calcAvgOccPerMonth(data) {
   return vals.length > 0 ? vals.reduce(function(s,v){return s+v;},0) / vals.length : 0;
 }
 
+// An employee is "inactive" only if their endDate is a non-empty string. Any falsy value
+// (empty string, undefined, null) or non-string means they're active. Centralized here so
+// every caller gets the same answer — previously subtle differences in how records flowed
+// through the migration vs the real-time listener caused the الموظفون count to flicker
+// between including and excluding inactives across reloads.
+function isEmployeeInactive(emp) {
+  if (!emp || typeof emp !== 'object') return false;
+  if (typeof emp.endDate !== 'string') return false;
+  return emp.endDate.trim().length > 0;
+}
+
 function updateKPIs() {
   const d = approvedData;
   // Use management employee list as source of truth for employee count
   var mgmtEmps = getMgmtData().employees || [];
-  var activeEmps = mgmtEmps.filter(function(e) { return typeof e === 'object' ? !e.endDate : true; });
+  var activeEmps = mgmtEmps.filter(function(e) { return !isEmployeeInactive(e); });
   const employees = activeEmps;
   const platforms = [...new Set(d.map(r => r.platform))];
   const departments = [...new Set(d.map(r => r.department))];
