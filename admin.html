@@ -10623,47 +10623,76 @@ function exportEmployeesExcel() {
   var data = getMgmtData();
   var employees = data.employees || [];
   if (!employees.length) { showMgmtToast('لا يوجد موظفين للتصدير', 'error'); return; }
-  // Build Excel XML (SpreadsheetML format)
-  var xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  xml += '<?mso-application progid="Excel.Sheet"?>\n';
-  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
-  xml += '<Styles><Style ss:ID="header"><Font ss:Bold="1" ss:Size="12"/><Interior ss:Color="#1B8354" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1"/></Style>';
-  xml += '<Style ss:ID="rtl"><Alignment ss:ReadingOrder="RightToLeft"/></Style></Styles>\n';
-  xml += '<Worksheet ss:Name="الموظفين"><Table>\n';
-  // Headers
-  var headers = ['#', 'الاسم', 'الإدارة', 'القسم', 'نوع التعاقد', 'تاريخ البدء', 'تاريخ الانتهاء', 'الحالة', 'عدد الغيابات'];
-  xml += '<Row>';
-  headers.forEach(function(h) { xml += '<Cell ss:StyleID="header"><Data ss:Type="String">' + escapeHtml(h) + '</Data></Cell>'; });
-  xml += '</Row>\n';
-  // Data rows
+  if (typeof XLSX === 'undefined') {
+    showMgmtToast('مكتبة Excel غير محمّلة — أعد تحميل الصفحة', 'error');
+    return;
+  }
+  // Build a real .xlsx file via SheetJS. The previous SpreadsheetML-in-.xls approach made modern
+  // Excel flag the file as corrupted (also had a malformed double <Font> element). aoa_to_sheet
+  // takes a 2D array and writeFile produces a valid OOXML workbook that opens cleanly.
+  var headers = ['#', 'المعرّف', 'الاسم', 'المسمى الوظيفي', 'الإدارة', 'القسم', 'نوع التعاقد', 'تاريخ البدء', 'تاريخ الانتهاء', 'الحالة', 'عدد الغيابات', 'الغيابات', 'عدد المهام'];
+  var rows = [headers];
+  // Build a quick name → task-count lookup from allData so the export carries the same signal as
+  // the new "بدون مهام" filter on the page.
+  var taskCountByName = {};
+  if (Array.isArray(allData)) {
+    allData.forEach(function(t) { if (t && t.name) taskCountByName[t.name] = (taskCountByName[t.name] || 0) + 1; });
+  }
   employees.forEach(function(emp, i) {
-    var name = typeof emp === 'string' ? emp : emp.name;
+    var name = typeof emp === 'string' ? emp : (emp.name || '');
+    var id = typeof emp === 'object' ? (emp.id || '') : '';
+    var jobTitle = typeof emp === 'object' ? (emp.jobTitle || '') : '';
     var dept = typeof emp === 'object' ? (emp.department || '') : '';
     var sec = typeof emp === 'object' ? (emp.section || '') : '';
     var ct = typeof emp === 'object' ? (emp.contractType || 'inhouse') : 'inhouse';
     var start = typeof emp === 'object' ? (emp.startDate || '') : '';
     var end = typeof emp === 'object' ? (emp.endDate || '') : '';
     var status = end ? 'غير نشط' : 'نشط';
-    var absCount = typeof emp === 'object' && Array.isArray(emp.absences) ? emp.absences.length : 0;
+    var absences = typeof emp === 'object' && Array.isArray(emp.absences) ? emp.absences : [];
+    var absCount = absences.length;
+    var absSummary = absences.map(function(a) {
+      var span = (a.from || '') + ' → ' + (a.to || '');
+      return a.reason ? span + ' (' + a.reason + ')' : span;
+    }).join(' / ');
     var ctLabel = ct === 'offshore' ? 'Offshore' : 'Inhouse';
-    xml += '<Row ss:StyleID="rtl">';
-    xml += '<Cell><Data ss:Type="Number">' + (i+1) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="String">' + escapeHtml(name) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="String">' + escapeHtml(dept) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="String">' + escapeHtml(sec) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="String">' + escapeHtml(ctLabel) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="String">' + escapeHtml(start) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="String">' + escapeHtml(end) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="String">' + escapeHtml(status) + '</Data></Cell>';
-    xml += '<Cell><Data ss:Type="Number">' + absCount + '</Data></Cell>';
-    xml += '</Row>\n';
+    rows.push([
+      i + 1,
+      id,
+      name,
+      jobTitle,
+      dept,
+      sec,
+      ctLabel,
+      start,
+      end,
+      status,
+      absCount,
+      absSummary,
+      taskCountByName[name] || 0
+    ]);
   });
-  xml += '</Table></Worksheet></Workbook>';
-  var blob = new Blob(['\uFEFF' + xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'employees_' + new Date().toISOString().slice(0,10) + '.xls';
-  a.click();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  // Sensible column widths so dates/text aren't clipped on first open.
+  ws['!cols'] = [
+    { wch: 5 },   // #
+    { wch: 28 },  // id
+    { wch: 28 },  // name
+    { wch: 22 },  // job title
+    { wch: 22 },  // dept
+    { wch: 22 },  // section
+    { wch: 12 },  // contract
+    { wch: 14 },  // start
+    { wch: 14 },  // end
+    { wch: 10 },  // status
+    { wch: 8 },   // abs count
+    { wch: 40 },  // abs summary
+    { wch: 12 }   // task count
+  ];
+  // Right-to-left view to match the rest of the app.
+  ws['!views'] = [{ RTL: true }];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'الموظفين');
+  XLSX.writeFile(wb, 'employees_' + new Date().toISOString().slice(0, 10) + '.xlsx');
   showMgmtToast('تم تصدير ' + employees.length + ' موظف إلى Excel', 'success');
 }
 
