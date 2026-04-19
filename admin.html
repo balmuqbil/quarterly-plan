@@ -5605,6 +5605,13 @@ function renderResourcePlanner() {
       if (ia === -1) ia = RP_CARD_TASK_PRIORITY.length;
       if (ib === -1) ib = RP_CARD_TASK_PRIORITY.length;
       if (ia !== ib) return ia - ib;
+      // Same priority bucket: keep cards with the same taskType together. Without this,
+      // unlisted types (إدارة عمليات DevOps, دعم L3, تطوير موبايل, …) all share priority
+      // `length`, then sort by name, which interleaved them and made the grouper emit each
+      // taskType label more than once (looking like "not grouped").
+      var ta = a.taskType || 'أخرى';
+      var tb = b.taskType || 'أخرى';
+      if (ta !== tb) return ta.localeCompare(tb, 'ar');
       return (a.name || '').localeCompare(b.name || '', 'ar');
     });
     var html = '<div class="rp-cards-flow">';
