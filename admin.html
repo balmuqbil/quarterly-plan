@@ -1746,6 +1746,8 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
         <div class="subtitle" data-i18n="page.dataMgmt.subtitle">إضافة، تعديل، وحذف البيانات المرجعية — تُطبق على نموذج الموظف</div>
       </div>
       <div class="top-actions">
+        <button class="export-btn" onclick="downloadFullBackup()" title="تحميل نسخة كاملة (البيانات الأساسية + المهام) كملف JSON — استخدمها قبل أي تغييرات كبيرة" style="background:#10b981;color:#fff;border:none;">💾 نسخة احتياطية كاملة</button>
+        <label class="export-btn" style="cursor:pointer;background:#dc2626;color:#fff;border:none;" title="استعادة البيانات من ملف نسخة احتياطية JSON — يستبدل جميع البيانات الحالية">🔄 استعادة<input type="file" accept=".json" style="display:none" onchange="restoreFullBackup(event)"></label>
         <button class="export-btn" onclick="showGhostEmployees()" title="البحث عن أسماء في المهام غير موجودة في قائمة الموظفين">👻 أسماء شبحية</button>
         <button class="export-btn" onclick="runManualReconcile()" title="إضافة أي موظف/منصة موجود في المهام لكن غير موجود في القوائم الرئيسية">🔄 استيراد من المهام</button>
         <button class="export-btn" onclick="forceSyncMgmtToCloud()" title="رفع جميع البيانات إلى Firebase">☁️ مزامنة</button>
@@ -2211,7 +2213,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 5;
+var APP_BUILD_VERSION = 6;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -11083,6 +11085,222 @@ function exportMgmtData() {
   a.download = 'qplan_settings_' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
   showMgmtToast('تم تصدير الإعدادات', 'success');
+}
+
+// ==================== FULL BACKUP / RESTORE ====================
+// Full backup = everything at `management/*` + everything at `tasks/*` from Firebase.
+// This is the single piece of safety net that lets us recover from any data-loss incident.
+// Save the downloaded JSON somewhere safe (OneDrive, GDrive, a USB stick — not just Downloads).
+
+function countOfNode(v) {
+  if (!v) return 0;
+  if (Array.isArray(v)) return v.length;
+  if (typeof v === 'object') return Object.keys(v).length;
+  return 0;
+}
+
+function downloadFullBackup() {
+  if (!firebaseReady || !firebaseDb) {
+    showMgmtToast('Firebase غير متصل — تأكد من تسجيل الدخول وإعادة المحاولة', 'error');
+    return;
+  }
+  showMgmtToast('⏳ جاري تجهيز النسخة الاحتياطية…', 'success');
+  Promise.all([
+    firebaseDb.ref('management').once('value'),
+    firebaseDb.ref('tasks').once('value')
+  ]).then(function(snaps) {
+    var mgmt = snaps[0].val() || {};
+    var tasks = snaps[1].val() || {};
+    var backup = {
+      format: 'qplan-full-backup',
+      version: 1,
+      buildVersion: typeof APP_BUILD_VERSION !== 'undefined' ? APP_BUILD_VERSION : null,
+      timestamp: new Date().toISOString(),
+      counts: {
+        employees: countOfNode(mgmt.employees),
+        demands: countOfNode(mgmt.demands),
+        requisitions: countOfNode(mgmt.requisitions),
+        platforms: countOfNode(mgmt.platforms),
+        tasks: countOfNode(tasks)
+      },
+      management: mgmt,
+      tasks: tasks
+    };
+    var json = JSON.stringify(backup, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'qplan_backup_' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    var c = backup.counts;
+    showMgmtToast('✅ تم تحميل النسخة: ' + c.employees + ' موظف · ' + c.demands + ' متطلب · ' + c.tasks + ' مهمة', 'success');
+    console.log('💾 Backup complete:', backup.counts, '(' + Math.round(json.length / 1024) + 'KB)');
+  }).catch(function(err) {
+    console.error('Backup failed:', err);
+    showMgmtToast('فشل تحميل النسخة: ' + err.message, 'error');
+  });
+}
+
+function restoreFullBackup(event) {
+  var file = event.target.files[0];
+  event.target.value = ''; // reset so user can re-select same file if they cancel
+  if (!file) return;
+  if (!firebaseReady || !firebaseDb) {
+    showMgmtToast('Firebase غير متصل — تسجيل الدخول أولاً', 'error');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var backup;
+    try { backup = JSON.parse(e.target.result); }
+    catch (err) { showMgmtToast('❌ ملف JSON غير صالح', 'error'); return; }
+
+    if (!backup || typeof backup !== 'object' || !backup.management) {
+      showMgmtToast('❌ الملف ليس نسخة احتياطية صالحة — يجب أن يحتوي على management', 'error');
+      return;
+    }
+    if (backup.format && backup.format !== 'qplan-full-backup') {
+      if (!confirm('⚠️ صيغة الملف غير معروفة (' + backup.format + '). المتابعة على مسؤوليتك؟')) return;
+    }
+
+    // Compare with current Firebase state before confirming
+    Promise.all([
+      firebaseDb.ref('management').once('value'),
+      firebaseDb.ref('tasks').once('value')
+    ]).then(function(snaps) {
+      var curMgmt = snaps[0].val() || {};
+      var curTasks = snaps[1].val() || {};
+      showRestoreConfirmDialog(backup, curMgmt, curTasks, file.name);
+    }).catch(function(err) {
+      showMgmtToast('فشل قراءة الحالة الحالية: ' + err.message, 'error');
+    });
+  };
+  reader.onerror = function() { showMgmtToast('فشل قراءة الملف', 'error'); };
+  reader.readAsText(file);
+}
+
+function showRestoreConfirmDialog(backup, curMgmt, curTasks, fileName) {
+  var existing = document.getElementById('restoreConfirmOverlay');
+  if (existing) existing.remove();
+
+  // Build a side-by-side comparison of key collection sizes
+  var keys = ['employees', 'demands', 'requisitions', 'platforms', 'projects', 'departments', 'sections', 'taskTypes', 'jobTitles'];
+  var rows = keys.map(function(k) {
+    return { key: k, backup: countOfNode(backup.management ? backup.management[k] : null), current: countOfNode(curMgmt[k]) };
+  });
+  var backupTasks = countOfNode(backup.tasks);
+  var currentTasks = countOfNode(curTasks);
+
+  var html = '<div id="restoreConfirmOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:620px;width:100%;max-height:88vh;overflow-y:auto;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;">';
+  html += '<h2 style="margin:0;font-size:17px;color:#dc2626;">⚠️ استعادة نسخة احتياطية</h2>';
+  html += '<button onclick="document.getElementById(\'restoreConfirmOverlay\').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-light);">×</button>';
+  html += '</div>';
+
+  html += '<p style="font-size:13px;color:var(--text-light);margin:0 0 14px;line-height:1.7;">' +
+          'ستقوم هذه العملية باستبدال جميع البيانات الحالية في Firebase بمحتوى الملف.<br>' +
+          '<strong style="color:#dc2626;">لا يمكن التراجع عن هذه العملية.</strong> تأكد من أن لديك نسخة احتياطية من الحالة الحالية أيضاً قبل المتابعة.' +
+          '</p>';
+
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;">';
+  html += '<div style="margin-bottom:8px;"><strong>📁 الملف:</strong> ' + escapeHtml(fileName || '—') + '</div>';
+  if (backup.timestamp) html += '<div style="margin-bottom:8px;"><strong>📅 تاريخ النسخة:</strong> ' + escapeHtml(new Date(backup.timestamp).toLocaleString('ar-SA')) + '</div>';
+  if (backup.buildVersion) html += '<div style="margin-bottom:8px;"><strong>🏷️ إصدار التطبيق:</strong> v' + escapeHtml(String(backup.buildVersion)) + '</div>';
+  html += '</div>';
+
+  html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:var(--bg);">' +
+          '<th style="padding:8px 10px;text-align:right;font-weight:700;">العنصر</th>' +
+          '<th style="padding:8px 10px;text-align:center;font-weight:700;">الحالي في Firebase</th>' +
+          '<th style="padding:8px 10px;text-align:center;font-weight:700;">في النسخة الاحتياطية</th>' +
+          '<th style="padding:8px 10px;text-align:center;font-weight:700;">الفرق</th>' +
+          '</tr></thead><tbody>';
+  rows.forEach(function(r) {
+    var diff = r.backup - r.current;
+    var diffStr = diff === 0 ? '—' : (diff > 0 ? '+' + diff : String(diff));
+    var diffColor = diff === 0 ? 'var(--text-light)' : (diff < 0 ? '#dc2626' : '#059669');
+    html += '<tr style="border-top:1px solid var(--border);">' +
+            '<td style="padding:7px 10px;">' + escapeHtml(r.key) + '</td>' +
+            '<td style="padding:7px 10px;text-align:center;">' + r.current + '</td>' +
+            '<td style="padding:7px 10px;text-align:center;font-weight:700;">' + r.backup + '</td>' +
+            '<td style="padding:7px 10px;text-align:center;color:' + diffColor + ';font-weight:700;">' + diffStr + '</td>' +
+            '</tr>';
+  });
+  var taskDiff = backupTasks - currentTasks;
+  var taskDiffStr = taskDiff === 0 ? '—' : (taskDiff > 0 ? '+' + taskDiff : String(taskDiff));
+  var taskDiffColor = taskDiff === 0 ? 'var(--text-light)' : (taskDiff < 0 ? '#dc2626' : '#059669');
+  html += '<tr style="border-top:2px solid var(--border);background:var(--bg);">' +
+          '<td style="padding:8px 10px;font-weight:700;">🗂️ المهام (tasks)</td>' +
+          '<td style="padding:8px 10px;text-align:center;">' + currentTasks + '</td>' +
+          '<td style="padding:8px 10px;text-align:center;font-weight:700;">' + backupTasks + '</td>' +
+          '<td style="padding:8px 10px;text-align:center;color:' + taskDiffColor + ';font-weight:700;">' + taskDiffStr + '</td>' +
+          '</tr>';
+  html += '</tbody></table></div>';
+
+  // Checkbox to confirm they understand this is destructive
+  html += '<label style="display:flex;gap:8px;align-items:flex-start;padding:10px;background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.25);border-radius:10px;cursor:pointer;font-size:12px;margin-bottom:14px;">';
+  html += '<input type="checkbox" id="restoreConfirmChk" style="margin-top:2px;">';
+  html += '<span>أفهم أن جميع البيانات الحالية ستُستبدل بمحتوى الملف، وأن هذه العملية لا رجعة فيها. لديّ نسخة احتياطية من الحالة الحالية.</span>';
+  html += '</label>';
+
+  html += '<div style="display:flex;gap:10px;justify-content:flex-end;padding-top:12px;border-top:1px solid var(--border);">';
+  html += '<button onclick="document.getElementById(\'restoreConfirmOverlay\').remove()" style="padding:9px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;">إلغاء</button>';
+  html += '<button id="restoreConfirmBtn" onclick="executeFullRestore()" disabled style="padding:9px 18px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-family:inherit;font-size:13px;opacity:0.5;">🔄 استبدال البيانات</button>';
+  html += '</div></div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  var chk = document.getElementById('restoreConfirmChk');
+  var btn = document.getElementById('restoreConfirmBtn');
+  chk.addEventListener('change', function() {
+    btn.disabled = !chk.checked;
+    btn.style.opacity = chk.checked ? '1' : '0.5';
+  });
+  window._pendingRestoreBackup = backup;
+}
+
+function executeFullRestore() {
+  var backup = window._pendingRestoreBackup;
+  if (!backup) return;
+  var btn = document.getElementById('restoreConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الاستعادة…'; }
+
+  // Defensive auto-backup of CURRENT state first, stored in localStorage under a timestamped key.
+  // If the user doesn't have their own backup of the pre-restore state, this is the last-ditch
+  // safety net.
+  try {
+    firebaseDb.ref('management').once('value').then(function(mSnap) {
+      firebaseDb.ref('tasks').once('value').then(function(tSnap) {
+        var pre = { timestamp: new Date().toISOString(), management: mSnap.val() || {}, tasks: tSnap.val() || {} };
+        try { localStorage.setItem('qplan_pre_restore_backup_' + Date.now(), JSON.stringify(pre)); } catch (e) {}
+      });
+    });
+  } catch (e) { /* non-fatal */ }
+
+  var mgmt = backup.management || {};
+  var tasks = backup.tasks || null;
+
+  var ops = [];
+  ops.push(firebaseDb.ref('management').set(mgmt));
+  if (tasks) ops.push(firebaseDb.ref('tasks').set(tasks));
+
+  Promise.all(ops).then(function() {
+    window._pendingRestoreBackup = null;
+    var overlay = document.getElementById('restoreConfirmOverlay');
+    if (overlay) overlay.remove();
+    showMgmtToast('✅ تمت الاستعادة — جاري إعادة التحميل…', 'success');
+    // Clear local sync flags so next load re-reconciles cleanly
+    try {
+      localStorage.removeItem(MGMT_STORAGE_PREFIX + 'firebase_synced');
+    } catch (e) {}
+    setTimeout(function() { location.reload(); }, 1200);
+  }).catch(function(err) {
+    console.error('Restore failed:', err);
+    showMgmtToast('❌ فشلت الاستعادة: ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 استبدال البيانات'; }
+  });
 }
 
 function importMgmtData(event) {
