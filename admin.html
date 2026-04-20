@@ -2203,6 +2203,58 @@ var firebaseApp = null;
 var firebaseDb = null;
 var firebaseReady = false;
 
+// ---------- Build version guard ----------
+// BUMP THIS NUMBER on every deploy that changes data-write behavior. New-code sessions publish
+// their version to Firebase; other new-code sessions listening to that node show a reload banner
+// when a higher version arrives. This is the only reliable way to evict stale cached JS that
+// would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
+// Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
+// once to enter the new world. After that, future version bumps prompt reloads automatically.
+var APP_BUILD_VERSION = 1;
+var buildVersionWatchStarted = false;
+
+function initBuildVersionWatch() {
+  if (buildVersionWatchStarted) return;
+  if (!firebaseReady || !firebaseDb) return;
+  buildVersionWatchStarted = true;
+  var ref = firebaseDb.ref('app/build_version');
+  // Publish our version if Firebase has nothing stored or a lower value. Uses .transaction to
+  // avoid racing two sessions trying to publish the same bump at the same time.
+  ref.transaction(function(current) {
+    if (typeof current !== 'number' || current < APP_BUILD_VERSION) return APP_BUILD_VERSION;
+    return undefined; // don't commit — current value is already >= ours
+  }, function(err, committed) {
+    if (err) console.warn('Build version publish failed:', err);
+    else if (committed) console.log('📢 Published build version: ' + APP_BUILD_VERSION);
+  }, false);
+  // Listen for future bumps. When we see one > our running version, show the reload banner.
+  ref.on('value', function(snap) {
+    var latest = snap.val();
+    if (typeof latest === 'number' && latest > APP_BUILD_VERSION) {
+      showUpdateBanner(latest);
+    }
+  });
+}
+
+function showUpdateBanner(latestVersion) {
+  if (document.getElementById('appUpdateBanner')) return; // already visible
+  var isRtl = document.documentElement.dir !== 'ltr';
+  var banner = document.createElement('div');
+  banner.id = 'appUpdateBanner';
+  banner.setAttribute('dir', isRtl ? 'rtl' : 'ltr');
+  banner.style.cssText = 'position:fixed;bottom:20px;left:20px;right:20px;max-width:560px;margin:0 auto;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:14px 20px;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,0.35);z-index:10000;display:flex;align-items:center;gap:12px;font-family:inherit;';
+  banner.innerHTML =
+    '<span style="font-size:22px;">⚠️</span>' +
+    '<div style="flex:1;font-size:13px;line-height:1.5;">' +
+      '<div style="font-weight:700;margin-bottom:2px;">تم إصدار نسخة محدّثة من التطبيق (v' + latestVersion + ')</div>' +
+      '<div style="font-size:11px;opacity:0.95;">هذه الجلسة تعمل على نسخة قديمة (v' + APP_BUILD_VERSION + '). أعد التحميل لتفادي فقدان البيانات.</div>' +
+    '</div>' +
+    '<button onclick="try{location.reload(true);}catch(e){location.reload();}" style="background:#fff;color:#d97706;border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;white-space:nowrap;">🔄 إعادة التحميل</button>' +
+    '<button onclick="document.getElementById(\'appUpdateBanner\').remove();" style="background:none;border:none;color:#fff;cursor:pointer;font-size:22px;line-height:1;padding:0 4px;opacity:0.8;" title="إغلاق">×</button>';
+  document.body.appendChild(banner);
+  console.warn('⚠️ App update detected: running v' + APP_BUILD_VERSION + ', latest v' + latestVersion);
+}
+
 function initFirebase() {
   if (!FIREBASE_CONFIG.databaseURL) {
     console.warn('⚠️ Firebase not configured — go to Settings to enter Firebase config');
@@ -2214,11 +2266,13 @@ function initFirebase() {
     }
     firebaseDb = firebase.database();
     firebaseReady = true;
-    console.log('🔥 Firebase initialized:', FIREBASE_CONFIG.projectId);
+    console.log('🔥 Firebase initialized:', FIREBASE_CONFIG.projectId, '(app v' + APP_BUILD_VERSION + ')');
     // Flush any writes that were queued while Firebase was unavailable
     if (typeof mgmtFlushPendingWrites === 'function') {
       setTimeout(mgmtFlushPendingWrites, 500);
     }
+    // Start the build-version heartbeat so stale cached sessions get prompted to reload.
+    initBuildVersionWatch();
     return true;
   } catch (err) {
     console.error('❌ Firebase init failed:', err);
