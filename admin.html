@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لوحة تحكم خطة العمل الربعية</title>
+<title>تخطيط ومتابعة تطوير الحلول</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <!-- Theme: set data-theme before paint to avoid flash (default = edugate) -->
 <script>
@@ -1044,8 +1044,8 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
     <div class="logo">📊</div>
-    <h1 data-i18n="login.title">لوحة تحكم خطة العمل</h1>
-    <p data-i18n="login.subtitle">الربعية — تسجيل دخول المسؤول</p>
+    <h1 data-i18n="login.title">تخطيط ومتابعة تطوير الحلول</h1>
+    <p data-i18n="login.subtitle">تسجيل دخول المسؤول</p>
     <form id="loginForm" onsubmit="event.preventDefault();attemptLogin();" autocomplete="on">
     <div class="login-field">
       <label data-i18n="login.username">اسم المستخدم</label>
@@ -1071,7 +1071,7 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
 <div class="sidebar">
   <div class="sidebar-header">
     <div class="logo">📊</div>
-    <h2 data-i18n="sidebar.app">خطة العمل الربعية</h2>
+    <h2 data-i18n="sidebar.app">تخطيط ومتابعة تطوير الحلول</h2>
     <span data-i18n="sidebar.admin">لوحة تحكم المسؤول</span>
   </div>
   <div class="sidebar-nav">
@@ -1947,14 +1947,14 @@ var CURRENT_LANG = localStorage.getItem(LANG_KEY) || 'ar';
 var I18N = {
   ar: {
     // Login
-    'login.title': 'لوحة تحكم خطة العمل',
-    'login.subtitle': 'الربعية — تسجيل دخول المسؤول',
+    'login.title': 'تخطيط ومتابعة تطوير الحلول',
+    'login.subtitle': 'تسجيل دخول المسؤول',
     'login.username': 'اسم المستخدم',
     'login.password': 'كلمة المرور',
     'login.submit': 'تسجيل الدخول',
     'loading': 'جاري تحميل البيانات...',
     // Sidebar
-    'sidebar.app': 'خطة العمل الربعية',
+    'sidebar.app': 'تخطيط ومتابعة تطوير الحلول',
     'sidebar.admin': 'لوحة تحكم المسؤول',
     'sidebar.userName': 'المسؤول',
     'sidebar.role.admin': 'مدير النظام',
@@ -2010,13 +2010,13 @@ var I18N = {
     'btn.back': '→ العودة للوحة الرئيسية'
   },
   en: {
-    'login.title': 'Quarterly Plan Admin',
-    'login.subtitle': 'Quarterly — Admin Login',
+    'login.title': 'Solution Development Planning & Tracking',
+    'login.subtitle': 'Admin Login',
     'login.username': 'Username',
     'login.password': 'Password',
     'login.submit': 'Sign in',
     'loading': 'Loading data...',
-    'sidebar.app': 'Quarterly Plan',
+    'sidebar.app': 'Solution Development Planning',
     'sidebar.admin': 'Admin Dashboard',
     'sidebar.userName': 'Admin',
     'sidebar.role.admin': 'System Admin',
@@ -2210,7 +2210,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 2;
+var APP_BUILD_VERSION = 3;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
