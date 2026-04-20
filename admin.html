@@ -2210,7 +2210,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 1;
+var APP_BUILD_VERSION = 2;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
