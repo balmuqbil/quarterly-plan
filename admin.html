@@ -1698,6 +1698,7 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
           <button class="rp-expand-all" id="rpSortDirBtn" onclick="rpToggleSortDir()" title="تصاعدي">⬆</button>
           <button class="rp-expand-all" onclick="rpExpandAll()" title="توسيع الكل">▼ توسيع</button>
           <button class="rp-expand-all" onclick="rpCollapseAll()" title="طي الكل">▲ طي</button>
+          <button class="rp-expand-all" onclick="rpRunInvalidAssignmentsCleanup()" title="فحص المخصصات ضد الإجازات وحالة الموظفين" style="border-color:#f59e0b;color:#b45309;">🧹 تنظيف المخصصات</button>
         </div>
         <div id="rpPlatforms"></div>
       </div>
@@ -2210,7 +2211,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 4;
+var APP_BUILD_VERSION = 5;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -6132,6 +6133,175 @@ function rpReleasePlatform(platform) {
   showMgmtToast('تم إزالة ' + toRemove.length + ' موظف من ' + platform + ' لشهر ' + month, 'success');
 }
 
+// ---------- Resource Planner: inactive / time-off gating ----------
+// Every entry point that assigns or copies a resource now runs rpCheckEmployeeForMonth against
+// the TARGET month/year. If the employee hasn't started, has ended, or has an absence covering
+// that month, the assignment is blocked.
+// rpRunInvalidAssignmentsCleanup() scans existing allData for tasks that violate this rule
+// (could have been created before this gate existed, or the employee's end/absence was set later)
+// and offers a confirm dialog listing impacted platforms & resources before bulk-removal.
+
+function rpCheckEmployeeForMonth(empName, monthName, year) {
+  if (!empName) return { ok: true };
+  var mgmt = getMgmtData();
+  var emp = (mgmt.employees || []).find(function(e) {
+    return (typeof e === 'string' ? e : e.name) === empName;
+  });
+  if (!emp || typeof emp === 'string') return { ok: true }; // unknown employee — don't block
+  // Employment period first (unstarted / already-left wins over absence)
+  if (emp.startDate) {
+    var sIdx = monthToIndex(emp.startDate);
+    var tIdx = monthToIndex(monthName + ' ' + year);
+    if (sIdx > tIdx) {
+      return { ok: false, reason: 'not-started', label: 'لم يباشر بعد', detail: 'يبدأ في ' + emp.startDate };
+    }
+  }
+  if (emp.endDate) {
+    var eIdx = monthToIndex(emp.endDate);
+    var tIdx2 = monthToIndex(monthName + ' ' + year);
+    if (eIdx < tIdx2) {
+      return { ok: false, reason: 'inactive', label: 'غير نشط', detail: 'انتهت خدمته في ' + emp.endDate };
+    }
+  }
+  // Then absences for the specific month
+  if (Array.isArray(emp.absences)) {
+    var targetIdx = monthToIndex(monthName + ' ' + year);
+    for (var i = 0; i < emp.absences.length; i++) {
+      var a = emp.absences[i] || {};
+      var f = monthToIndex(a.from), t = monthToIndex(a.to);
+      if (targetIdx >= f && targetIdx <= t) {
+        return { ok: false, reason: 'absence', label: 'إجازة', detail: (a.from || '') + ' → ' + (a.to || '') + (a.reason ? ' (' + a.reason + ')' : '') };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+// Scan every approved task in allData and return any that target a month/year where the employee
+// is inactive or on leave. Ignores time-off placeholder tasks (they're the source of truth for
+// absence, not a violation).
+function rpFindInvalidAssignments() {
+  var invalid = [];
+  if (!Array.isArray(allData)) return invalid;
+  allData.forEach(function(t, idx) {
+    if (!t || !t.name) return;
+    if ((t.status || 'pending') !== 'approved') return;
+    // Skip time-off markers — the absence system creates these intentionally
+    if (t.platform === 'إجازة' || t.taskType === 'إجازة' || t.timeOff) return;
+    var check = rpCheckEmployeeForMonth(t.name, t.month, t.year || '');
+    if (!check.ok) {
+      invalid.push({
+        idx: idx,
+        task: t,
+        reason: check.reason,
+        label: check.label,
+        detail: check.detail || ''
+      });
+    }
+  });
+  return invalid;
+}
+
+function rpRunInvalidAssignmentsCleanup() {
+  if (!userCanEdit()) { showMgmtToast('ليس لديك صلاحية', 'error'); return; }
+  var invalid = rpFindInvalidAssignments();
+  if (invalid.length === 0) {
+    showMgmtToast('✅ لا توجد مخصصات غير صالحة', 'success');
+    return;
+  }
+  rpShowInvalidAssignmentsDialog(invalid);
+}
+
+function rpShowInvalidAssignmentsDialog(invalid) {
+  // Remove any existing overlay first
+  var existing = document.getElementById('rpInvalidOverlay');
+  if (existing) existing.remove();
+
+  // Group by platform → reason → [{name, month, year, occ, detail, idx}]
+  var byPlatform = {};
+  invalid.forEach(function(item) {
+    var p = item.task.platform || '— بدون منصة —';
+    if (!byPlatform[p]) byPlatform[p] = [];
+    byPlatform[p].push(item);
+  });
+
+  // Unique resources impacted
+  var impactedResources = {};
+  invalid.forEach(function(item) { impactedResources[item.task.name] = (impactedResources[item.task.name] || 0) + 1; });
+
+  var html = '<div id="rpInvalidOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:760px;width:100%;max-height:88vh;overflow-y:auto;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;">';
+  html += '<h2 style="margin:0;font-size:17px;color:#b45309;">🧹 مخصصات غير صالحة (' + invalid.length + ')</h2>';
+  html += '<button onclick="document.getElementById(\'rpInvalidOverlay\').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-light);">×</button>';
+  html += '</div>';
+  html += '<p style="font-size:13px;color:var(--text-light);margin:0 0 16px;line-height:1.6;">' +
+          'الموارد التالية مخصصة على أشهر لم يباشروا فيها بعد أو انتهت خدمتهم أو لديهم إجازة مسجلة. ' +
+          'اضغط <strong>تأكيد الحذف</strong> لإزالة كل هذه المهام من الخطة والمزامنة إلى Firebase.' +
+          '</p>';
+
+  html += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;">';
+  html += '<div style="font-weight:700;margin-bottom:4px;">📊 ملخص التأثير</div>';
+  html += '<div><strong>' + Object.keys(byPlatform).length + '</strong> منصة متأثرة — <strong>' + Object.keys(impactedResources).length + '</strong> مورد — <strong>' + invalid.length + '</strong> مهمة</div>';
+  html += '</div>';
+
+  Object.keys(byPlatform).sort().forEach(function(p) {
+    var items = byPlatform[p];
+    html += '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">';
+    html += '<div style="background:var(--bg);padding:8px 12px;font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center;">';
+    html += '<span>💻 ' + escapeHtml(p) + '</span>';
+    html += '<span style="font-size:11px;color:var(--text-light);">' + items.length + ' مهمة</span>';
+    html += '</div>';
+    html += '<div style="padding:8px 12px;">';
+    items.forEach(function(it) {
+      var t = it.task;
+      var badgeColor = it.reason === 'absence' ? '#f59e0b' : (it.reason === 'not-started' ? '#6366f1' : '#dc2626');
+      html += '<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--border);font-size:12px;">';
+      html += '<span style="flex:0 0 auto;padding:2px 8px;border-radius:6px;background:' + badgeColor + '20;color:' + badgeColor + ';font-weight:700;font-size:11px;">' + escapeHtml(it.label) + '</span>';
+      html += '<span style="flex:1;"><strong>' + escapeHtml(t.name || '') + '</strong>' +
+              ' — ' + escapeHtml(t.taskType || '') +
+              ' (' + escapeHtml(t.month || '') + ' ' + escapeHtml(t.year || '') + ', ' + (parseFloat(t.occupancy) || 0) + '%)</span>';
+      if (it.detail) html += '<span style="font-size:11px;color:var(--text-light);">' + escapeHtml(it.detail) + '</span>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  html += '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">';
+  html += '<button onclick="document.getElementById(\'rpInvalidOverlay\').remove()" style="padding:9px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;">إلغاء</button>';
+  html += '<button onclick="rpExecuteInvalidRemoval()" style="padding:9px 18px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-family:inherit;font-size:13px;">🗑️ تأكيد الحذف (' + invalid.length + ')</button>';
+  html += '</div></div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  // Stash for the executor to use
+  window._rpInvalidList = invalid;
+}
+
+function rpExecuteInvalidRemoval() {
+  var invalid = window._rpInvalidList || [];
+  if (invalid.length === 0) return;
+  // Snapshot current idx→firebaseKey, then splice in reverse index order so later indices don't shift
+  var firebaseKeys = [];
+  invalid.forEach(function(item) {
+    var t = allData[item.idx];
+    if (t && t._firebaseKey) firebaseKeys.push(t._firebaseKey);
+  });
+  var sorted = invalid.slice().sort(function(a, b) { return b.idx - a.idx; });
+  sorted.forEach(function(item) { allData.splice(item.idx, 1); });
+  // Batch Firebase removal
+  if (firebaseReady && firebaseDb && firebaseKeys.length) {
+    var updates = {};
+    firebaseKeys.forEach(function(k) { updates['tasks/' + k] = null; });
+    firebaseDb.ref().update(updates).catch(function(err) { console.error('Batch invalid-removal failed:', err); });
+  }
+  window._rpInvalidList = null;
+  var overlay = document.getElementById('rpInvalidOverlay');
+  if (overlay) overlay.remove();
+  applyFilters();
+  if (typeof renderResourcePlanner === 'function') renderResourcePlanner();
+  showMgmtToast('🗑️ تم حذف ' + invalid.length + ' مخصصة غير صالحة', 'success');
+}
+
 // Inter-squad card dragging
 var rpCardDragIdx = null;
 function rpCardDragStart(e, idx) {
@@ -6309,6 +6479,14 @@ function confirmRpAssign() {
 
   if (occ < 20) { showMgmtToast('الحد الأدنى للإشغال 20%', 'error'); return; }
   if (!taskType) { showMgmtToast('يرجى اختيار نوع المهمة', 'error'); return; }
+  // Block inactive / on-leave / not-yet-started employees from being assigned to this month.
+  // Defense-in-depth: the left-panel filter already hides them, but a cached drag reference or
+  // a manually-called function could still land here.
+  var activeCheck = rpCheckEmployeeForMonth(empName, month, year);
+  if (!activeCheck.ok) {
+    showMgmtToast('❌ ' + empName + ' — ' + activeCheck.label + (activeCheck.detail ? ' (' + activeCheck.detail + ')' : '') + ' في ' + month + ' ' + year, 'error');
+    return;
+  }
 
   // Check if there's a conflict
   var conflictArea = document.getElementById('rpConflictArea');
@@ -6482,9 +6660,16 @@ function rpCopyToNextMonth(platform) {
     return;
   }
 
-  // Build review data: for each task, check conflicts in target month
+  // Build review data: for each task, check conflicts in target month + active status
   var reviewItems = [];
+  var blockedItems = []; // tasks whose employee is inactive/on-leave in the TARGET month — never copied
   currentTasks.forEach(function(t) {
+    // First: is the employee even eligible in the target month?
+    var activeCheck = rpCheckEmployeeForMonth(t.name, nextMonth, nextYear);
+    if (!activeCheck.ok) {
+      blockedItems.push({ source: t, occ: parseFloat(t.occupancy) || 0, label: activeCheck.label, detail: activeCheck.detail });
+      return; // excluded from reviewItems entirely — user cannot override this
+    }
     // Find existing tasks for this employee in next month (same platform)
     var existingSamePlat = [];
     var empTotalNextMonth = 0;
@@ -6510,8 +6695,8 @@ function rpCopyToNextMonth(platform) {
   var hasConflicts = reviewItems.some(function(r) { return r.hasDuplicate || r.exceedsLimit; });
   var cleanItems = reviewItems.filter(function(r) { return !r.hasDuplicate && !r.exceedsLimit; });
 
-  // If no conflicts, just confirm and copy
-  if (!hasConflicts) {
+  // If no conflicts AND nothing blocked by inactivity/absence, go straight to confirm
+  if (!hasConflicts && blockedItems.length === 0) {
     if (!confirm('نسخ ' + currentTasks.length + ' تخصيص من ' + month + ' → ' + nextMonth + '؟')) return;
     rpExecuteCopy(cleanItems, platform, nextMonth, nextQuarter, nextYear, month, quarter, year);
     return;
@@ -6520,6 +6705,16 @@ function rpCopyToNextMonth(platform) {
   // Build review dialog
   var html = '<div style="max-height:70vh;overflow-y:auto;">';
   html += '<p style="font-size:14px;margin-bottom:12px;">نسخ تخصيصات <strong>' + escapeHtml(platform) + '</strong> من <strong>' + month + '</strong> → <strong>' + nextMonth + '</strong></p>';
+
+  // Blocked items — shown before clean/conflict so user sees them first. No checkbox: they cannot be copied.
+  if (blockedItems.length > 0) {
+    html += '<div style="margin-bottom:12px;padding:10px;background:rgba(245,158,11,0.08);border-radius:8px;border:1px solid rgba(245,158,11,0.3);">';
+    html += '<div style="font-size:13px;font-weight:700;color:#b45309;margin-bottom:6px;">🚫 لن تُنسخ (' + blockedItems.length + ') — المورد غير متاح في ' + nextMonth + '</div>';
+    blockedItems.forEach(function(b) {
+      html += '<div style="font-size:12px;padding:3px 0;"><strong>' + escapeHtml(b.source.name) + '</strong> — ' + escapeHtml(b.source.taskType) + ' (' + b.occ + '%) <span style="color:#b45309;">— ' + escapeHtml(b.label) + (b.detail ? ' (' + escapeHtml(b.detail) + ')' : '') + '</span></div>';
+    });
+    html += '</div>';
+  }
 
   // Clean items
   if (cleanItems.length > 0) {
@@ -6689,10 +6884,16 @@ function rpCopyAllToNextMonth() {
     return;
   }
 
-  // Build review items per-task (each keeps its own platform)
+  // Build review items per-task (each keeps its own platform) + block inactive employees.
   var reviewItems = [];
+  var blockedItems = []; // inactive / on-leave in nextMonth — never copied, shown in review for visibility
   currentTasks.forEach(function(t) {
     var tPlatform = t.platform || '';
+    var activeCheck = rpCheckEmployeeForMonth(t.name, nextMonth, nextYear);
+    if (!activeCheck.ok) {
+      blockedItems.push({ source: t, occ: parseFloat(t.occupancy) || 0, platform: tPlatform, label: activeCheck.label, detail: activeCheck.detail });
+      return;
+    }
     var existingSamePlat = [];
     var empTotalNextMonth = 0;
     allData.forEach(function(r, idx) {
@@ -6719,8 +6920,8 @@ function rpCopyAllToNextMonth() {
   var hasConflicts = reviewItems.some(function(r) { return r.hasDuplicate || r.exceedsLimit; });
   var cleanItems = reviewItems.filter(function(r) { return !r.hasDuplicate && !r.exceedsLimit; });
 
-  // Fast path: no conflicts
-  if (!hasConflicts) {
+  // Fast path: no conflicts AND nothing blocked
+  if (!hasConflicts && blockedItems.length === 0) {
     if (!confirm('نسخ ' + currentTasks.length + ' تخصيص من جميع المنصات: ' + month + ' → ' + nextMonth + '؟')) return;
     rpExecuteCopyAll(cleanItems, nextMonth, nextQuarter, nextYear, month, quarter, year);
     return;
@@ -6738,10 +6939,27 @@ function rpCopyAllToNextMonth() {
     var p = r.platform || '(بدون منصة)';
     (conflictByPlat[p] = conflictByPlat[p] || []).push(r);
   });
+  var blockedByPlat = {};
+  blockedItems.forEach(function(b) {
+    var p = b.platform || '(بدون منصة)';
+    (blockedByPlat[p] = blockedByPlat[p] || []).push(b);
+  });
 
   var html = '<div style="max-height:70vh;overflow-y:auto;">';
   html += '<p style="font-size:14px;margin-bottom:12px;">نسخ جميع التخصيصات من <strong>' + month + '</strong> → <strong>' + nextMonth + '</strong></p>';
-  html += '<p style="font-size:12px;color:var(--text-light);margin-bottom:12px;">إجمالي: ' + currentTasks.length + ' تخصيص · ✅ بلا تعارض: ' + cleanItems.length + ' · ⚠️ تعارض: ' + conflictItems.length + '</p>';
+  html += '<p style="font-size:12px;color:var(--text-light);margin-bottom:12px;">إجمالي: ' + currentTasks.length + ' تخصيص · ✅ بلا تعارض: ' + cleanItems.length + ' · ⚠️ تعارض: ' + conflictItems.length + (blockedItems.length ? ' · 🚫 محجوبة: ' + blockedItems.length : '') + '</p>';
+
+  if (blockedItems.length > 0) {
+    html += '<div style="margin-bottom:12px;padding:10px;background:rgba(245,158,11,0.08);border-radius:8px;border:1px solid rgba(245,158,11,0.3);">';
+    html += '<div style="font-size:13px;font-weight:700;color:#b45309;margin-bottom:6px;">🚫 لن تُنسخ (' + blockedItems.length + ') — المورد غير متاح في ' + nextMonth + '</div>';
+    Object.keys(blockedByPlat).sort().forEach(function(p) {
+      html += '<div style="font-size:12px;font-weight:600;margin-top:6px;color:var(--text);">💻 ' + escapeHtml(p) + ' (' + blockedByPlat[p].length + ')</div>';
+      blockedByPlat[p].forEach(function(b) {
+        html += '<div style="font-size:12px;padding:2px 0 2px 14px;"><strong>' + escapeHtml(b.source.name) + '</strong> — ' + escapeHtml(b.source.taskType) + ' (' + b.occ + '%) <span style="color:#b45309;">— ' + escapeHtml(b.label) + (b.detail ? ' (' + escapeHtml(b.detail) + ')' : '') + '</span></div>';
+      });
+    });
+    html += '</div>';
+  }
 
   if (cleanItems.length > 0) {
     html += '<div style="margin-bottom:12px;padding:10px;background:rgba(16,185,129,0.08);border-radius:8px;border:1px solid rgba(16,185,129,0.2);">';
