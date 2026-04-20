@@ -2210,7 +2210,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 3;
+var APP_BUILD_VERSION = 4;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -7789,7 +7789,7 @@ function setPlatformMeta(platformName, field, value) {
     delete meta[platformName][field];
   }
   saveMgmtList('platformMeta', meta);
-  var labels = { owner: 'المالك', replacement: 'البديل' };
+  var labels = { owner: 'المالك', replacement: 'البديل', code: 'رمز المنصة' };
   showMgmtToast(platformName + ' — ' + (labels[field] || field) + ': ' + (value || 'تم الإزالة'), 'success');
 }
 
@@ -9263,8 +9263,13 @@ function renderDataManagement() {
                 var replacementVal = pm.replacement || '';
                 var ownerOpts = '<option value="">— المالك —</option>' + empNames.map(function(n) { return '<option value="' + escapeAttr(n) + '"' + (n === ownerVal ? ' selected' : '') + '>' + escapeHtml(n) + '</option>'; }).join('');
                 var replOpts = '<option value="">— البديل —</option>' + empNames.map(function(n) { return '<option value="' + escapeAttr(n) + '"' + (n === replacementVal ? ' selected' : '') + '>' + escapeHtml(n) + '</option>'; }).join('');
+                // 2-letter code used in auto-generated demand reqNumbers. Auto-suggested from
+                // DEMAND_PLATFORM_CODE_DEFAULTS / name-derivation when admin hasn't set one.
+                var platCodeVal = (pm.code || '').toUpperCase();
+                var platCodeSuggested = platCodeVal || (typeof getDemandPlatformCode === 'function' ? getDemandPlatformCode(item) : '');
                 return '<button class="badge-managed ' + (isVendor ? 'vendor' : 'internal') + '" style="cursor:pointer;border:none;margin:0 6px;" onclick="event.stopPropagation();togglePlatformManaged(\'' + escapeAttr(item) + '\')" title="اضغط للتبديل">' + (isVendor ? 'Vendor' : 'Internal') + '</button>' +
                   '<div style="display:flex;gap:6px;align-items:center;margin:0 6px;">' +
+                    '<input class="plat-code-input" value="' + escapeAttr(platCodeVal) + '" placeholder="' + escapeAttr(platCodeSuggested) + '" maxlength="2" onclick="event.stopPropagation()" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,\'\').slice(0,2)" onchange="setPlatformMeta(\'' + escapeAttr(item) + '\',\'code\',this.value)" title="رمز المنصة (حرفان) — يُستخدم في توليد أرقام المتطلبات" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:6px;font-family:inherit;background:var(--bg);color:var(--text);width:44px;text-align:center;font-weight:700;letter-spacing:1px;">' +
                     '<select class="plat-owner-select" onchange="setPlatformMeta(\'' + escapeAttr(item) + '\',\'owner\',this.value)" title="مالك المنصة" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;background:var(--bg);color:var(--text);min-width:100px;max-width:150px;">' + ownerOpts + '</select>' +
                     '<select class="plat-repl-select" onchange="setPlatformMeta(\'' + escapeAttr(item) + '\',\'replacement\',this.value)" title="بديل المالك" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;background:var(--bg);color:var(--text);min-width:100px;max-width:150px;">' + replOpts + '</select>' +
                   '</div>';
@@ -11637,6 +11642,109 @@ var DEMAND_CLASSIFICATIONS = ['تطوير جديد', 'طلب تغيير', 'تح�
 var DEMAND_PRIORITIES = ['عاجل جداً', 'عاجل', 'متوسط', 'عادي'];
 var DEMAND_IMPORTANCE = ['حرجة', 'عالية', 'متوسطة', 'عادية'];
 var DEMAND_BUSINESS_CATEGORIES = ['أعمال تقنية', 'متطلبات أعمال', 'التزام خارجي'];
+
+// ---------- Auto-generated reqNumber: code tables & helpers ----------
+// Format: {B}{C}{PP}-{YY}{NNNN}
+// Example: TNNR-260001 → Tech / New / Nour / 2026 / sequence 1
+// Applies to NEW demands only. Existing demands keep their manually-typed reqNumber.
+var DEMAND_BUSINESS_CATEGORY_CODES = {
+  'أعمال تقنية': 'T',
+  'متطلبات أعمال': 'B',
+  'التزام خارجي': 'X'
+};
+var DEMAND_CLASSIFICATION_CODES = {
+  'تطوير جديد': 'N',
+  'طلب تغيير': 'C',
+  'تحسين': 'E'
+};
+// Default 2-letter codes for known platforms. Admin can override per-platform via platformMeta.
+var DEMAND_PLATFORM_CODE_DEFAULTS = {
+  'نور': 'NR',
+  'مدرستي': 'MD',
+  'سفير': 'SF',
+  'بوابة التعليم': 'BT',
+  'فارس': 'FR'
+};
+
+function getDemandPlatformCode(platformName) {
+  if (!platformName) return '';
+  var mgmt = getMgmtData();
+  var stored = ((mgmt.platformMeta || {})[platformName] || {}).code;
+  if (stored) return String(stored).toUpperCase().slice(0, 2).padEnd(2, 'X');
+  var def = DEMAND_PLATFORM_CODE_DEFAULTS[platformName];
+  if (def) return def;
+  // Fallback: derive a 2-letter code from the name — first two non-space characters transliterated
+  // if Latin, otherwise first two chars of the name uppercased.
+  var clean = String(platformName).replace(/\s+/g, '');
+  var latin = clean.match(/[A-Za-z0-9]/g);
+  if (latin && latin.length >= 2) return (latin[0] + latin[1]).toUpperCase();
+  if (clean.length >= 2) return (clean[0] + clean[1]).toUpperCase();
+  return (clean + 'XX').slice(0, 2).toUpperCase();
+}
+
+function getDemandYearSuffix(dateStr) {
+  // Accepts an ISO date string (YYYY-MM-DD) or falls back to current year.
+  var y;
+  if (dateStr && /^\d{4}/.test(dateStr)) y = parseInt(dateStr.slice(0, 4), 10);
+  else y = new Date().getFullYear();
+  if (!y || isNaN(y)) y = new Date().getFullYear();
+  return String(y).slice(-2);
+}
+
+// Next zero-padded sequence within a (year, platform) scope. Scans existing demands and picks
+// max+1 so deletions don't refill gaps.
+function getNextDemandSequence(yearSuffix, platformCode) {
+  var mgmt = getMgmtData();
+  var demands = mgmt.demands || [];
+  var prefix = platformCode + '-' + yearSuffix;
+  var maxSeq = 0;
+  demands.forEach(function(d) {
+    if (!d || !d.reqNumber) return;
+    // Match either the dashed or dashless form: ..PP-YYNNNN  or  ..PPYYNNNN
+    var rn = String(d.reqNumber).toUpperCase();
+    // Accept any 4-letter prefix, the platform code as the last 2 of those, and our year suffix
+    var re = new RegExp('^[A-Z]{2}' + platformCode + '-?' + yearSuffix + '(\\d{4})$');
+    var m = rn.match(re);
+    if (m) {
+      var n = parseInt(m[1], 10);
+      if (n > maxSeq) maxSeq = n;
+    }
+  });
+  var next = maxSeq + 1;
+  return String(next).padStart(4, '0');
+}
+
+function generateDemandReqNumber(opts) {
+  opts = opts || {};
+  var bizCode = DEMAND_BUSINESS_CATEGORY_CODES[opts.businessCategory] || '';
+  var classCode = DEMAND_CLASSIFICATION_CODES[opts.classification] || '';
+  var platCode = getDemandPlatformCode(opts.platform || '');
+  if (!bizCode || !classCode || !opts.platform || !platCode) return '';
+  var yy = getDemandYearSuffix(opts.requestDate);
+  var seq = getNextDemandSequence(yy, platCode);
+  return bizCode + classCode + platCode + '-' + yy + seq;
+}
+
+// Called from the demand modal whenever businessCategory / classification / platform /
+// requestDate changes. Only updates the reqNumber field when we're creating a NEW demand —
+// existing demands keep whatever reqNumber was typed or imported.
+function updateDemandReqNumberPreview(isEdit) {
+  if (isEdit) return;
+  var input = document.getElementById('dmReqNumber');
+  if (!input) return;
+  var bc = (document.getElementById('dmBusinessCategory') || {}).value || '';
+  var cl = (document.getElementById('dmClassification') || {}).value || '';
+  var pl = (document.getElementById('dmPlatform') || {}).value || '';
+  var rd = (document.getElementById('dmRequestDate') || {}).value || '';
+  var generated = generateDemandReqNumber({
+    businessCategory: bc,
+    classification: cl,
+    platform: pl,
+    requestDate: rd
+  });
+  input.value = generated;
+  input.placeholder = generated ? '' : 'سيتم توليده تلقائياً';
+}
 // Lookups taken from New Demand.xlsx (updated).
 var DEMAND_STAGES = ['متطلب جديد', 'الدراسة والتحليل', 'التصميم والتطوير', 'الفحص والتحقق', 'قبول المستخدم', 'تم الانتهاء'];
 var DEMAND_WORK_SIZES = [
@@ -11976,15 +12084,21 @@ function openDemandModal(existing) {
   }
   var inputStyle = 'style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg);color:var(--text);font-size:13px;"';
 
-  html += fld('رقم المتطلب *', '<input id="dmReqNumber" type="text" value="' + escapeAttr(d.reqNumber) + '" ' + inputStyle + '>');
-  html += fld('المنصة / النظام *', '<select id="dmPlatform" ' + inputStyle + '><option value="">— اختر —</option>' + platforms.map(function(p) { return '<option value="' + escapeAttr(p) + '"' + (p === d.platform ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'; }).join('') + '</select>');
+  // For NEW demands, reqNumber is auto-generated from businessCategory + classification + platform + year
+  // and is read-only. For EDIT, we keep whatever was saved (no renumbering of existing records).
+  var reqNumberLabel = isEdit ? 'رقم المتطلب *' : 'رقم المتطلب (تلقائي)';
+  var reqNumberInput = isEdit
+    ? '<input id="dmReqNumber" type="text" value="' + escapeAttr(d.reqNumber) + '" ' + inputStyle + '>'
+    : '<input id="dmReqNumber" type="text" value="" placeholder="سيتم توليده تلقائياً" readonly style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:var(--bg-secondary, #f4f4f5);color:var(--text);font-size:13px;cursor:not-allowed;">';
+  html += fld(reqNumberLabel, reqNumberInput);
+  html += fld('المنصة / النظام *', '<select id="dmPlatform" onchange="updateDemandReqNumberPreview(' + (isEdit ? 'true' : 'false') + ')" ' + inputStyle + '><option value="">— اختر —</option>' + platforms.map(function(p) { return '<option value="' + escapeAttr(p) + '"' + (p === d.platform ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'; }).join('') + '</select>');
   html += fld('الخدمة', '<input id="dmService" type="text" value="' + escapeAttr(d.service) + '" ' + inputStyle + '>');
   html += fld('الخدمة الفرعية', '<input id="dmSubService" type="text" value="' + escapeAttr(d.subService) + '" ' + inputStyle + '>');
   html += '<div style="grid-column:1/-1;">' + fld('الوصف *', '<textarea id="dmDescription" rows="2" ' + inputStyle + '>' + escapeHtml(d.description) + '</textarea>') + '</div>';
-  html += fld('التصنيف', '<select id="dmClassification" ' + inputStyle + '>' + selOptions(DEMAND_CLASSIFICATIONS, d.classification) + '</select>');
+  html += fld('التصنيف', '<select id="dmClassification" onchange="updateDemandReqNumberPreview(' + (isEdit ? 'true' : 'false') + ')" ' + inputStyle + '>' + selOptions(DEMAND_CLASSIFICATIONS, d.classification) + '</select>');
   html += fld('الأولوية', '<select id="dmPriority" ' + inputStyle + '>' + selOptions(DEMAND_PRIORITIES, d.priority) + '</select>');
   html += fld('الأهمية', '<select id="dmImportance" ' + inputStyle + '>' + selOptions(DEMAND_IMPORTANCE, d.importance) + '</select>');
-  html += fld('تصنيف الأعمال', '<select id="dmBusinessCategory" ' + inputStyle + '>' + selOptions(DEMAND_BUSINESS_CATEGORIES, d.businessCategory) + '</select>');
+  html += fld('تصنيف الأعمال', '<select id="dmBusinessCategory" onchange="updateDemandReqNumberPreview(' + (isEdit ? 'true' : 'false') + ')" ' + inputStyle + '>' + selOptions(DEMAND_BUSINESS_CATEGORIES, d.businessCategory) + '</select>');
   // Requesting entity stays as a datalist (dynamic — users may add new orgs), seeded from Excel + existing demands
   function datalistOpts(arr) {
     return arr.map(function(v) { return '<option value="' + escapeAttr(v) + '">'; }).join('');
@@ -11992,7 +12106,7 @@ function openDemandModal(existing) {
   var reqEntityOpts = getDemandFieldOptions('requestingEntity', DEMAND_REQUESTING_ENTITIES_SEED);
 
   html += fld('الجهة الطالبة', '<input id="dmRequestingEntity" type="text" list="dmRequestingEntityList" value="' + escapeAttr(d.requestingEntity) + '" ' + inputStyle + '><datalist id="dmRequestingEntityList">' + datalistOpts(reqEntityOpts) + '</datalist>');
-  html += fld('تاريخ الطلب', '<input id="dmRequestDate" type="date" value="' + escapeAttr(d.requestDate) + '" ' + inputStyle + '>');
+  html += fld('تاريخ الطلب', '<input id="dmRequestDate" type="date" value="' + escapeAttr(d.requestDate) + '" onchange="updateDemandReqNumberPreview(' + (isEdit ? 'true' : 'false') + ')" ' + inputStyle + '>');
   // حجم العمل, مرحلة الطلب, حالة النشر are strict lookups from the Excel now
   html += fld('حجم العمل', '<select id="dmWorkSize" ' + inputStyle + '><option value="">—</option>' + selOptions(DEMAND_WORK_SIZES, d.workSize) + '</select>');
   html += fld('مرحلة الطلب', '<select id="dmStage" ' + inputStyle + '>' + selOptions(DEMAND_STAGES, d.stage) + '</select>');
@@ -12016,6 +12130,10 @@ function openDemandModal(existing) {
   html += '</div></div>';
 
   document.body.insertAdjacentHTML('beforeend', html);
+  // Compute the initial reqNumber for new demands now that the defaults are in place
+  // (businessCategory = 'متطلبات أعمال', classification = 'تطوير جديد'). If platform is empty
+  // the preview shows the placeholder until the user picks one.
+  if (!isEdit) updateDemandReqNumberPreview(false);
 }
 
 function closeDemandModal() {
@@ -12027,10 +12145,23 @@ function saveDemand(existingId) {
   var reqNumber = sanitizeInput(document.getElementById('dmReqNumber').value);
   var platform = document.getElementById('dmPlatform').value;
   var description = sanitizeInput(document.getElementById('dmDescription').value);
+  var isEditingExisting = !!existingId;
 
-  if (!reqNumber) { showMgmtToast('رقم المتطلب مطلوب', 'error'); return; }
   if (!platform) { showMgmtToast('المنصة مطلوبة', 'error'); return; }
   if (!description) { showMgmtToast('الوصف مطلوب', 'error'); return; }
+  // For new demands: if the live preview didn't fill reqNumber (e.g. platform or category empty),
+  // regenerate it defensively at save time. For edits: keep whatever was stored; renumbering a
+  // referenced record is unsafe.
+  if (!isEditingExisting && !reqNumber) {
+    reqNumber = generateDemandReqNumber({
+      businessCategory: document.getElementById('dmBusinessCategory').value,
+      classification: document.getElementById('dmClassification').value,
+      platform: platform,
+      requestDate: document.getElementById('dmRequestDate').value
+    });
+    if (!reqNumber) { showMgmtToast('تعذّر توليد رقم المتطلب — تأكد من اختيار المنصة والتصنيف', 'error'); return; }
+  }
+  if (!reqNumber) { showMgmtToast('رقم المتطلب مطلوب', 'error'); return; }
 
   var data = getMgmtData();
   var demands = data.demands || [];
