@@ -1748,6 +1748,7 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
       <div class="top-actions">
         <button class="export-btn" onclick="downloadFullBackup()" title="تحميل نسخة كاملة (البيانات الأساسية + المهام) كملف JSON — استخدمها قبل أي تغييرات كبيرة" style="background:#10b981;color:#fff;border:none;">💾 نسخة احتياطية كاملة</button>
         <label class="export-btn" style="cursor:pointer;background:#dc2626;color:#fff;border:none;" title="استعادة البيانات من ملف نسخة احتياطية JSON — يستبدل جميع البيانات الحالية">🔄 استعادة<input type="file" accept=".json" style="display:none" onchange="restoreFullBackup(event)"></label>
+        <button class="export-btn" onclick="consolidateDuplicates()" title="فحص Firebase للسجلات المكررة في الموظفين والمتطلبات والطلبات، ودمجها إلى سجل واحد لكل اسم/معرّف" style="background:#f59e0b;color:#fff;border:none;">🧹 دمج التكرارات</button>
         <button class="export-btn" onclick="showGhostEmployees()" title="البحث عن أسماء في المهام غير موجودة في قائمة الموظفين">👻 أسماء شبحية</button>
         <button class="export-btn" onclick="runManualReconcile()" title="إضافة أي موظف/منصة موجود في المهام لكن غير موجود في القوائم الرئيسية">🔄 استيراد من المهام</button>
         <button class="export-btn" onclick="forceSyncMgmtToCloud()" title="رفع جميع البيانات إلى Firebase">☁️ مزامنة</button>
@@ -2213,7 +2214,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 6;
+var APP_BUILD_VERSION = 7;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -11300,6 +11301,257 @@ function executeFullRestore() {
     console.error('Restore failed:', err);
     showMgmtToast('❌ فشلت الاستعادة: ' + err.message, 'error');
     if (btn) { btn.disabled = false; btn.textContent = '🔄 استبدال البيانات'; }
+  });
+}
+
+// ==================== CONSOLIDATE DUPLICATES ====================
+// When Firebase ends up with a mix of numeric-keyed (legacy array) + string-id-keyed
+// (new per-record) entries in management/employees|demands|requisitions, the same person
+// or record lives under multiple keys. The dedup-on-read in getMgmtData() hides this from the
+// UI but every client derives a slightly different "winner" per name, so counts drift between
+// sessions. This tool scans the raw Firebase node, merges duplicates by name (for employees)
+// or by id / reqNumber (for demands/requisitions), and rewrites the node as a clean keyed set.
+
+function consolidateDuplicates() {
+  if (!firebaseReady || !firebaseDb) {
+    showMgmtToast('Firebase غير متصل — سجّل الدخول أولاً', 'error');
+    return;
+  }
+  showMgmtToast('⏳ جاري فحص Firebase…', 'success');
+  firebaseDb.ref('management').once('value').then(function(snap) {
+    var raw = snap.val() || {};
+    var plan = {
+      employees: analyzeEmployeesForConsolidation(raw.employees),
+      demands: analyzeDemandsForConsolidation(raw.demands),
+      requisitions: analyzeRequisitionsForConsolidation(raw.requisitions)
+    };
+    showConsolidateDialog(plan);
+  }).catch(function(err) {
+    showMgmtToast('فشل الفحص: ' + err.message, 'error');
+  });
+}
+
+function analyzeEmployeesForConsolidation(node) {
+  var records = [];
+  if (!node) return { before: 0, after: 0, winners: {}, records: [] };
+  if (Array.isArray(node)) records = node.filter(Boolean);
+  else if (typeof node === 'object') records = Object.keys(node).map(function(k) { return node[k]; }).filter(function(v) { return v && typeof v === 'object'; });
+
+  var winnersByName = {};
+  records.forEach(function(e) {
+    if (!e || typeof e !== 'object') return;
+    var name = String(e.name || '').trim();
+    if (!name) return;
+    // Score: prefer records with more fields filled, then more absences, then has an id already
+    var score = 0;
+    ['department','section','startDate','endDate','contractType','jobTitle'].forEach(function(f) { if (e[f]) score++; });
+    if (Array.isArray(e.absences) && e.absences.length) score += 2 * e.absences.length;
+    if (e.id) score += 1;
+
+    var cur = winnersByName[name];
+    if (!cur) {
+      winnersByName[name] = { record: Object.assign({}, e), score: score };
+      return;
+    }
+    // Prefer higher score; on tie, merge field-by-field preferring non-empty values
+    if (score > cur.score) {
+      var kept = Object.assign({}, cur.record, e);
+      // But don't lose absences — union
+      var unionAbs = mergeAbsences(cur.record.absences, e.absences);
+      kept.absences = unionAbs;
+      winnersByName[name] = { record: kept, score: score };
+    } else {
+      ['department','section','startDate','endDate','contractType','jobTitle','id'].forEach(function(f) {
+        if (!cur.record[f] && e[f]) cur.record[f] = e[f];
+      });
+      cur.record.absences = mergeAbsences(cur.record.absences, e.absences);
+    }
+  });
+
+  // Ensure every winner has a stable id
+  var winners = {};
+  Object.keys(winnersByName).forEach(function(name) {
+    var rec = winnersByName[name].record;
+    if (typeof ensureEmployeeId === 'function') ensureEmployeeId(rec);
+    rec.name = name;
+    winners[rec.id] = rec;
+  });
+
+  return { before: records.length, after: Object.keys(winners).length, winners: winners };
+}
+
+function mergeAbsences(a, b) {
+  var out = Array.isArray(a) ? a.slice() : [];
+  var seen = {};
+  out.forEach(function(x) { if (x) seen[[x.from, x.to, x.reason].join('|')] = true; });
+  (Array.isArray(b) ? b : []).forEach(function(x) {
+    if (!x) return;
+    var sig = [x.from, x.to, x.reason].join('|');
+    if (!seen[sig]) { out.push(x); seen[sig] = true; }
+  });
+  return out;
+}
+
+function analyzeDemandsForConsolidation(node) {
+  var records = [];
+  if (!node) return { before: 0, after: 0, winners: {} };
+  if (Array.isArray(node)) records = node.filter(Boolean);
+  else records = Object.keys(node).map(function(k) { return node[k]; }).filter(function(v) { return v && typeof v === 'object'; });
+
+  // Prefer records that already have an id; dedupe by id first, then by reqNumber
+  var byId = {};
+  records.forEach(function(r) {
+    if (!r || typeof r !== 'object') return;
+    if (r.id) { byId[r.id] = r; }
+  });
+  var byReqNumber = {};
+  records.forEach(function(r) {
+    if (!r || typeof r !== 'object') return;
+    var rn = String(r.reqNumber || '').trim();
+    if (!rn) return;
+    if (!byReqNumber[rn]) byReqNumber[rn] = r;
+    // if duplicate reqNumber and we have an id version already in byId, that one wins
+  });
+  // Build winners: start from byId, then add any byReqNumber entries not already covered
+  var winners = {};
+  Object.keys(byId).forEach(function(id) { winners[id] = byId[id]; });
+  Object.keys(byReqNumber).forEach(function(rn) {
+    var r = byReqNumber[rn];
+    // Skip if same reqNumber already represented by an id-winner
+    var already = Object.keys(winners).some(function(id) { return winners[id].reqNumber === rn; });
+    if (already) return;
+    if (!r.id) r.id = 'd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    winners[r.id] = r;
+  });
+  return { before: records.length, after: Object.keys(winners).length, winners: winners };
+}
+
+function analyzeRequisitionsForConsolidation(node) {
+  var records = [];
+  if (!node) return { before: 0, after: 0, winners: {} };
+  if (Array.isArray(node)) records = node.filter(Boolean);
+  else records = Object.keys(node).map(function(k) { return node[k]; }).filter(function(v) { return v && typeof v === 'object'; });
+
+  // Requisitions: dedupe strictly by id (no natural secondary key — candidateName is optional)
+  var winners = {};
+  records.forEach(function(r) {
+    if (!r || typeof r !== 'object') return;
+    var id = r.id || ('req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
+    r.id = id;
+    if (!winners[id]) winners[id] = r;
+  });
+  return { before: records.length, after: Object.keys(winners).length, winners: winners };
+}
+
+function showConsolidateDialog(plan) {
+  var existing = document.getElementById('consolidateOverlay');
+  if (existing) existing.remove();
+
+  var totalBefore = plan.employees.before + plan.demands.before + plan.requisitions.before;
+  var totalAfter = plan.employees.after + plan.demands.after + plan.requisitions.after;
+
+  var html = '<div id="consolidateOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">';
+  html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:600px;width:100%;max-height:88vh;overflow-y:auto;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;">';
+  html += '<h2 style="margin:0;font-size:17px;color:#b45309;">🧹 دمج التكرارات</h2>';
+  html += '<button onclick="document.getElementById(\'consolidateOverlay\').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-light);">×</button>';
+  html += '</div>';
+
+  html += '<p style="font-size:13px;color:var(--text-light);margin:0 0 14px;line-height:1.7;">' +
+          'هذه العملية تفحص السجلات في Firebase وتدمج المكررات لكل مجموعة، ثم تستبدل العقدة بالسجلات الفريدة فقط.<br>' +
+          '<strong>دمج الموظفين</strong> بالاسم (بعد قص المسافات) مع جمع الغيابات وحفظ أغنى سجل.<br>' +
+          '<strong>دمج المتطلبات</strong> بالـ id أو رقم المتطلب.<br>' +
+          '<strong>دمج الطلبات</strong> بالـ id.<br>' +
+          '<strong style="color:#dc2626;">احتفظ بنسخة احتياطية قبل المتابعة.</strong>' +
+          '</p>';
+
+  html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:var(--bg);">' +
+          '<th style="padding:9px 12px;text-align:right;font-weight:700;">المجموعة</th>' +
+          '<th style="padding:9px 12px;text-align:center;font-weight:700;">قبل</th>' +
+          '<th style="padding:9px 12px;text-align:center;font-weight:700;">بعد</th>' +
+          '<th style="padding:9px 12px;text-align:center;font-weight:700;">تم دمجها</th>' +
+          '</tr></thead><tbody>';
+  [
+    { key: 'employees', label: '👥 الموظفين' },
+    { key: 'demands',   label: '📋 المتطلبات' },
+    { key: 'requisitions', label: '👔 طلبات التوظيف' }
+  ].forEach(function(row) {
+    var info = plan[row.key];
+    var merged = info.before - info.after;
+    var mergedColor = merged > 0 ? '#dc2626' : 'var(--text-light)';
+    html += '<tr style="border-top:1px solid var(--border);">' +
+            '<td style="padding:8px 12px;">' + row.label + '</td>' +
+            '<td style="padding:8px 12px;text-align:center;">' + info.before + '</td>' +
+            '<td style="padding:8px 12px;text-align:center;font-weight:700;color:#059669;">' + info.after + '</td>' +
+            '<td style="padding:8px 12px;text-align:center;color:' + mergedColor + ';font-weight:700;">' + (merged > 0 ? '-' + merged : '—') + '</td>' +
+            '</tr>';
+  });
+  html += '<tr style="border-top:2px solid var(--border);background:var(--bg);">' +
+          '<td style="padding:9px 12px;font-weight:700;">الإجمالي</td>' +
+          '<td style="padding:9px 12px;text-align:center;font-weight:700;">' + totalBefore + '</td>' +
+          '<td style="padding:9px 12px;text-align:center;font-weight:700;color:#059669;">' + totalAfter + '</td>' +
+          '<td style="padding:9px 12px;text-align:center;font-weight:700;color:#dc2626;">' + (totalBefore - totalAfter > 0 ? '-' + (totalBefore - totalAfter) : '—') + '</td>' +
+          '</tr>';
+  html += '</tbody></table></div>';
+
+  if (totalBefore === totalAfter) {
+    html += '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--success);">✅ لا توجد تكرارات — البيانات نظيفة بالفعل.</div>';
+  }
+
+  html += '<label style="display:flex;gap:8px;align-items:flex-start;padding:10px;background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.25);border-radius:10px;cursor:pointer;font-size:12px;margin-bottom:14px;">';
+  html += '<input type="checkbox" id="consolidateChk" style="margin-top:2px;">';
+  html += '<span>لقد حمّلت نسخة احتياطية كاملة مؤخراً، وأفهم أن هذه العملية ستستبدل العقد في Firebase بالسجلات المدموجة.</span>';
+  html += '</label>';
+
+  html += '<div style="display:flex;gap:10px;justify-content:flex-end;padding-top:12px;border-top:1px solid var(--border);">';
+  html += '<button onclick="document.getElementById(\'consolidateOverlay\').remove()" style="padding:9px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;">إلغاء</button>';
+  var disabled = totalBefore === totalAfter;
+  html += '<button id="consolidateBtn" onclick="executeConsolidate()" disabled style="padding:9px 18px;background:#b45309;color:#fff;border:none;border-radius:8px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';font-weight:700;font-family:inherit;font-size:13px;opacity:0.5;">🧹 تنفيذ الدمج</button>';
+  html += '</div></div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  var chk = document.getElementById('consolidateChk');
+  var btn = document.getElementById('consolidateBtn');
+  chk.addEventListener('change', function() {
+    btn.disabled = !chk.checked || totalBefore === totalAfter;
+    btn.style.opacity = btn.disabled ? '0.5' : '1';
+    btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
+  });
+  window._pendingConsolidatePlan = plan;
+}
+
+function executeConsolidate() {
+  var plan = window._pendingConsolidatePlan;
+  if (!plan) return;
+  var btn = document.getElementById('consolidateBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الدمج…'; }
+
+  // Auto-backup current state before overwriting
+  try {
+    firebaseDb.ref('management').once('value').then(function(mSnap) {
+      var pre = { timestamp: new Date().toISOString(), management: mSnap.val() || {} };
+      try { localStorage.setItem('qplan_pre_consolidate_' + Date.now(), JSON.stringify(pre)); } catch (e) {}
+    });
+  } catch (e) {}
+
+  var ops = [];
+  ops.push(firebaseDb.ref('management/employees').set(plan.employees.winners));
+  ops.push(firebaseDb.ref('management/demands').set(plan.demands.winners));
+  ops.push(firebaseDb.ref('management/requisitions').set(plan.requisitions.winners));
+
+  Promise.all(ops).then(function() {
+    window._pendingConsolidatePlan = null;
+    var overlay = document.getElementById('consolidateOverlay');
+    if (overlay) overlay.remove();
+    showMgmtToast('✅ تم الدمج — جاري إعادة التحميل…', 'success');
+    try { localStorage.removeItem(MGMT_STORAGE_PREFIX + 'firebase_synced'); } catch (e) {}
+    setTimeout(function() { location.reload(); }, 1200);
+  }).catch(function(err) {
+    console.error('Consolidate failed:', err);
+    showMgmtToast('❌ فشل الدمج: ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🧹 تنفيذ الدمج'; }
   });
 }
 
