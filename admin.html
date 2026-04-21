@@ -2214,7 +2214,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 10;
+var APP_BUILD_VERSION = 11;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -8677,8 +8677,17 @@ function pushAllMgmtToFirebase() {
 function fbToArray(val) {
   if (Array.isArray(val)) return val;
   if (val && typeof val === 'object') {
+    var keys = Object.keys(val);
+    // Id-keyed object (e.g. {emp_ali_abc: {...}, emp_sara_xyz: {...}}) — return its values
+    // as an array. Previously we did `arr[parseInt(k)] = val[k]` which silently produced
+    // `arr[NaN] = ...` (no-op) for string keys, so the result was always `[]` — the exact
+    // trap that kept wiping employees/demands/requisitions on every real-time listener fire.
+    if (keys.length > 0 && !keys.every(function(k) { return /^\d+$/.test(k); })) {
+      return keys.map(function(k) { return val[k]; }).filter(function(v) { return v != null; });
+    }
+    // Numeric-keyed (Firebase's array-to-object conversion): rebuild the sparse array
     var arr = [];
-    Object.keys(val).forEach(function(k) { arr[parseInt(k)] = val[k]; });
+    keys.forEach(function(k) { arr[parseInt(k)] = val[k]; });
     return arr.filter(function(v) { return v !== undefined && v !== null; });
   }
   return val;
