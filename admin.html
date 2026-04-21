@@ -2214,7 +2214,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 7;
+var APP_BUILD_VERSION = 8;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -8408,6 +8408,33 @@ function loadMgmtFromFirebase(callback) {
         }
       }
     });
+
+    // Safety-resync: if the sync flag says we've synced before but localStorage is empty for a
+    // keyed collection while Firebase has records, something reset local (backup-restore page
+    // reload, private mode, cleared storage, JSON.parse failure, corruption) without clearing
+    // the sync flag. Without this escalation the subsequent-sync branch would happily leave
+    // localStorage empty and the UI would show zero records for that collection. Escalate to
+    // first-sync so the pull-from-Firebase path definitely runs.
+    if (!isFirstSync) {
+      var needsResync = MGMT_KEYED_COLLECTIONS.some(function(k) {
+        try {
+          var raw = localStorage.getItem(MGMT_STORAGE_PREFIX + k);
+          var localCount = 0;
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            localCount = Array.isArray(parsed) ? parsed.length : (parsed && typeof parsed === 'object' ? Object.keys(parsed).length : 0);
+          }
+          var fbVal = fbData[k];
+          var fbCount = fbVal ? (Array.isArray(fbVal) ? fbVal.length : (typeof fbVal === 'object' ? Object.keys(fbVal).length : 0)) : 0;
+          return localCount === 0 && fbCount > 0;
+        } catch (e) { return true; } // JSON parse failure → also escalate
+      });
+      if (needsResync) {
+        console.log('🚨 Safety-resync: local is empty but Firebase has keyed data — treating as first-sync to pull');
+        isFirstSync = true;
+        localStorage.removeItem(MGMT_SYNC_FLAG);
+      }
+    }
 
     // Helper to get/set localStorage for a key (managed_users uses different prefix)
     function getLocalStorageKey(key) {
