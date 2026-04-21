@@ -2214,7 +2214,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 8;
+var APP_BUILD_VERSION = 9;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -12543,10 +12543,22 @@ function demandImportanceColor(i) {
   return '#64748b';
 }
 function demandStageColor(s) {
+  // Explicit per-stage mapping with distinctly different hues (grey → violet → blue → amber →
+  // pink → green). Previously we used a close-together palette (indigo/purple/blue/cyan) that
+  // read as "all shades of blue" in the UI.
+  var map = {
+    'متطلب جديد':        '#64748b', // slate grey — neutral start
+    'الدراسة والتحليل':  '#8b5cf6', // violet — analysis/planning
+    'التصميم والتطوير':  '#3b82f6', // blue — building
+    'الفحص والتحقق':     '#f59e0b', // amber — inspection/testing
+    'قبول المستخدم':     '#ec4899', // pink — user approval
+    'تم الانتهاء':        '#10b981'  // green — done
+  };
+  if (map[s]) return map[s];
+  // Fallback for any legacy/custom stage not in the canonical list
+  var fallback = ['#64748b', '#8b5cf6', '#3b82f6', '#f59e0b', '#ec4899', '#10b981', '#dc2626', '#0ea5e9'];
   var idx = DEMAND_STAGES.indexOf(s);
-  if (idx === -1) return '#64748b';
-  var colors = ['#94a3b8', '#6366f1', '#8b5cf6', '#3b82f6', '#06b6d4', '#f59e0b', '#ec4899', '#10b981'];
-  return colors[idx] || '#64748b';
+  return idx >= 0 ? fallback[idx % fallback.length] : '#64748b';
 }
 
 function renderDemands() {
