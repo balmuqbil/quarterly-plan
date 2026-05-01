@@ -2214,7 +2214,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 11;
+var APP_BUILD_VERSION = 12;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -3206,15 +3206,26 @@ function seedEmployeesFromData(data) {
     if (name) uniqueNames.add(name);
   });
 
+  var addedRecs = [];
   uniqueNames.forEach(name => {
     if (!existingNames.has(name) && !deletedEmps[name]) {
-      mgmt.employees.push({ name, department: '', section: '' });
+      var newEmp = { name, department: '', section: '' };
+      if (typeof ensureEmployeeId === 'function') ensureEmployeeId(newEmp);
+      mgmt.employees.push(newEmp);
       existingNames.add(name);
+      addedRecs.push(newEmp);
       added++;
     }
   });
 
-  if (added > 0) saveMgmtList('employees', mgmt.employees);
+  if (added > 0) {
+    saveMgmtList('employees', mgmt.employees);
+    // Per-record writes — saveMgmtList for keyed collections is localStorage-only by design,
+    // so we explicitly push each new record via the per-record helper.
+    if (typeof saveEmployeeRecord === 'function') {
+      addedRecs.forEach(function(e) { saveEmployeeRecord(e.name, e); });
+    }
+  }
 }
 
 function remapEmployeeNames(data) {
@@ -3356,8 +3367,15 @@ function reconcileEmployeesFromTasks(taskData) {
 
   var added = Object.values(missingEmps);
   if (added.length > 0) {
-    added.forEach(function(emp) { empList.push(emp); });
+    added.forEach(function(emp) {
+      if (typeof ensureEmployeeId === 'function') ensureEmployeeId(emp);
+      empList.push(emp);
+    });
     saveMgmtList('employees', empList);
+    // Per-record writes — saveMgmtList for keyed collections is local-only by design.
+    if (typeof saveEmployeeRecord === 'function') {
+      added.forEach(function(emp) { saveEmployeeRecord(emp.name, emp); });
+    }
     console.log('👥 Reconciled employees from tasks — added ' + added.length + ':', added.map(function(e) { return e.name; }).join(', '));
   }
 }
@@ -8048,6 +8066,14 @@ function saveMgmtList(key, list, opts) {
   // overwrite whichever concurrent session has the richer, larger array — losing everyone
   // else's edits. Local-only means: fix up this client's copy and do NOT propagate.
   if (opts && opts.localOnly) return;
+  // Keyed collections (employees / demands / requisitions): localStorage-only here. The
+  // per-record helpers (saveEmployeeRecord / saveDemandRecord / saveRequisitionRecord and their
+  // delete counterparts) own Firebase sync for these collections. Pushing the full local set
+  // via .update() would re-add records that another session deleted but this session hasn't
+  // yet seen the deletion for — that's the "deleted employees come back" bug. Bulk-add paths
+  // (seedEmployeesFromData, reconcileEmployeesFromTasks, mergeEmployees, importDemandsFromExcel)
+  // explicitly call per-record helpers for each new record they create.
+  if (typeof isKeyedCollection === 'function' && isKeyedCollection(key)) return;
   // Every management save is queued in a persistent pending-writes log. The queue guarantees that
   // if Firebase is not ready / write fails / the page is closed before the async set() lands,
   // the change isn't lost — it gets retried on the next session. It also prevents the real-time
@@ -11713,12 +11739,15 @@ function mergeEmployees(newEmployees) {
   const data = getMgmtData();
   const existingNames = new Set(data.employees.map(e => typeof e === 'string' ? e : e.name));
   let added = 0, skipped = 0;
+  var addedRecs = [];
   newEmployees.forEach(emp => {
     const name = typeof emp === 'string' ? emp : emp.name;
     if (existingNames.has(name)) { skipped++; }
     else {
       const empObj = typeof emp === 'string' ? { name: emp, department: '', section: '' } : emp;
+      if (typeof ensureEmployeeId === 'function') ensureEmployeeId(empObj);
       data.employees.push(empObj);
+      addedRecs.push(empObj);
       existingNames.add(name);
       // User is explicitly re-importing this name — forget any prior tombstone for it.
       if (typeof clearMgmtDelete === 'function') clearMgmtDelete('employees', name);
@@ -11726,6 +11755,10 @@ function mergeEmployees(newEmployees) {
     }
   });
   saveMgmtList('employees', data.employees);
+  // Per-record writes — saveMgmtList for keyed collections is local-only by design.
+  if (typeof saveEmployeeRecord === 'function') {
+    addedRecs.forEach(function(e) { saveEmployeeRecord(e.name, e); });
+  }
   renderDataManagement();
   let msg = 'تم استيراد ' + added + ' موظف';
   if (skipped > 0) msg += ' (تم تخطي ' + skipped + ' مكرر)';
@@ -11740,13 +11773,22 @@ function renderRequisitions() {
   var reqs = data.requisitions || [];
   // Migrate old placeholder candidateNames like "مرشح 2", "مرشح 3" etc.
   var migrated = false;
+  var migratedReqs = [];
   reqs.forEach(function(req) {
     if (req.candidateName && /^مرشح\s*\d+$/.test(req.candidateName.trim())) {
       req.candidateName = '';
       migrated = true;
+      migratedReqs.push(req);
     }
   });
-  if (migrated) { data.requisitions = reqs; saveMgmtList('requisitions', reqs); }
+  if (migrated) {
+    data.requisitions = reqs;
+    saveMgmtList('requisitions', reqs);
+    // Per-record writes — saveMgmtList for keyed collections is local-only.
+    if (typeof saveRequisitionRecord === 'function') {
+      migratedReqs.forEach(saveRequisitionRecord);
+    }
+  }
   var projects = data.projects || [];
   var html = '';
   var canManage = isAdmin(); // only admin can advance/revert/edit/delete
@@ -13080,6 +13122,10 @@ function importDemandsFromExcel(inputEl) {
 
       var merged = existing.concat(newDemands);
       saveMgmtList('demands', merged);
+      // Per-record writes — saveMgmtList for keyed collections is local-only by design.
+      if (typeof saveDemandRecord === 'function') {
+        newDemands.forEach(function(d) { saveDemandRecord(d); });
+      }
       renderDemands();
       showMgmtToast('تم استيراد ' + newDemands.length + ' متطلب بنجاح', 'success');
     } catch (err) {
