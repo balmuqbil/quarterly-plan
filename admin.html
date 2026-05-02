@@ -1418,7 +1418,7 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
           <option value="fte">ترتيب: FTEs</option>
           <option value="employees">ترتيب: عدد الموظفين</option>
           <option value="avgOcc">ترتيب: متوسط إشغال</option>
-          <option value="departments">ترتيب: عدد الإدارات</option>
+          <option value="squads">ترتيب: عدد الفرق</option>
           <option value="name">ترتيب: الاسم</option>
         </select>
         <button class="export-btn" id="platSortDir" style="font-size:14px;padding:6px 10px;min-width:36px;" onclick="togglePlatSortDir()" title="تنازلي — اضغط للتبديل">⬇</button>
@@ -2214,7 +2214,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 12;
+var APP_BUILD_VERSION = 13;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -3903,6 +3903,11 @@ function renderPlatformsSection() {
     p._avgOcc = grandTotalOcc > 0 ? (p.totalOcc / grandTotalOcc * 100) : 0;
   });
 
+  // Squad counts (admin-configured) used both for the new "squads" sort option and the
+  // "فريق" stat on each platform card.
+  var sortSquadCounts = {};
+  try { sortSquadCounts = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'platformSquads') || '{}'); } catch(e) {}
+
   // Sort platforms
   var sortBy = (document.getElementById('platSortBy')?.value) || 'tasks';
   var dir = platSortDir === 'asc' ? 1 : -1;
@@ -3913,7 +3918,8 @@ function renderPlatformsSection() {
       case 'fte': return dir * (a._fte - b._fte);
       case 'employees': return dir * (a.employees.size - b.employees.size);
       case 'avgOcc': return dir * (a._avgOcc - b._avgOcc);
-      case 'departments': return dir * (a.departments.size - b.departments.size);
+      case 'squads': return dir * ((sortSquadCounts[a.name] || 1) - (sortSquadCounts[b.name] || 1));
+      case 'departments': return dir * (a.departments.size - b.departments.size); // legacy — leave for backward compat
       default: return dir * (a.tasks - b.tasks);
     }
   });
@@ -3922,6 +3928,31 @@ function renderPlatformsSection() {
   var countEl = document.getElementById('platCount');
   if (countEl) countEl.textContent = platforms.length + ' منصة';
 
+  // Squad counts per platform (admin-configured) and demand requirements per platform — used
+  // for the platform cards' new metrics. Squads always shown; requirements badge only shown
+  // when a specific quarter is selected.
+  var squadCounts = {};
+  try { squadCounts = JSON.parse(localStorage.getItem(MGMT_STORAGE_PREFIX + 'platformSquads') || '{}'); } catch(e) {}
+  var quarterSelected = (qtrVal !== 'all');
+  var demandCountsByPlatform = {}; // { platform: { total, done } }
+  if (quarterSelected) {
+    var allDemands = (getMgmtData().demands || []);
+    var quarterLabel = qtrVal + (yearVal !== 'all' ? ' ' + yearVal : '');
+    allDemands.forEach(function(d) {
+      if (!d || !d.platform) return;
+      // A demand counts toward this quarter if its expectedQuarter or actualQuarter matches.
+      // Compare just the quarter when year is "all", or quarter+year when a specific year is set.
+      function matchQ(val) {
+        if (!val) return false;
+        return yearVal === 'all' ? val.indexOf(qtrVal) === 0 : val === quarterLabel;
+      }
+      if (!matchQ(d.expectedQuarter) && !matchQ(d.actualQuarter)) return;
+      if (!demandCountsByPlatform[d.platform]) demandCountsByPlatform[d.platform] = { total: 0, done: 0 };
+      demandCountsByPlatform[d.platform].total++;
+      if (d.stage === 'تم الانتهاء') demandCountsByPlatform[d.platform].done++;
+    });
+  }
+
   const grid = document.getElementById('platformsGrid');
   grid.innerHTML = platforms.map((p,i) => {
     const icon = Object.entries(PLATFORM_ICONS).find(([k]) => p.name.includes(k));
@@ -3929,17 +3960,28 @@ function renderPlatformsSection() {
     var avgOcc = p._avgOcc.toFixed(0);
     var projBadges = renderProjectBadges(p.name);
     var managedBadge = getPlatformManagedBadge(p.name);
+    var numSquads = squadCounts[p.name] || 1;
+    var color = COLORS[i % COLORS.length];
+    // Header badge: when a quarter is selected, show requirements progress; otherwise show task count.
+    var headerBadge;
+    if (quarterSelected) {
+      var counts = demandCountsByPlatform[p.name] || { total: 0, done: 0 };
+      var label = counts.done + ' / ' + counts.total + ' متطلب';
+      headerBadge = '<span class="detail-card-badge" title="مكتمل / إجمالي للربع المختار" style="background:' + color + '22;color:' + color + '">' + label + '</span>';
+    } else {
+      headerBadge = '<span class="detail-card-badge" style="background:' + color + '22;color:' + color + '">' + p.tasks + ' مهمة</span>';
+    }
     return `<div class="detail-card platform-card" onclick="showPlatformDrill('` + escapeJS(p.name) + `')">
       <div class="platform-card-icon">${icon ? icon[1] : '💻'}</div>
       <div class="detail-card-header">
         <div class="detail-card-name">${escapeHtml(p.name)} ${managedBadge}</div>
-        <span class="detail-card-badge" style="background:${COLORS[i%COLORS.length]}22;color:${COLORS[i%COLORS.length]}">${p.tasks} مهمة</span>
+        ${headerBadge}
       </div>
       ${projBadges ? '<div style="margin-bottom:8px;">' + projBadges + '</div>' : ''}
       <div class="detail-card-stats">
         <div class="detail-stat"><div class="detail-stat-value">${p.employees.size}</div><div class="detail-stat-label">موظف</div></div>
         <div class="detail-stat"><div class="detail-stat-value">${fte}</div><div class="detail-stat-label">FTEs</div></div>
-        <div class="detail-stat"><div class="detail-stat-value">${p.departments.size}</div><div class="detail-stat-label">إدارات</div></div>
+        <div class="detail-stat"><div class="detail-stat-value">${numSquads}</div><div class="detail-stat-label">فريق</div></div>
         <div class="detail-stat"><div class="detail-stat-value">${avgOcc}%</div><div class="detail-stat-label">نسبة الإشغال</div></div>
       </div>
     </div>`;
