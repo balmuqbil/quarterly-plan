@@ -1398,7 +1398,7 @@ html[data-theme="edugate"].dark-mode tr:hover td { background:rgba(27,131,84,0.0
           <option value="2026">2026</option>
           <option value="2027">2027</option>
         </select>
-        <select class="quarter-filter" id="platQuarterFilter" onchange="renderPlatformsSection()">
+        <select class="quarter-filter" id="platQuarterFilter" onchange="updatePlatMonthOptions();renderPlatformsSection()">
           <option value="all">جميع الأرباع</option>
           <option value="الأول">الربع الأول</option>
           <option value="الثاني">الربع الثاني</option>
@@ -2214,7 +2214,7 @@ var firebaseReady = false;
 // would otherwise silently clobber fresh writes (the 226 vs 169 bug, missing demands, etc.).
 // Old-code sessions from before this feature shipped can't self-detect — everyone has to reload
 // once to enter the new world. After that, future version bumps prompt reloads automatically.
-var APP_BUILD_VERSION = 13;
+var APP_BUILD_VERSION = 14;
 var buildVersionWatchStarted = false;
 
 function initBuildVersionWatch() {
@@ -3851,6 +3851,24 @@ function togglePlatSortDir() {
   document.getElementById('platSortDir').textContent = platSortDir === 'asc' ? '⬆' : '⬇';
   document.getElementById('platSortDir').title = platSortDir === 'asc' ? 'تصاعدي — اضغط للتبديل' : 'تنازلي — اضغط للتبديل';
   renderPlatformsSection();
+}
+
+// When the quarter dropdown changes, rebuild the month dropdown to only contain months of the
+// selected quarter (or all 12 if quarter is "all"). Previously the month dropdown was static, so
+// switching from Q2 → Q1 while أبريل was selected silently filtered all data to zero (April isn't
+// in Q1) and the page rendered empty until the user manually reset the month.
+function updatePlatMonthOptions() {
+  var qSel = document.getElementById('platQuarterFilter');
+  var mSel = document.getElementById('platMonthFilter');
+  if (!qSel || !mSel) return;
+  var qVal = qSel.value;
+  var allMonths = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  var months = (qVal === 'all') ? allMonths : (QUARTER_MONTHS[qVal] || allMonths);
+  mSel.innerHTML = '<option value="all">جميع الأشهر</option>' +
+    months.map(function(m){ return '<option value="' + m + '">' + m + '</option>'; }).join('');
+  // Reset to "all" — viewing the whole quarter is the right default; user can drill into a
+  // specific month afterwards.
+  mSel.value = 'all';
 }
 
 function renderPlatformsSection() {
